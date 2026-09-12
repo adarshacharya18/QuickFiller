@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles,
   Copy,
@@ -17,7 +17,7 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { scanFormFields, extractJobMetadata, getCleanFormatHint, DetectedField, JobMetadata } from '../../utils/scanner';
-import { setNativeInputValue } from '../../utils/autofill';
+import { setNativeInputValue, insertTextAtCursor, CursorTargetInfo } from '../../utils/autofill';
 import { getStorageData, updateStorageData } from '../../utils/storage';
 import { StorageData, CustomPasteItem } from '../../types/storage';
 import { CandidateProfile } from '../../types/profile';
@@ -41,6 +41,13 @@ export const Drawer: React.FC = () => {
     type: 'success' | 'warning' | 'info';
     message: string;
   } | null>(null);
+  const [bankNotice, setBankNotice] = useState<{
+    type: 'success' | 'info';
+    message: string;
+  } | null>(null);
+
+  // Active cursor tracking for direct-into-page insertions
+  const lastFocusedCursorRef = useRef<CursorTargetInfo | null>(null);
 
   // Custom paste bank state
   const [bankSearch, setBankSearch] = useState('');
@@ -136,6 +143,76 @@ export const Drawer: React.FC = () => {
     };
   }, []);
 
+  // Track focused element and cursor position on the host page
+  useEffect(() => {
+    const isInsideDrawer = (node: Node | null): boolean => {
+      if (!node) return false;
+      let curr: Node | null = node;
+      while (curr) {
+        if (curr instanceof Element && curr.tagName.toLowerCase() === 'quickfiller-drawer') {
+          return true;
+        }
+        if (curr instanceof ShadowRoot && curr.host?.tagName.toLowerCase() === 'quickfiller-drawer') {
+          return true;
+        }
+        curr = curr.parentNode || (curr as ShadowRoot).host || null;
+      }
+      return false;
+    };
+
+    const updateCursorTarget = (target: EventTarget | null) => {
+      let el: HTMLElement | null = null;
+      if (target instanceof HTMLElement) {
+        el = target;
+      } else if (document.activeElement instanceof HTMLElement) {
+        el = document.activeElement;
+      }
+
+      if (!el || isInsideDrawer(el)) {
+        return;
+      }
+
+      const tagName = el.tagName?.toUpperCase();
+      const isInput = tagName === 'INPUT' || tagName === 'TEXTAREA';
+      const isEditable = el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+
+      if (isInput || isEditable) {
+        let start: number | null = null;
+        let end: number | null = null;
+        if (isInput) {
+          try {
+            start = (el as HTMLInputElement).selectionStart;
+            end = (el as HTMLInputElement).selectionEnd;
+          } catch {
+            // Unsupported input types like email/number
+          }
+        }
+        lastFocusedCursorRef.current = {
+          element: el,
+          selectionStart: start,
+          selectionEnd: end,
+        };
+      }
+    };
+
+    const handleFocusIn = (e: FocusEvent) => updateCursorTarget(e.target);
+    const handleSelectionChange = () => updateCursorTarget(document.activeElement);
+    const handleMouseUp = (e: MouseEvent) => updateCursorTarget(e.target);
+    const handleKeyUp = (e: KeyboardEvent) => updateCursorTarget(e.target);
+
+    document.addEventListener('focusin', handleFocusIn, true);
+    document.addEventListener('selectionchange', handleSelectionChange, true);
+    document.addEventListener('mouseup', handleMouseUp, true);
+    document.addEventListener('keyup', handleKeyUp, true);
+
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn, true);
+      document.removeEventListener('selectionchange', handleSelectionChange, true);
+      document.removeEventListener('mouseup', handleMouseUp, true);
+      document.removeEventListener('keyup', handleKeyUp, true);
+    };
+  }, []);
+
   const resolveFieldValue = (field: DetectedField, profile?: CandidateProfile): string => {
     if (!profile) return '';
     const p = profile.personal;
@@ -196,6 +273,29 @@ export const Drawer: React.FC = () => {
       setInsertedId(field.id);
       setTimeout(() => setInsertedId(null), 2000);
       setTimeout(scanPage, 150);
+    }
+  };
+
+  const handleInsertAtCursor = (text: string, id: string) => {
+    if (!text) return;
+    const success = insertTextAtCursor(text, lastFocusedCursorRef.current);
+    if (success) {
+      setInsertedId(id);
+      setTimeout(() => setInsertedId(null), 2000);
+      setBankNotice({
+        type: 'success',
+        message: 'Inserted text into active field at cursor position!',
+      });
+      setTimeout(() => setBankNotice(null), 3000);
+      setTimeout(scanPage, 200);
+    } else {
+      // Fallback: Copy to clipboard and display instruction notice
+      handleCopy(text, id);
+      setBankNotice({
+        type: 'info',
+        message: 'No input selected on page — copied to clipboard! Click an input to insert.',
+      });
+      setTimeout(() => setBankNotice(null), 3500);
     }
   };
 
@@ -774,6 +874,23 @@ export const Drawer: React.FC = () => {
                     />
                   </div>
 
+                  {bankNotice && (
+                    <div
+                      className={`p-2 rounded-lg text-xs flex items-center gap-2 border animate-in fade-in duration-150 ${
+                        bankNotice.type === 'success'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : 'bg-sky-50 text-sky-800 border-sky-200'
+                      }`}
+                    >
+                      {bankNotice.type === 'success' ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />
+                      )}
+                      <span className="font-medium text-[11px] leading-tight">{bankNotice.message}</span>
+                    </div>
+                  )}
+
                   {totalResults === 0 && (
                     <div className="text-center py-8 text-slate-400 space-y-1">
                       <p className="font-medium text-xs text-slate-600">No matching snippets found</p>
@@ -804,8 +921,29 @@ export const Drawer: React.FC = () => {
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => handleInsertAtCursor(item.value, item.id)}
+                              title="Insert at cursor into active form input"
+                              className="flex items-center gap-1 text-[11px] font-medium text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 px-2 py-1 rounded-md transition"
+                            >
+                              {insertedId === item.id ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span className="text-emerald-600 font-semibold">Inserted</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ArrowDownToLine className="w-3 h-3 text-sky-600" />
+                                  <span>Insert</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => handleCopy(item.value, item.id)}
-                              className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition"
+                              title="Copy to clipboard"
+                              className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition"
                             >
                               {copiedId === item.id ? (
                                 <>
@@ -820,6 +958,7 @@ export const Drawer: React.FC = () => {
                               )}
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleDeleteSnippet(item.id)}
                               title="Delete snippet"
                               className="text-slate-300 hover:text-rose-600 p-1 rounded transition"
@@ -851,22 +990,45 @@ export const Drawer: React.FC = () => {
                               {item.value}
                             </span>
                           </div>
-                          <button
-                            onClick={() => handleCopy(item.value, `std_${idx}`)}
-                            className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition flex-shrink-0"
-                          >
-                            {copiedId === `std_${idx}` ? (
-                              <>
-                                <Check className="w-3 h-3 text-emerald-600" />
-                                <span className="text-emerald-600">Copied</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3 h-3 text-slate-500" />
-                                <span>Copy</span>
-                              </>
-                            )}
-                          </button>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => handleInsertAtCursor(item.value, `std_${idx}`)}
+                              title="Insert at cursor into active form input"
+                              className="flex items-center gap-1 text-[11px] font-medium text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 px-2 py-1 rounded-md transition"
+                            >
+                              {insertedId === `std_${idx}` ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span className="text-emerald-600 font-semibold">Inserted</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ArrowDownToLine className="w-3 h-3 text-sky-600" />
+                                  <span>Insert</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(item.value, `std_${idx}`)}
+                              title="Copy to clipboard"
+                              className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition"
+                            >
+                              {copiedId === `std_${idx}` ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span className="text-emerald-600">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3 text-slate-500" />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -887,12 +1049,45 @@ export const Drawer: React.FC = () => {
                             <span className="font-semibold text-xs text-slate-800 break-words flex-1 min-w-0">
                               {q.questionPrompt}
                             </span>
-                            <button
-                              onClick={() => handleCopy(q.answer, q.id)}
-                              className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-md transition flex-shrink-0 font-medium"
-                            >
-                              {copiedId === q.id ? 'Copied' : 'Copy'}
-                            </button>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => handleInsertAtCursor(q.answer, q.id)}
+                                title="Insert at cursor into active form input"
+                                className="flex items-center gap-1 text-[10px] text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 px-2 py-0.5 rounded-md transition font-medium"
+                              >
+                                {insertedId === q.id ? (
+                                  <>
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                    <span className="text-emerald-600 font-semibold">Inserted</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <ArrowDownToLine className="w-3 h-3 text-sky-600" />
+                                    <span>Insert</span>
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(q.answer, q.id)}
+                                title="Copy to clipboard"
+                                className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-md transition font-medium"
+                              >
+                                {copiedId === q.id ? (
+                                  <>
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                    <span className="text-emerald-600">Copied</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3 h-3 text-slate-500" />
+                                    <span>Copy</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
                           </div>
                           <p className="text-[11px] text-slate-600 break-words leading-relaxed select-text">
                             {q.answer}
@@ -908,32 +1103,66 @@ export const Drawer: React.FC = () => {
                       <h5 className="font-semibold text-[10px] text-slate-400 px-0.5 uppercase tracking-wider">
                         Portfolio Projects ({projectItems.length})
                       </h5>
-                      {projectItems.map((proj) => (
-                        <div
-                          key={proj.id}
-                          className="p-2.5 bg-white border border-slate-200/80 rounded-xl space-y-1 shadow-xs hover:border-slate-300 transition"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold text-xs text-slate-800 break-words flex-1 min-w-0">
-                              {proj.title}
-                            </span>
-                            <button
-                              onClick={() =>
-                                handleCopy(
-                                  `${proj.title}: ${proj.description} (${proj.url || proj.githubUrl || ''})`,
-                                  proj.id
-                                )
-                              }
-                              className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-md transition flex-shrink-0 font-medium"
-                            >
-                              {copiedId === proj.id ? 'Copied' : 'Copy'}
-                            </button>
+                      {projectItems.map((proj) => {
+                        const projectSnippet = `${proj.title}: ${proj.description}${
+                          proj.url ? ' (' + proj.url + ')' : proj.githubUrl ? ' (' + proj.githubUrl + ')' : ''
+                        }`;
+
+                        return (
+                          <div
+                            key={proj.id}
+                            className="p-2.5 bg-white border border-slate-200/80 rounded-xl space-y-1 shadow-xs hover:border-slate-300 transition"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-xs text-slate-800 break-words flex-1 min-w-0">
+                                {proj.title}
+                              </span>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => handleInsertAtCursor(projectSnippet, proj.id)}
+                                  title="Insert at cursor into active form input"
+                                  className="flex items-center gap-1 text-[10px] text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 px-2 py-0.5 rounded-md transition font-medium"
+                                >
+                                  {insertedId === proj.id ? (
+                                    <>
+                                      <Check className="w-3 h-3 text-emerald-600" />
+                                      <span className="text-emerald-600 font-semibold">Inserted</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ArrowDownToLine className="w-3 h-3 text-sky-600" />
+                                      <span>Insert</span>
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(projectSnippet, proj.id)}
+                                  title="Copy to clipboard"
+                                  className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-md transition font-medium"
+                                >
+                                  {copiedId === proj.id ? (
+                                    <>
+                                      <Check className="w-3 h-3 text-emerald-600" />
+                                      <span className="text-emerald-600">Copied</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="w-3 h-3 text-slate-500" />
+                                      <span>Copy</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-slate-600 break-words leading-relaxed select-text">
+                              {proj.description}
+                            </p>
                           </div>
-                          <p className="text-[11px] text-slate-600 break-words leading-relaxed select-text">
-                            {proj.description}
-                          </p>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

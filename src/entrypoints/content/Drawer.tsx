@@ -393,11 +393,9 @@ export const Drawer: React.FC = () => {
                           </div>
 
                           {field.placeholder && (
-                            <div className="max-w-full min-w-0 inline-flex items-center gap-1.5 text-[10px] text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60 overflow-hidden">
-                              <span className="font-semibold text-slate-600 flex-shrink-0">Format:</span>
-                              <span className="truncate min-w-0 flex-1" title={field.placeholder}>
-                                {field.placeholder}
-                              </span>
+                            <div className="w-full text-[10px] text-slate-500 font-mono bg-slate-100/90 border border-slate-200/70 px-2.5 py-1 rounded-md leading-relaxed break-words">
+                              <span className="font-semibold text-slate-700 mr-1.5">Format:</span>
+                              <span className="text-slate-600">{field.placeholder}</span>
                             </div>
                           )}
                         </div>

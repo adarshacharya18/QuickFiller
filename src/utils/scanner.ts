@@ -7,7 +7,9 @@ export type StandardFieldType =
   | 'linkedin'
   | 'github'
   | 'portfolio'
-  | 'city';
+  | 'city'
+  | 'state'
+  | 'postalCode';
 
 export interface DetectedField {
   id: string;
@@ -25,6 +27,28 @@ export interface JobMetadata {
   descriptionSnippet: string;
 }
 
+export function isElementVisible(elem: HTMLElement): boolean {
+  if (!elem) return false;
+  if (elem.style.display === 'none' || elem.style.visibility === 'hidden') return false;
+
+  const style = window.getComputedStyle(elem);
+  if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+    return false;
+  }
+
+  // If element has layout dimensions or rects
+  if (elem.offsetWidth > 0 || elem.offsetHeight > 0 || elem.getClientRects().length > 0) {
+    return true;
+  }
+
+  // Fixed/sticky elements have offsetParent === null by CSS spec
+  if (style.position === 'fixed' || style.position === 'sticky') {
+    return true;
+  }
+
+  return elem.offsetParent !== null;
+}
+
 export function findFieldLabel(element: HTMLElement): string {
   // 1. Explicit <label for="...">
   if (element.id) {
@@ -37,7 +61,6 @@ export function findFieldLabel(element: HTMLElement): string {
   // 2. Wrapping <label>
   const parentLabel = element.closest('label');
   if (parentLabel && parentLabel.textContent?.trim()) {
-    // Clone and remove inputs to get just label text
     const clone = parentLabel.cloneNode(true) as HTMLElement;
     clone.querySelectorAll('input, textarea, select').forEach((n) => n.remove());
     if (clone.textContent?.trim()) {
@@ -46,9 +69,11 @@ export function findFieldLabel(element: HTMLElement): string {
   }
 
   // 3. ARIA attributes
-  if (element.getAttribute('aria-label')) {
-    return element.getAttribute('aria-label')!.trim();
+  const ariaLabel = element.getAttribute('aria-label');
+  if (ariaLabel && ariaLabel.trim()) {
+    return ariaLabel.trim();
   }
+
   const ariaLabelledBy = element.getAttribute('aria-labelledby');
   if (ariaLabelledBy) {
     const refElem = document.getElementById(ariaLabelledBy);
@@ -61,13 +86,22 @@ export function findFieldLabel(element: HTMLElement): string {
   const parentContainer = element.closest('.form-group, .field, [class*="field"], [class*="question"], div');
   if (parentContainer) {
     const headerOrLegend = parentContainer.querySelector('legend, h3, h4, h5, span, p');
-    if (headerOrLegend && headerOrLegend.textContent?.trim() && headerOrLegend.textContent.length < 150) {
+    if (
+      headerOrLegend &&
+      headerOrLegend.textContent?.trim() &&
+      headerOrLegend.textContent.length < 150
+    ) {
       return headerOrLegend.textContent.trim();
     }
   }
 
-  // 5. Placeholder or name
-  return element.getAttribute('placeholder') || element.getAttribute('name') || '';
+  // 5. Placeholder, title or name fallback
+  return (
+    element.getAttribute('placeholder') ||
+    element.getAttribute('title') ||
+    element.getAttribute('name') ||
+    ''
+  );
 }
 
 export function classifyField(
@@ -76,17 +110,20 @@ export function classifyField(
 ): StandardFieldType | 'custom_question' {
   const name = (element.getAttribute('name') || '').toLowerCase();
   const id = (element.id || '').toLowerCase();
+  const placeholder = (element.getAttribute('placeholder') || '').toLowerCase();
   const autocomplete = (element.getAttribute('autocomplete') || '').toLowerCase();
-  const text = `${label} ${name} ${id} ${autocomplete}`.toLowerCase();
+  const automationId = (element.getAttribute('data-automation-id') || '').toLowerCase();
+  const ariaLabel = (element.getAttribute('aria-label') || '').toLowerCase();
+  const text = `${label} ${name} ${id} ${placeholder} ${autocomplete} ${automationId} ${ariaLabel}`.toLowerCase();
 
   if (element.tagName === 'TEXTAREA') {
     return 'custom_question';
   }
 
-  if (/(first[-_\s]?name|^first$|given[-_\s]?name)/i.test(text)) {
+  if (/(first[-_\s]?name|^first$|given[-_\s]?name|fname)/i.test(text)) {
     return 'firstName';
   }
-  if (/(last[-_\s]?name|^last$|family[-_\s]?name|surname)/i.test(text)) {
+  if (/(last[-_\s]?name|^last$|family[-_\s]?name|surname|lname)/i.test(text)) {
     return 'lastName';
   }
   if (/(full[-_\s]?name|^name$|candidate[-_\s]?name)/i.test(text)) {
@@ -107,7 +144,13 @@ export function classifyField(
   if (/portfolio|website|personal[-_\s]?url|personal[-_\s]?site/i.test(text)) {
     return 'portfolio';
   }
-  if (/city|location|address[-_\s]?city/i.test(text)) {
+  if (/(postal[-_\s]?code|zip[-_\s]?code|^zip$)/i.test(text)) {
+    return 'postalCode';
+  }
+  if (/(state|province|region)/i.test(text)) {
+    return 'state';
+  }
+  if (/(city|location|address[-_\s]?city)/i.test(text)) {
     return 'city';
   }
 
@@ -136,8 +179,8 @@ export function scanFormFields(): {
   const customQuestions: DetectedField[] = [];
 
   inputs.forEach((elem, index) => {
-    // Ignore hidden or zero-dimension inputs
-    if (elem.offsetParent === null && elem.type !== 'textarea') return;
+    // Check visibility without dropping fixed-position modals
+    if (!isElementVisible(elem) && elem.tagName !== 'TEXTAREA') return;
 
     const label = findFieldLabel(elem);
     const classification = classifyField(elem, label);

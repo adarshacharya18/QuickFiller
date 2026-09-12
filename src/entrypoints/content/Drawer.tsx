@@ -8,13 +8,13 @@ import {
   Zap,
   ArrowDownToLine,
   ExternalLink,
-  ChevronDown,
-  ChevronUp,
+  AlertCircle,
 } from 'lucide-react';
 import { scanFormFields, extractJobMetadata, DetectedField, JobMetadata } from '../../utils/scanner';
 import { setNativeInputValue } from '../../utils/autofill';
 import { getStorageData } from '../../utils/storage';
 import { StorageData } from '../../types/storage';
+import { CandidateProfile } from '../../types/profile';
 
 export const Drawer: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -29,6 +29,10 @@ export const Drawer: React.FC = () => {
   const [generating, setGenerating] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [insertedId, setInsertedId] = useState<string | null>(null);
+  const [autofillBanner, setAutofillBanner] = useState<{
+    type: 'success' | 'warning' | 'info';
+    message: string;
+  } | null>(null);
 
   // Scan page and load storage
   const scanPage = () => {
@@ -38,14 +42,80 @@ export const Drawer: React.FC = () => {
     setJobMetadata(extractJobMetadata());
   };
 
+  const refreshStorage = async () => {
+    const data = await getStorageData();
+    setStorage(data);
+    return data;
+  };
+
   useEffect(() => {
-    getStorageData().then(setStorage);
+    refreshStorage();
     scanPage();
 
-    // Re-scan periodically for dynamic forms / multi-step SPA pages
-    const interval = setInterval(scanPage, 4000);
-    return () => clearInterval(interval);
+    // 1. Periodically re-scan form for dynamic SPAs
+    const interval = setInterval(scanPage, 3500);
+
+    // 2. Real-time sync: Listen for storage changes from Options page
+    const handleStorageChange = (
+      _changes: Record<string, chrome.storage.StorageChange>,
+      area: string
+    ) => {
+      if (area === 'local') {
+        refreshStorage();
+      }
+    };
+
+    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+      chrome.storage.onChanged.addListener(handleStorageChange);
+    }
+
+    // 3. Refresh storage when user switches back to this tab
+    const handleWindowFocus = () => {
+      refreshStorage();
+      scanPage();
+    };
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      clearInterval(interval);
+      if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+        chrome.storage.onChanged.removeListener(handleStorageChange);
+      }
+      window.removeEventListener('focus', handleWindowFocus);
+    };
   }, []);
+
+  const resolveFieldValue = (field: DetectedField, profile?: CandidateProfile): string => {
+    if (!profile) return '';
+    const p = profile.personal;
+
+    switch (field.type) {
+      case 'firstName':
+        return p.firstName || '';
+      case 'lastName':
+        return p.lastName || '';
+      case 'fullName':
+        return `${p.firstName} ${p.lastName}`.trim() || p.firstName || '';
+      case 'email':
+        return p.email || '';
+      case 'phone':
+        return p.phone || '';
+      case 'city':
+        return p.city || '';
+      case 'state':
+        return p.state || '';
+      case 'postalCode':
+        return p.postalCode || '';
+      case 'linkedin':
+        return p.linkedinUrl || '';
+      case 'github':
+        return p.githubUrl || '';
+      case 'portfolio':
+        return p.portfolioUrl || profile.portfolioDetails?.url || '';
+      default:
+        return '';
+    }
+  };
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -53,64 +123,80 @@ export const Drawer: React.FC = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleInsert = (field: DetectedField, text: string) => {
+  const handleInsert = async (field: DetectedField, text: string) => {
+    if (!text) return;
+
+    let target: HTMLInputElement | HTMLTextAreaElement | null = null;
     if (field.element && document.body.contains(field.element)) {
-      setNativeInputValue(field.element, text);
+      target = field.element;
+    } else {
+      target =
+        (document.getElementById(field.id) as HTMLInputElement | HTMLTextAreaElement) ||
+        (document.querySelector(`[name="${field.id}"]`) as HTMLInputElement | HTMLTextAreaElement);
+    }
+
+    if (target) {
+      setNativeInputValue(target, text);
       setInsertedId(field.id);
       setTimeout(() => setInsertedId(null), 2000);
-    } else {
-      // Re-scan and try again
-      const target = document.getElementById(field.id) as HTMLInputElement | HTMLTextAreaElement;
-      if (target) {
-        setNativeInputValue(target, text);
-        setInsertedId(field.id);
-        setTimeout(() => setInsertedId(null), 2000);
-      }
+      setTimeout(scanPage, 150);
     }
   };
 
-  const autofillAllStandard = () => {
-    if (!storage) return;
-    const profile = storage.profile;
+  const autofillAllStandard = async () => {
+    setAutofillBanner(null);
+    const currentStorage = await refreshStorage();
+    const profile = currentStorage.profile;
+
+    const hasProfileData = Boolean(
+      profile.personal.firstName ||
+        profile.personal.email ||
+        profile.personal.phone ||
+        profile.personal.linkedinUrl
+    );
+
+    if (!hasProfileData) {
+      setAutofillBanner({
+        type: 'warning',
+        message: 'Your profile is empty! Click "Open Options" below to add your details first.',
+      });
+      return;
+    }
+
+    let filledCount = 0;
 
     standardFields.forEach((field) => {
-      let val = '';
-      switch (field.type) {
-        case 'firstName':
-          val = profile.personal.firstName;
-          break;
-        case 'lastName':
-          val = profile.personal.lastName;
-          break;
-        case 'fullName':
-          val = `${profile.personal.firstName} ${profile.personal.lastName}`.trim();
-          break;
-        case 'email':
-          val = profile.personal.email;
-          break;
-        case 'phone':
-          val = profile.personal.phone;
-          break;
-        case 'linkedin':
-          val = profile.personal.linkedinUrl || '';
-          break;
-        case 'github':
-          val = profile.personal.githubUrl || '';
-          break;
-        case 'portfolio':
-          val = profile.personal.portfolioUrl || '';
-          break;
-        case 'city':
-          val = profile.personal.city || '';
-          break;
+      const val = resolveFieldValue(field, profile);
+      if (!val) return;
+
+      let target: HTMLInputElement | HTMLTextAreaElement | null = null;
+      if (field.element && document.body.contains(field.element)) {
+        target = field.element;
+      } else {
+        target =
+          (document.getElementById(field.id) as HTMLInputElement | HTMLTextAreaElement) ||
+          (document.querySelector(`[name="${field.id}"]`) as HTMLInputElement | HTMLTextAreaElement);
       }
 
-      if (val && field.element) {
-        setNativeInputValue(field.element, val);
+      if (target) {
+        const ok = setNativeInputValue(target, val);
+        if (ok) filledCount++;
       }
     });
 
-    scanPage();
+    if (filledCount > 0) {
+      setAutofillBanner({
+        type: 'success',
+        message: `Successfully autofilled ${filledCount} field${filledCount > 1 ? 's' : ''}!`,
+      });
+    } else {
+      setAutofillBanner({
+        type: 'info',
+        message: 'No matching profile values found for detected fields on this page.',
+      });
+    }
+
+    setTimeout(scanPage, 200);
   };
 
   const generateAnswerForField = (field: DetectedField, instructions?: string) => {
@@ -363,50 +449,86 @@ export const Drawer: React.FC = () => {
                   </div>
                   <button
                     onClick={autofillAllStandard}
-                    className="flex items-center gap-1.5 text-xs bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-sm transition"
+                    className="flex items-center gap-1.5 text-xs bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-sm transition active:scale-95"
                   >
                     <Zap className="w-3.5 h-3.5" />
                     Fill All
                   </button>
                 </div>
 
+                {autofillBanner && (
+                  <div
+                    className={`p-2.5 rounded-xl text-xs flex items-center gap-2 border animate-in fade-in duration-150 ${
+                      autofillBanner.type === 'success'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : autofillBanner.type === 'warning'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                        : 'bg-sky-50 text-sky-800 border-sky-200'
+                    }`}
+                  >
+                    {autofillBanner.type === 'success' ? (
+                      <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    )}
+                    <span className="font-medium">{autofillBanner.message}</span>
+                  </div>
+                )}
+
                 <div className="space-y-2">
-                  {standardFields.map((field) => (
-                    <div
-                      key={field.id}
-                      className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg text-xs"
-                    >
-                      <div className="truncate max-w-[240px]">
-                        <span className="font-medium text-slate-800 block truncate">
-                          {field.label}
-                        </span>
-                        <span className="text-[10px] text-slate-400 capitalize">
-                          Type: {field.type}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => {
-                          if (!storage) return;
-                          let v = '';
-                          const p = storage.profile;
-                          if (field.type === 'firstName') v = p.personal.firstName;
-                          else if (field.type === 'lastName') v = p.personal.lastName;
-                          else if (field.type === 'fullName')
-                            v = `${p.personal.firstName} ${p.personal.lastName}`;
-                          else if (field.type === 'email') v = p.personal.email;
-                          else if (field.type === 'phone') v = p.personal.phone;
-                          else if (field.type === 'linkedin') v = p.personal.linkedinUrl || '';
-                          else if (field.type === 'github') v = p.personal.githubUrl || '';
-                          else if (field.type === 'portfolio') v = p.personal.portfolioUrl || '';
-                          else if (field.type === 'city') v = p.personal.city;
-                          if (v) handleInsert(field, v);
-                        }}
-                        className="text-[11px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded transition"
-                      >
-                        Insert
-                      </button>
+                  {standardFields.length === 0 ? (
+                    <div className="text-center py-10 text-slate-400 space-y-2">
+                      <p className="font-medium text-slate-600">No standard fields detected</p>
+                      <p className="text-xs">Navigate to a job application form with text inputs.</p>
                     </div>
-                  ))}
+                  ) : (
+                    standardFields.map((field) => {
+                      const resolvedVal = resolveFieldValue(field, storage?.profile);
+
+                      return (
+                        <div
+                          key={field.id}
+                          className="p-2.5 bg-white border border-slate-200 rounded-lg text-xs space-y-1"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="truncate max-w-[240px]">
+                              <span className="font-medium text-slate-800 block truncate">
+                                {field.label}
+                              </span>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] text-slate-400 capitalize">
+                                  Type: {field.type}
+                                </span>
+                                {resolvedVal ? (
+                                  <span className="text-[10px] text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200 truncate max-w-[150px]">
+                                    {resolvedVal}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-amber-600 italic">
+                                    (No profile value)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <button
+                              disabled={!resolvedVal}
+                              onClick={() => handleInsert(field, resolvedVal)}
+                              className="text-[11px] font-medium text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1 rounded transition"
+                            >
+                              {insertedId === field.id ? (
+                                <span className="text-emerald-600 flex items-center gap-1">
+                                  <Check className="w-3 h-3" /> Inserted
+                                </span>
+                              ) : (
+                                'Insert'
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             )}

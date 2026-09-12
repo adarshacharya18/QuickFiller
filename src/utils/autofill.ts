@@ -7,20 +7,36 @@ export function setNativeInputValue(
   try {
     element.focus();
 
-    // Bypass React / Angular / Vue synthetic property setters
-    const prototype = Object.getPrototypeOf(element);
-    const valueSetter = Object.getOwnPropertyDescriptor(element, 'value')?.set;
-    const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+    const previousValue = element.value;
 
-    if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
-      prototypeValueSetter.call(element, value);
-    } else if (valueSetter) {
-      valueSetter.call(element, value);
+    // 1. Call prototype setter to bypass React / Vue / Angular wrappers
+    const proto =
+      element instanceof HTMLTextAreaElement
+        ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
+    const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+
+    if (descriptor && descriptor.set) {
+      descriptor.set.call(element, value);
     } else {
       element.value = value;
     }
 
-    // Trigger complete cycle of browser events
+    // 2. Update React internal value tracker if present
+    const tracker = (element as any)._valueTracker;
+    if (tracker) {
+      tracker.setValue(previousValue);
+    }
+
+    // 3. Fallback direct assignment if value wasn't updated
+    if (element.value !== value) {
+      element.value = value;
+    }
+
+    // 4. Trigger complete cycle of browser events
+    element.dispatchEvent(
+      new InputEvent('input', { bubbles: true, cancelable: true, data: value })
+    );
     element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
     element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
     element.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
@@ -29,6 +45,8 @@ export function setNativeInputValue(
     console.error('[QuickFiller] Error setting input value:', err);
     try {
       element.value = value;
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
     } catch {
       // Ignore fallback error
     }

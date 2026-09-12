@@ -168,23 +168,39 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({
 
       {/* Section 2: Custom Question & Answer Bank */}
       <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm space-y-3.5 sm:space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h3 className="text-sm sm:text-base font-semibold text-slate-900 flex items-center gap-2">
               <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5 text-sky-600" />
-              Approved Q&A Bank
+              Approved Q&amp;A Bank
             </h3>
             <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-              Saved answers the AI can cite or reuse verbatim in job forms.
+              Saved answers and Custom Paste Bank snippets the AI will cite or reuse verbatim in job forms.
             </p>
           </div>
           <button
+            type="button"
             onClick={addCustomQuestion}
-            className="flex items-center gap-1.5 text-xs bg-sky-50 hover:bg-sky-100 text-sky-700 font-medium px-3 py-1.5 rounded-lg transition"
+            className="flex items-center gap-1.5 text-xs bg-sky-50 hover:bg-sky-100 text-sky-700 font-medium px-3 py-1.5 rounded-lg transition self-start sm:self-auto"
           >
             <Plus className="w-3.5 h-3.5" />
-            Add Q&A
+            Add Q&amp;A
           </button>
+        </div>
+
+        {/* AI Grounding Reference Banner */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-sky-50/70 border border-sky-100 rounded-xl text-[11px] text-sky-950">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-sky-600 flex-shrink-0" />
+            <span>
+              <strong>AI Grounding Context:</strong> The AI automatically cites both your <strong>{bank.length} Approved Q&amp;A</strong> answers and your <strong>{pasteBank.length} Custom Paste Bank</strong> snippets when drafting responses.
+            </span>
+          </div>
+          {pasteBank.length > 0 && (
+            <span className="text-[10px] bg-sky-100/90 text-sky-800 font-medium px-2 py-0.5 rounded-md flex-shrink-0 self-start sm:self-auto">
+              {pasteBank.length} paste snippet{pasteBank.length > 1 ? 's' : ''} connected
+            </span>
+          )}
         </div>
 
         {bank.length === 0 ? (

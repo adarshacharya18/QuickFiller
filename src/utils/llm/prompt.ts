@@ -1,11 +1,13 @@
 import { CandidateProfile } from '../../types/profile';
 import { ScreeningWizardAnswers, ScreeningQuestion } from '../../types/questions';
+import { CustomPasteItem } from '../../types/storage';
 
 export function buildSystemPrompt(
   profile: CandidateProfile,
   wizardAnswers: ScreeningWizardAnswers,
   questionBank: ScreeningQuestion[],
-  jobContext?: { title?: string; company?: string; descriptionSnippet?: string }
+  jobContext?: { title?: string; company?: string; descriptionSnippet?: string } | null,
+  customPasteBank: CustomPasteItem[] = []
 ): string {
   const projectsList = profile.portfolioDetails.featuredProjects
     .filter((p) => p.title && (p.description || p.url))
@@ -43,6 +45,11 @@ export function buildSystemPrompt(
     .map((q) => `Q: ${q.questionPrompt}\nA: ${q.answer}`)
     .join('\n\n');
 
+  const pasteBankSnippets = (customPasteBank || [])
+    .filter((item) => item.label && item.value)
+    .map((item) => `- ${item.label}: "${item.value}"`)
+    .join('\n');
+
   return `You are QuickFiller, an AI assistant helping a job candidate apply for roles.
 Your task is to draft authentic, concise, high-impact answers to job application screening questions.
 
@@ -74,8 +81,11 @@ ${educationList || 'None specified'}
 
 ${profile.rawResumeText ? `RAW RESUME CONTEXT:\n${profile.rawResumeText.slice(0, 2500)}\n` : ''}
 
-PREVIOUS APPROVED ANSWERS:
+PREVIOUS APPROVED ANSWERS (Q&A BANK):
 ${knownAnswers || 'None specified'}
+
+CANDIDATE CUSTOM PASTE BANK SNIPPETS & REUSABLE VALUES:
+${pasteBankSnippets || 'None specified'}
 
 ${jobContext?.company ? `TARGET COMPANY: ${jobContext.company}` : ''}
 ${jobContext?.title ? `TARGET ROLE: ${jobContext.title}` : ''}
@@ -97,6 +107,8 @@ CRITICAL RULES & INSTRUCTIONS:
    - If the field is a multi-line textarea:
      Provide a persuasive, well-structured 1-3 paragraph response.
 5. If the question asks for factual data (e.g. salary, notice period, sponsorship), answer using the candidate's exact preferences.
-6. Be direct, authentic, professional, and confident. Avoid generic AI fluff.
-7. Output ONLY the drafted answer text. Do not include conversational filler like "Here is a response:".`;
+6. GROUNDING WITH APPROVED ANSWERS & PASTE BANK:
+   - When answering questions, you can cite, extract facts from, or reuse relevant snippets from PREVIOUS APPROVED ANSWERS and CANDIDATE CUSTOM PASTE BANK SNIPPETS verbatim where suitable (e.g. citing custom profile URLs, clearance, availability, or approved statements).
+7. Be direct, authentic, professional, and confident. Avoid generic AI fluff.
+8. Output ONLY the drafted answer text. Do not include conversational filler like "Here is a response:".`;
 }

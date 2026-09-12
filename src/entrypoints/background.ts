@@ -56,7 +56,8 @@ export default defineBackground(() => {
             storage.profile,
             storage.wizardAnswers,
             storage.questionBank,
-            jobContext
+            jobContext,
+            storage.customPasteBank || []
           );
 
           let userPrompt = `Job Application Question:\n"${questionPrompt}"`;

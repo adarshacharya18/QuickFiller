@@ -1,6 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { ExtractedLink, CandidateProfile, ProjectItem, ExperienceItem, EducationItem } from '../types/profile';
+import { validatePdfBuffer } from './security';
 
 // Set worker source for pdfjs
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -380,6 +381,11 @@ export function extractCity(headerLines: string[], email: string, phone: string)
 }
 
 export async function parseResumePdf(fileBuffer: ArrayBuffer): Promise<ParsedResumeResult> {
+  const validation = validatePdfBuffer(fileBuffer);
+  if (!validation.valid) {
+    throw new Error(validation.error || 'Invalid PDF file');
+  }
+
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(fileBuffer) });
   const pdfDoc = await loadingTask.promise;
 

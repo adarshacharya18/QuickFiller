@@ -9,6 +9,7 @@ import {
   buildCoverLetterSystemPrompt,
   buildCoverLetterUserPrompt,
 } from '../utils/llm/coverLetterPrompt';
+import { isSafeExternalUrl } from '../utils/security';
 
 export default defineBackground(() => {
   console.log('[QuickFiller] Background Service Worker initialized.');
@@ -82,6 +83,12 @@ export default defineBackground(() => {
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // Security: Verify message sender is internal to this extension
+    if (sender.id && typeof chrome !== 'undefined' && chrome.runtime?.id && sender.id !== chrome.runtime.id) {
+      console.warn('[QuickFiller] Rejected message from untrusted sender ID:', sender.id);
+      return false;
+    }
+
     if (message?.type === 'INJECT_AND_TOGGLE_DRAWER') {
       const tabId = message.tabId;
       if (tabId) {
@@ -122,13 +129,33 @@ export default defineBackground(() => {
         return false;
       }
 
-      fetch(url)
+      // Security: SSRF validation to prevent access to localhost, private networks, or metadata endpoints
+      const safeCheck = isSafeExternalUrl(url);
+      if (!safeCheck.safe || !safeCheck.url) {
+        sendResponse({ success: false, error: safeCheck.error || 'URL failed security validation' });
+        return false;
+      }
+
+      fetch(safeCheck.url.toString(), {
+        signal: AbortSignal.timeout(10000), // 10-second timeout
+      })
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+          const contentType = res.headers.get('content-type') || '';
+          if (
+            contentType &&
+            !contentType.includes('text/html') &&
+            !contentType.includes('text/plain') &&
+            !contentType.includes('application/xhtml+xml')
+          ) {
+            throw new Error(`Invalid content-type: ${contentType}. Only HTML/text pages are supported.`);
+          }
           return res.text();
         })
         .then((html) => {
-          const extracted = extractCleanJDFromHtml(html);
+          // Cap HTML string size to 2.5MB to protect memory
+          const cappedHtml = html.length > 2500000 ? html.slice(0, 2500000) : html;
+          const extracted = extractCleanJDFromHtml(cappedHtml);
           const isValid = isValidJobDescription(extracted.jdText);
           sendResponse({
             success: true,
@@ -206,7 +233,7 @@ export default defineBackground(() => {
             storage.customPasteBank || []
           );
 
-          let userPrompt = `Job Application Question:\n"${questionPrompt}"`;
+          let userPrompt = `Job Application Question:\n<screening_question>\n${questionPrompt}\n</screening_question>`;
 
           if (placeholder) {
             userPrompt += `\nExpected Format / Example: "${placeholder}"`;

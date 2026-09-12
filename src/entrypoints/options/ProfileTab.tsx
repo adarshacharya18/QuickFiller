@@ -28,6 +28,20 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Security: Validate file type and size constraints
+    if (file.type && file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      alert('Security validation: Please upload a valid PDF document (.pdf).');
+      e.target.value = '';
+      return;
+    }
+
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    if (file.size > MAX_FILE_SIZE) {
+      alert(`File too large (${(file.size / (1024 * 1024)).toFixed(1)}MB). Please upload a PDF under 10MB.`);
+      e.target.value = '';
+      return;
+    }
+
     setIsParsing(true);
     setParseNotice(null);
 

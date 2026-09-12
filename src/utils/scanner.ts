@@ -14,7 +14,7 @@ export type StandardFieldType =
 export interface DetectedField {
   id: string;
   element: HTMLInputElement | HTMLTextAreaElement;
-  type: StandardFieldType | 'custom_question';
+  type: StandardFieldType | 'custom_question' | 'cover_letter';
   label: string;
   placeholder: string;
   value: string;
@@ -99,43 +99,25 @@ export function findFieldLabel(element: HTMLElement): string {
     prev = prev.previousElementSibling;
   }
 
-  // 5. Parent container's label
-  const parentContainer = element.closest(
-    '.form-group, .field, [class*="field"], [class*="question"], [class*="form-row"], div'
-  );
-  if (parentContainer) {
-    const innerLabel = parentContainer.querySelector('label');
-    if (innerLabel && innerLabel.textContent?.trim()) {
-      const clone = innerLabel.cloneNode(true) as HTMLElement;
+  // 5. Ancestor container label lookup (e.g. form group, fieldset)
+  const container = element.closest('.form-group, .field, [class*="form-item"], [class*="field-"], tr, td, li');
+  if (container) {
+    const lbl = container.querySelector('label, [class*="label"], span.title, div.title');
+    if (lbl && lbl.textContent?.trim()) {
+      const clone = lbl.cloneNode(true) as HTMLElement;
       clone.querySelectorAll('input, textarea, select').forEach((n) => n.remove());
-      if (clone.textContent?.trim()) {
-        return clone.textContent.trim();
-      }
-    }
-
-    const headerOrLegend = parentContainer.querySelector('legend, h3, h4, h5, p');
-    if (
-      headerOrLegend &&
-      headerOrLegend.textContent?.trim() &&
-      headerOrLegend.textContent.length < 150
-    ) {
-      return headerOrLegend.textContent.trim();
+      if (clone.textContent?.trim()) return clone.textContent.trim();
     }
   }
 
-  // 6. Placeholder, title or name fallback
-  return (
-    element.getAttribute('placeholder') ||
-    element.getAttribute('title') ||
-    element.getAttribute('name') ||
-    ''
-  );
+  // 6. Name / placeholder fallback
+  return element.getAttribute('name') || element.getAttribute('placeholder') || '';
 }
 
 export function classifyField(
   element: HTMLInputElement | HTMLTextAreaElement,
   label: string
-): StandardFieldType | 'custom_question' {
+): StandardFieldType | 'custom_question' | 'cover_letter' {
   const name = (element.getAttribute('name') || '').toLowerCase();
   const id = (element.id || '').toLowerCase();
   const placeholder = (element.getAttribute('placeholder') || '').toLowerCase();
@@ -143,6 +125,11 @@ export function classifyField(
   const automationId = (element.getAttribute('data-automation-id') || '').toLowerCase();
   const ariaLabel = (element.getAttribute('aria-label') || '').toLowerCase();
   const text = `${label} ${name} ${id} ${placeholder} ${autocomplete} ${automationId} ${ariaLabel}`.toLowerCase();
+
+  // Explicit cover letter detection
+  if (/cover[-_\s]?letter|statement of interest|motivation[-_\s]?letter|letter of motivation/i.test(text)) {
+    return 'cover_letter';
+  }
 
   if (element.tagName === 'TEXTAREA') {
     return 'custom_question';
@@ -224,7 +211,7 @@ export function scanFormFields(): {
       isTextarea: elem.tagName === 'TEXTAREA',
     };
 
-    if (classification === 'custom_question') {
+    if (classification === 'custom_question' || classification === 'cover_letter') {
       customQuestions.push(field);
     } else {
       standardFields.push(field);

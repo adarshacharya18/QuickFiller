@@ -15,9 +15,14 @@ import {
   Plus,
   Trash2,
   ClipboardList,
+  FileText,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { scanFormFields, extractJobMetadata, getCleanFormatHint, DetectedField, JobMetadata } from '../../utils/scanner';
 import { setNativeInputValue, insertTextAtCursor, CursorTargetInfo } from '../../utils/autofill';
+import { deriveJobPostingUrl, extractInlineJD } from '../../utils/jdResolver';
 import { getStorageData, updateStorageData } from '../../utils/storage';
 import { StorageData, CustomPasteItem } from '../../types/storage';
 import { CandidateProfile } from '../../types/profile';
@@ -29,7 +34,23 @@ export const Drawer: React.FC = () => {
   const [standardFields, setStandardFields] = useState<DetectedField[]>([]);
   const [customQuestions, setCustomQuestions] = useState<DetectedField[]>([]);
   const [jobMetadata, setJobMetadata] = useState<JobMetadata | null>(null);
-  const [activeTab, setActiveTab] = useState<'questions' | 'autofill' | 'bank'>('questions');
+  const [activeTab, setActiveTab] = useState<'questions' | 'coverLetter' | 'autofill' | 'bank'>('questions');
+
+  // Cover Letter Generator State
+  const [targetCompany, setTargetCompany] = useState('');
+  const [targetRole, setTargetRole] = useState('');
+  const [coverLetterJD, setCoverLetterJD] = useState('');
+  const [coverLetterJDSource, setCoverLetterJDSource] = useState('');
+  const [isResolvingJD, setIsResolvingJD] = useState(false);
+  const [showJDInput, setShowJDInput] = useState(false);
+  const [userJDInput, setUserJDInput] = useState('');
+  const [userJDUrl, setUserJDUrl] = useState('');
+  const [isFetchingUrl, setIsFetchingUrl] = useState(false);
+  const [coverLetterTone, setCoverLetterTone] = useState<'professional' | 'technical' | 'startup'>('professional');
+  const [coverLetterLength, setCoverLetterLength] = useState<'concise' | 'standard' | 'detailed'>('standard');
+  const [coverLetterCustomNote, setCoverLetterCustomNote] = useState('');
+  const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
+  const [generatedCoverLetter, setGeneratedCoverLetter] = useState('');
 
   // Question answers state: { [fieldId]: string }
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -299,6 +320,194 @@ export const Drawer: React.FC = () => {
     }
   };
 
+  // Sync target role & company when page metadata updates
+  useEffect(() => {
+    if (jobMetadata) {
+      if (!targetCompany && jobMetadata.company) setTargetCompany(jobMetadata.company);
+      if (!targetRole && jobMetadata.title) setTargetRole(jobMetadata.title);
+    }
+  }, [jobMetadata]);
+
+  // Auto-resolve JD when user switches to Cover Letter tab
+  useEffect(() => {
+    if (activeTab === 'coverLetter' && !coverLetterJD && !userJDInput && !isResolvingJD) {
+      resolveJobDescription();
+    }
+  }, [activeTab]);
+
+  // 1. Multi-tier JD Resolver
+  const resolveJobDescription = async () => {
+    setIsResolvingJD(true);
+
+    // Tier 1: Check Current Page DOM
+    const inline = extractInlineJD(document);
+    if (inline && inline.jdText) {
+      setCoverLetterJD(inline.jdText);
+      setCoverLetterJDSource('Current Page');
+      if (inline.title && !targetRole) setTargetRole(inline.title);
+      setShowJDInput(false);
+      setIsResolvingJD(false);
+      return;
+    }
+
+    // Tier 2: Check ATS URL Heuristic
+    const derivedUrl = deriveJobPostingUrl(window.location.href);
+    if (derivedUrl) {
+      try {
+        const resp = await chrome.runtime.sendMessage({
+          type: 'FETCH_EXTERNAL_JD',
+          url: derivedUrl,
+        });
+        if (resp?.success && resp.isValid && resp.jdText) {
+          setCoverLetterJD(resp.jdText);
+          setCoverLetterJDSource('Job Posting Link');
+          if (resp.title && !targetRole) setTargetRole(resp.title);
+          setShowJDInput(false);
+          setIsResolvingJD(false);
+          return;
+        }
+      } catch {}
+    }
+
+    // Tier 3: Check Opener Tab URL or Document Referrer
+    let candidateUrl: string | undefined = undefined;
+    try {
+      const tabSource = await chrome.runtime.sendMessage({ type: 'GET_TAB_SOURCE_URL' });
+      if (tabSource?.success && tabSource.url) {
+        candidateUrl = tabSource.url;
+      }
+    } catch {}
+
+    if (!candidateUrl && document.referrer && document.referrer.startsWith('http')) {
+      candidateUrl = document.referrer;
+    }
+
+    if (candidateUrl) {
+      try {
+        const resp = await chrome.runtime.sendMessage({
+          type: 'FETCH_EXTERNAL_JD',
+          url: candidateUrl,
+        });
+        if (resp?.success && resp.isValid && resp.jdText) {
+          setCoverLetterJD(resp.jdText);
+          setCoverLetterJDSource('Previous Page / Referrer');
+          if (resp.title && !targetRole) setTargetRole(resp.title);
+          setShowJDInput(false);
+          setIsResolvingJD(false);
+          return;
+        }
+      } catch {}
+    }
+
+    // Tier 4: Fallback - Ask user for JD
+    setIsResolvingJD(false);
+    setShowJDInput(true);
+  };
+
+  // 2. Fetch User-Pasted URL
+  const handleFetchUserUrl = async () => {
+    if (!userJDUrl.trim()) return;
+    setIsFetchingUrl(true);
+    try {
+      const resp = await chrome.runtime.sendMessage({
+        type: 'FETCH_EXTERNAL_JD',
+        url: userJDUrl.trim(),
+      });
+      if (resp?.success && resp.jdText) {
+        setCoverLetterJD(resp.jdText);
+        setCoverLetterJDSource(`Fetched from ${new URL(userJDUrl.trim()).hostname}`);
+        if (resp.title && !targetRole) {
+          setTargetRole(resp.title);
+        }
+        setShowJDInput(false);
+        setBankNotice({ type: 'success', message: 'Job Description fetched successfully!' });
+        setTimeout(() => setBankNotice(null), 3000);
+      } else {
+        setBankNotice({
+          type: 'info',
+          message: 'Could not extract JD from that URL. Please paste the JD text directly.',
+        });
+        setTimeout(() => setBankNotice(null), 4000);
+      }
+    } catch {
+      setBankNotice({
+        type: 'info',
+        message: 'Failed to fetch link. Please paste the JD text directly.',
+      });
+      setTimeout(() => setBankNotice(null), 4000);
+    } finally {
+      setIsFetchingUrl(false);
+    }
+  };
+
+  // 3. Generate Cover Letter
+  const handleGenerateCoverLetter = async () => {
+    const jdToUse = coverLetterJD.trim() || userJDInput.trim();
+    if (!jdToUse) {
+      setShowJDInput(true);
+      setBankNotice({
+        type: 'info',
+        message: 'Please provide or paste a Job Description first.',
+      });
+      setTimeout(() => setBankNotice(null), 3500);
+      return;
+    }
+
+    setIsGeneratingCoverLetter(true);
+    try {
+      const resp = await chrome.runtime.sendMessage({
+        type: 'GENERATE_COVER_LETTER',
+        options: {
+          company: targetCompany.trim() || jobMetadata?.company || 'Company',
+          role: targetRole.trim() || jobMetadata?.title || 'Position',
+          jobDescription: jdToUse,
+          tone: coverLetterTone,
+          length: coverLetterLength,
+          customNote: coverLetterCustomNote,
+        },
+      });
+
+      if (resp?.success && resp.answer) {
+        setGeneratedCoverLetter(resp.answer);
+      } else {
+        setBankNotice({
+          type: 'info',
+          message: resp?.error || 'Failed to generate cover letter. Check LLM settings.',
+        });
+        setTimeout(() => setBankNotice(null), 4000);
+      }
+    } catch (err: any) {
+      setBankNotice({
+        type: 'info',
+        message: err.message || 'Error generating cover letter',
+      });
+      setTimeout(() => setBankNotice(null), 4000);
+    } finally {
+      setIsGeneratingCoverLetter(false);
+    }
+  };
+
+  // 4. Insert Cover Letter into form or at cursor
+  const handleInsertCoverLetter = (letter: string) => {
+    if (!letter) return;
+    const clField = customQuestions.find((q) => q.type === 'cover_letter');
+    if (clField) {
+      handleInsert(clField, letter);
+      setInsertedId('cover_letter_btn');
+      setTimeout(() => setInsertedId(null), 2000);
+      return;
+    }
+
+    handleInsertAtCursor(letter, 'cover_letter_btn');
+  };
+
+  // 5. Save Cover Letter to Bank
+  const handleSaveCoverLetterToBank = async (letter: string) => {
+    const company = targetCompany.trim() || jobMetadata?.company || 'Company';
+    const role = targetRole.trim() || jobMetadata?.title || 'Role';
+    await handleSaveAnswerToPasteBank(`Cover Letter: ${role} at ${company}`, letter, 'cover_letter_save');
+  };
+
   const autofillAllStandard = async () => {
     setAutofillBanner(null);
     const currentStorage = await refreshStorage();
@@ -470,7 +679,8 @@ export const Drawer: React.FC = () => {
           {/* Tab Navigation */}
           <div className="flex border-b border-slate-200 bg-slate-50/80 px-2 pt-1.5 gap-1">
             {[
-              { id: 'questions', label: 'AI Answers', count: customQuestions.length },
+              { id: 'questions', label: 'Answers', count: customQuestions.length },
+              { id: 'coverLetter', label: 'Cover Letter', count: null },
               { id: 'autofill', label: 'Autofill', count: standardFields.length },
               { id: 'bank', label: 'Paste Bank', count: (storage?.customPasteBank?.length || 0) > 0 ? storage!.customPasteBank.length : null },
             ].map((tab) => {
@@ -547,6 +757,24 @@ export const Drawer: React.FC = () => {
                             <div className="w-full text-[10px] text-slate-600 font-mono bg-slate-100/90 border border-slate-200/70 px-2.5 py-1.5 rounded-md leading-relaxed break-words whitespace-normal select-text">
                               <span className="font-semibold text-slate-700 mr-1.5 flex-shrink-0">Format:</span>
                               <span className="text-slate-600 break-words">{formatHint}</span>
+                            </div>
+                          )}
+
+                          {field.type === 'cover_letter' && (
+                            <div className="p-2 bg-sky-50 border border-sky-200 rounded-lg flex items-center justify-between gap-2 text-xs">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <FileText className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />
+                                <span className="text-[11px] font-medium text-sky-900 truncate">
+                                  Cover letter field detected
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setActiveTab('coverLetter')}
+                                className="text-[11px] font-semibold text-sky-700 hover:text-sky-900 whitespace-nowrap underline"
+                              >
+                                Tailor with JD &rarr;
+                              </button>
                             </div>
                           )}
                         </div>
@@ -657,6 +885,298 @@ export const Drawer: React.FC = () => {
                       </div>
                     );
                   })
+                )}
+              </div>
+            )}
+
+            {/* TAB: Cover Letter Generator */}
+            {activeTab === 'coverLetter' && (
+              <div className="space-y-3">
+                <div className="bg-white rounded-xl p-3 sm:p-3.5 border border-slate-200/80 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-sky-100 text-sky-700 rounded-lg">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-xs text-slate-800">Cover Letter Generator</h4>
+                        <p className="text-[10px] text-slate-500">Auto-matches JD to your real projects</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={resolveJobDescription}
+                      disabled={isResolvingJD}
+                      title="Re-scan previous page or current page for Job Description"
+                      className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isResolvingJD ? 'animate-spin text-sky-600' : 'text-slate-500'}`} />
+                      <span>{isResolvingJD ? 'Scanning...' : 'Scan JD'}</span>
+                    </button>
+                  </div>
+
+                  {/* Target Role & Company */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                        Target Role
+                      </label>
+                      <input
+                        type="text"
+                        value={targetRole}
+                        onChange={(e) => setTargetRole(e.target.value)}
+                        placeholder="e.g. Senior Frontend Engineer"
+                        className="w-full text-xs p-2 rounded-lg border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-sky-500 outline-none text-slate-800 font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                        Target Company
+                      </label>
+                      <input
+                        type="text"
+                        value={targetCompany}
+                        onChange={(e) => setTargetCompany(e.target.value)}
+                        placeholder="e.g. Acme Corp"
+                        className="w-full text-xs p-2 rounded-lg border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-sky-500 outline-none text-slate-800 font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Job Description Status / Prompt */}
+                  {isResolvingJD ? (
+                    <div className="p-3 bg-sky-50/70 border border-sky-200/80 rounded-xl flex items-center gap-2.5 text-xs text-sky-900 animate-in fade-in duration-150">
+                      <Loader2 className="w-4 h-4 animate-spin text-sky-600 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <span className="font-semibold block">Resolving Job Description...</span>
+                        <span className="text-[10px] text-sky-700">Checking current page and previous link</span>
+                      </div>
+                    </div>
+                  ) : coverLetterJD && !showJDInput ? (
+                    <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-1.5 animate-in fade-in duration-150">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-900">
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Job Description Detected ({coverLetterJDSource || 'Auto-detected'})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowJDInput(true)}
+                          className="text-[11px] text-emerald-700 hover:text-emerald-900 underline font-medium"
+                        >
+                          Edit / Change
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-emerald-950/80 line-clamp-2 leading-relaxed">
+                        {coverLetterJD.slice(0, 160)}...
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2.5 animate-in fade-in duration-150">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div className="text-xs">
+                          <span className="font-semibold text-amber-950 block">Job Description Needed</span>
+                          <p className="text-[11px] text-amber-800 leading-snug mt-0.5">
+                            Application forms usually don't include the job description. Paste the JD or enter the posting URL so the AI can match your background.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Paste Link Input with Fetch button */}
+                      <div className="flex gap-1.5">
+                        <input
+                          type="url"
+                          value={userJDUrl}
+                          onChange={(e) => setUserJDUrl(e.target.value)}
+                          placeholder="Paste job posting link (e.g. linkedin.com/jobs/view/...)"
+                          className="flex-1 text-xs px-2.5 py-1.5 rounded-lg border border-amber-200 bg-white focus:border-amber-500 outline-none text-slate-800 placeholder:text-slate-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleFetchUserUrl}
+                          disabled={isFetchingUrl || !userJDUrl.trim()}
+                          className="text-[11px] bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white px-2.5 py-1.5 rounded-lg font-medium transition flex-shrink-0 flex items-center gap-1"
+                        >
+                          {isFetchingUrl ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <span>Fetching...</span>
+                            </>
+                          ) : (
+                            <span>Fetch JD</span>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Paste Text Area */}
+                      <div>
+                        <textarea
+                          rows={3}
+                          value={userJDInput}
+                          onChange={(e) => setUserJDInput(e.target.value)}
+                          placeholder="Or paste requirements, responsibilities, or bullet points..."
+                          className="w-full text-xs p-2 rounded-lg border border-amber-200 bg-white focus:border-amber-500 outline-none text-slate-800 resize-y placeholder:text-slate-400 leading-relaxed"
+                        />
+                        {userJDInput.trim() && (
+                          <div className="flex justify-end pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCoverLetterJD(userJDInput.trim());
+                                setCoverLetterJDSource('Pasted by user');
+                                setShowJDInput(false);
+                              }}
+                              className="text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-md font-medium transition"
+                            >
+                              Confirm JD
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tone & Length Selectors */}
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                        Tone
+                      </label>
+                      <select
+                        value={coverLetterTone}
+                        onChange={(e) => setCoverLetterTone(e.target.value as any)}
+                        className="w-full text-xs p-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 outline-none"
+                      >
+                        <option value="professional">Professional &amp; Polished</option>
+                        <option value="technical">Technical &amp; Systems Depth</option>
+                        <option value="startup">High-Ownership &amp; Startup</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                        Length
+                      </label>
+                      <select
+                        value={coverLetterLength}
+                        onChange={(e) => setCoverLetterLength(e.target.value as any)}
+                        className="w-full text-xs p-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 outline-none"
+                      >
+                        <option value="concise">Concise (~200 words)</option>
+                        <option value="standard">Standard (~350 words)</option>
+                        <option value="detailed">Detailed (~500 words)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Optional Focus Note */}
+                  <div>
+                    <input
+                      type="text"
+                      value={coverLetterCustomNote}
+                      onChange={(e) => setCoverLetterCustomNote(e.target.value)}
+                      placeholder="Optional focus (e.g. emphasize real-time audio copilot project)"
+                      className="w-full text-xs p-2 rounded-lg border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-sky-500 outline-none text-slate-800 placeholder:text-slate-400"
+                    />
+                  </div>
+
+                  {/* Generate Button */}
+                  <button
+                    type="button"
+                    disabled={isGeneratingCoverLetter || isResolvingJD}
+                    onClick={handleGenerateCoverLetter}
+                    className="w-full py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-medium text-xs shadow-xs transition flex items-center justify-center gap-2 active:scale-98"
+                  >
+                    <Sparkles className={`w-4 h-4 ${isGeneratingCoverLetter ? 'animate-spin' : ''}`} />
+                    <span>
+                      {isGeneratingCoverLetter
+                        ? 'Drafting Tailored Cover Letter...'
+                        : generatedCoverLetter
+                        ? 'Regenerate Cover Letter'
+                        : 'Generate Cover Letter'}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Generated Output Card */}
+                {generatedCoverLetter && (
+                  <div className="bg-white rounded-xl p-3 sm:p-3.5 border border-slate-200/80 shadow-xs space-y-3 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-sky-600" />
+                        Tailored Cover Letter
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {generatedCoverLetter.split(/\s+/).filter(Boolean).length} words
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-slate-50/70 border border-slate-200/60 rounded-xl max-h-80 overflow-y-auto select-text">
+                      <p className="text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
+                        {generatedCoverLetter}
+                      </p>
+                    </div>
+
+                    {/* Actions Bar */}
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleSaveCoverLetterToBank(generatedCoverLetter)}
+                        className="text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition flex items-center gap-1"
+                      >
+                        {savedBankId === 'cover_letter_save' ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span className="text-emerald-600">Saved to Bank</span>
+                          </>
+                        ) : (
+                          <>
+                            <ClipboardList className="w-3 h-3 text-slate-500" />
+                            <span>To Bank</span>
+                          </>
+                        )}
+                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(generatedCoverLetter, 'cover_letter_copy')}
+                          className="text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition flex items-center gap-1"
+                        >
+                          {copiedId === 'cover_letter_copy' ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              <span className="text-emerald-600">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3 text-slate-500" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => handleInsertCoverLetter(generatedCoverLetter)}
+                          className="text-[11px] font-medium text-white bg-slate-900 hover:bg-slate-800 px-3 py-1 rounded-md transition flex items-center gap-1"
+                        >
+                          {insertedId === 'cover_letter_btn' ? (
+                            <>
+                              <Check className="w-3 h-3 text-sky-400" />
+                              <span>Inserted</span>
+                            </>
+                          ) : (
+                            <>
+                              <ArrowDownToLine className="w-3 h-3" />
+                              <span>Insert</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             )}

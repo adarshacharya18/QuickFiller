@@ -11,6 +11,9 @@
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
+    "security:audit": "npm audit",
+    "security:sbom": "npx @cyclonedx/cyclonedx-npm --output-file ./sbom.cyclonedx.json",
+    "security:licenses": "npx license-checker --summary",
     "postinstall": "wxt prepare"
   },
   "dependencies": {

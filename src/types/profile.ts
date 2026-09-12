@@ -58,6 +58,7 @@ export interface CandidateProfile {
   experience: ExperienceItem[];
   education: EducationItem[];
   extractedLinks: ExtractedLink[];
+  rawResumeText?: string;
   updatedAt: number;
 }
 
@@ -86,5 +87,6 @@ export const defaultProfile: CandidateProfile = {
   experience: [],
   education: [],
   extractedLinks: [],
+  rawResumeText: '',
   updatedAt: Date.now(),
 };

@@ -2,6 +2,9 @@ export async function fetchOllamaModels(host: string = 'http://localhost:11434')
   try {
     const res = await fetch(`${host.replace(/\/+$/, '')}/api/tags`);
     if (!res.ok) {
+      if (res.status === 403) {
+        throw new Error('Ollama returned 403 Forbidden (Origin blocked by Ollama CORS policy)');
+      }
       throw new Error(`Ollama returned status ${res.status}`);
     }
     const data = await res.json();
@@ -11,7 +14,7 @@ export async function fetchOllamaModels(host: string = 'http://localhost:11434')
     return [];
   } catch (error) {
     console.warn('Could not fetch models from Ollama:', error);
-    return [];
+    throw error;
   }
 }
 
@@ -39,7 +42,12 @@ export async function callOllama(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Ollama error (${response.status}): ${errorText}`);
+    if (response.status === 403) {
+      throw new Error(
+        `Ollama returned 403 Forbidden (CORS / Origin blocked). QuickFiller includes automatic Declarative Net Request rules to rewrite origins, but if running Ollama as a service, ensure OLLAMA_ORIGINS="*" is allowed.`
+      );
+    }
+    throw new Error(`Ollama error (${response.status}): ${errorText || response.statusText}`);
   }
 
   const data = await response.json();

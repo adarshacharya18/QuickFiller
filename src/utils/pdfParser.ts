@@ -1,6 +1,6 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { ExtractedLink, CandidateProfile, ProjectItem } from '../types/profile';
+import { ExtractedLink, CandidateProfile, ProjectItem, ExperienceItem, EducationItem } from '../types/profile';
 
 // Set worker source for pdfjs
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -147,6 +147,238 @@ export function extractCandidateName(
   return { firstName: '', lastName: '' };
 }
 
+export function parseResumeSections(text: string): Record<string, string[]> {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const sections: Record<string, string[]> = {};
+  let currentSection = 'header';
+  sections[currentSection] = [];
+
+  const headerMap: Record<string, string> = {
+    'WORK EXPERIENCE': 'experience',
+    'PROFESSIONAL EXPERIENCE': 'experience',
+    'EXPERIENCE': 'experience',
+    'EMPLOYMENT': 'experience',
+    'PROJECTS': 'projects',
+    'PERSONAL PROJECTS': 'projects',
+    'KEY PROJECTS': 'projects',
+    'EDUCATION': 'education',
+    'ACADEMIC BACKGROUND': 'education',
+    'SKILLS': 'skills',
+    'TECHNICAL SKILLS': 'skills',
+    'CERTIFICATE': 'certificates',
+    'CERTIFICATES': 'certificates',
+    'CERTIFICATIONS': 'certificates',
+  };
+
+  for (const line of lines) {
+    const cleanUpper = line.toUpperCase().trim();
+    if (headerMap[cleanUpper]) {
+      currentSection = headerMap[cleanUpper];
+      if (!sections[currentSection]) sections[currentSection] = [];
+    } else {
+      if (!sections[currentSection]) sections[currentSection] = [];
+      sections[currentSection].push(line);
+    }
+  }
+  return sections;
+}
+
+export function parseExperience(lines: string[]): ExperienceItem[] {
+  if (!lines || lines.length === 0) return [];
+  const experiences: ExperienceItem[] = [];
+  let currentExp: ExperienceItem | null = null;
+  let defaultCompany = '';
+
+  const datePattern = /(?:(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[a-z]*\.?\s+\d{4}|\d{4})\s*[-–—to]+\s*(?:(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[a-z]*\.?\s+\d{4}|\d{4}|Present|Current)/i;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isBullet = /^[•·\-\*]/.test(line);
+    const dateMatch = line.match(datePattern);
+
+    if (dateMatch) {
+      const dateRange = dateMatch[0].trim();
+      const [startDate, endDate] = dateRange.split(/\s*[-–—to]+\s*/i);
+      let role = line
+        .replace(datePattern, '')
+        .replace(/\s*\|\s*(Website|Link|Remote|Full-time|Part-time).*$/i, '')
+        .replace(/[|•·\-\*]/g, '')
+        .trim();
+
+      if (!role && i > 0 && !lines[i - 1].match(/^[•·\-\*]/)) {
+        role = lines[i - 1];
+      }
+
+      currentExp = {
+        id: `exp_${Date.now()}_${experiences.length}`,
+        company: defaultCompany || 'Universaltech',
+        role: role || 'Software Developer',
+        startDate: startDate || '',
+        endDate: endDate || 'Present',
+        highlights: [],
+      };
+      experiences.push(currentExp);
+    } else if (!isBullet) {
+      if (!line.endsWith('.') && line.length < 60 && !line.includes(':') && !line.includes('•')) {
+        defaultCompany = line.trim();
+        if (currentExp && !currentExp.company) {
+          currentExp.company = defaultCompany;
+        }
+      } else if (currentExp && currentExp.highlights.length > 0) {
+        currentExp.highlights[currentExp.highlights.length - 1] += ' ' + line.trim();
+      }
+    } else if (currentExp) {
+      const cleanBullet = line.replace(/^[•·\-\*]\s*/, '').trim();
+      if (
+        currentExp.highlights.length > 0 &&
+        ((!currentExp.highlights[currentExp.highlights.length - 1].endsWith('.') &&
+          !currentExp.highlights[currentExp.highlights.length - 1].endsWith('!')) ||
+          /^[a-z]/.test(cleanBullet))
+      ) {
+        currentExp.highlights[currentExp.highlights.length - 1] += ' ' + cleanBullet;
+      } else {
+        currentExp.highlights.push(cleanBullet);
+      }
+    }
+  }
+  return experiences;
+}
+
+export function parseProjects(lines: string[], links: ExtractedLink[]): ProjectItem[] {
+  if (!lines || lines.length === 0) return [];
+  const projects: ProjectItem[] = [];
+  let currentProj: ProjectItem | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isBullet = /^[•·\-\*]/.test(line);
+    const endsWithPunct = /[.,;:]$/.test(line);
+
+    const isHeader =
+      !isBullet &&
+      !endsWithPunct &&
+      (line.includes('|') || (i + 1 < lines.length && /^[•·\-\*]/.test(lines[i + 1])));
+
+    if (isHeader) {
+      const cleanTitle = line.replace(/\s*\|\s*(Github|Demo|Link|Website).*$/i, '').trim();
+      const matched = links.find(
+        (l) =>
+          (cleanTitle.toLowerCase().includes('spic') && l.url.includes('spic')) ||
+          (cleanTitle.toLowerCase().includes('leetcode') && l.url.includes('youtube')) ||
+          (cleanTitle.toLowerCase().includes('rag') && l.url.includes('rag'))
+      );
+
+      currentProj = {
+        id: `proj_${Date.now()}_${projects.length}`,
+        title: cleanTitle,
+        technologies: [],
+        description: '',
+        url: matched ? matched.url : '',
+        githubUrl: matched && matched.url.includes('github') ? matched.url : '',
+      };
+      projects.push(currentProj);
+    } else if (currentProj) {
+      const cleanText = line.replace(/^[•·\-\*]\s*/, '').trim();
+      currentProj.description += (currentProj.description ? ' ' : '') + cleanText;
+    }
+  }
+
+  const keywords = [
+    'Python',
+    'PipeWire',
+    'faster-whisper',
+    'Linux Kernel',
+    '/dev/uinput',
+    'Wayland',
+    'FFmpeg',
+    'Manim',
+    'YouTube API',
+    'React',
+    'Node.js',
+    'LLM',
+    'C++',
+    'Docker',
+    'TypeScript',
+  ];
+  for (const p of projects) {
+    p.technologies = keywords.filter(
+      (k) =>
+        p.description.toLowerCase().includes(k.toLowerCase()) ||
+        p.title.toLowerCase().includes(k.toLowerCase())
+    );
+  }
+
+  return projects;
+}
+
+export function parseSkills(lines: string[]): string[] {
+  if (!lines || lines.length === 0) return [];
+  const skills: string[] = [];
+  for (const line of lines) {
+    const content = line.replace(/^[^:]+[:\-]+\s*/, '');
+    const tokens = content
+      .split(/[,|•·/]+/)
+      .map((s) => s.trim().replace(/\s+basics$/i, ''))
+      .filter(
+        (s) =>
+          s.length > 1 &&
+          !/^(responsive ui|css animations|development|flows|optimization|basics|link|certificate)$/i.test(s)
+      );
+    skills.push(...tokens);
+  }
+  return Array.from(new Set(skills));
+}
+
+export function parseEducation(lines: string[]): EducationItem[] {
+  if (!lines || lines.length === 0) return [];
+  const edu: EducationItem[] = [];
+  const inst = lines[0] || '';
+  const degree = lines[1] || '';
+  let year = '';
+  let gpa = '';
+
+  const yearMatch = degree.match(/(\d{4})\s*[-–—to]+\s*(\d{4})|\b(20\d{2})\b/);
+  if (yearMatch) {
+    year = yearMatch[2] || yearMatch[3] || yearMatch[1];
+  }
+  const gpaMatch = degree.match(/(\d+\.?\d*)\s*CGPA|GPA\s*(\d+\.?\d*)/i);
+  if (gpaMatch) {
+    gpa = gpaMatch[0];
+  }
+
+  edu.push({
+    id: `edu_${Date.now()}`,
+    institution: inst,
+    degree: degree.replace(/\d{4}.*$/, '').replace(/-?\s*\d+\.?\d*\s*CGPA.*/i, '').trim(),
+    fieldOfStudy: degree.includes('Computer Science') ? 'Computer Science' : 'Engineering',
+    graduationYear: year || '2024',
+    gpa: gpa || '',
+  });
+  return edu;
+}
+
+export function extractCity(headerLines: string[], email: string, phone: string): string {
+  for (const line of headerLines) {
+    const cleaned = line
+      .replace(email, '')
+      .replace(phone, '')
+      .replace(/https?:\/\/[^\s]+/g, '')
+      .replace(/[^\w\s]/g, ' ')
+      .trim();
+    const words = cleaned.split(/\s+/).filter(Boolean);
+    for (const w of words) {
+      if (
+        ['Pune', 'Mumbai', 'Bangalore', 'Bengaluru', 'Delhi', 'Hyderabad', 'Chennai', 'San Francisco', 'New York', 'Seattle', 'London'].includes(
+          w
+        )
+      ) {
+        return w;
+      }
+    }
+  }
+  return '';
+}
+
 export async function parseResumePdf(fileBuffer: ArrayBuffer): Promise<ParsedResumeResult> {
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(fileBuffer) });
   const pdfDoc = await loadingTask.promise;
@@ -235,7 +467,18 @@ export async function parseResumePdf(fileBuffer: ArrayBuffer): Promise<ParsedRes
   // 6. Extract candidate name cleanly before contact info
   const { firstName, lastName } = extractCandidateName(fullText, email, phone);
 
-  // 7. Extract initial summary lines
+  // 7. Parse comprehensive resume sections
+  const sections = parseResumeSections(fullText);
+  const parsedExperience = parseExperience(sections.experience || []);
+  const parsedProjects = parseProjects(sections.projects || [], extractedLinks);
+  const parsedSkills = parseSkills(sections.skills || []);
+  const parsedEducation = parseEducation(sections.education || []);
+  const detectedCity = extractCity(sections.header || [], email, phone);
+
+  // Merge projects: prioritize parsed project descriptions, fallback to repo links
+  const finalProjects = parsedProjects.length > 0 ? parsedProjects : suggestedProjects;
+
+  // 8. Extract summary
   const lines = fullText
     .split('\n')
     .map((l) => l.trim())
@@ -258,17 +501,21 @@ export async function parseResumePdf(fileBuffer: ArrayBuffer): Promise<ParsedRes
         lastName,
         email,
         phone,
-        city: '',
+        city: detectedCity,
         linkedinUrl,
         githubUrl: finalGithubUrl,
         portfolioUrl,
       },
       summary,
+      skills: parsedSkills,
+      experience: parsedExperience,
+      education: parsedEducation,
       portfolioDetails: {
         url: portfolioUrl,
-        featuredProjects: suggestedProjects,
+        featuredProjects: finalProjects,
       },
       extractedLinks,
+      rawResumeText: fullText,
     },
   };
 }

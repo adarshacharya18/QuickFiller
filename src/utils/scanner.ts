@@ -76,16 +76,44 @@ export function findFieldLabel(element: HTMLElement): string {
 
   const ariaLabelledBy = element.getAttribute('aria-labelledby');
   if (ariaLabelledBy) {
-    const refElem = document.getElementById(ariaLabelledBy);
-    if (refElem && refElem.textContent?.trim()) {
-      return refElem.textContent.trim();
+    const ids = ariaLabelledBy.split(/\s+/).filter(Boolean);
+    const texts = ids
+      .map((id) => document.getElementById(id)?.textContent?.trim())
+      .filter(Boolean);
+    if (texts.length > 0) {
+      return texts.join(' ');
     }
   }
 
-  // 4. Preceding text or parent container headers
-  const parentContainer = element.closest('.form-group, .field, [class*="field"], [class*="question"], div');
+  // 4. Preceding sibling label or container
+  let prev = element.previousElementSibling;
+  while (prev) {
+    if (prev.tagName === 'LABEL' || prev.querySelector('label')) {
+      const lbl = prev.tagName === 'LABEL' ? prev : prev.querySelector('label');
+      if (lbl && lbl.textContent?.trim()) {
+        const clone = lbl.cloneNode(true) as HTMLElement;
+        clone.querySelectorAll('input, textarea, select').forEach((n) => n.remove());
+        if (clone.textContent?.trim()) return clone.textContent.trim();
+      }
+    }
+    prev = prev.previousElementSibling;
+  }
+
+  // 5. Parent container's label
+  const parentContainer = element.closest(
+    '.form-group, .field, [class*="field"], [class*="question"], [class*="form-row"], div'
+  );
   if (parentContainer) {
-    const headerOrLegend = parentContainer.querySelector('legend, h3, h4, h5, span, p');
+    const innerLabel = parentContainer.querySelector('label');
+    if (innerLabel && innerLabel.textContent?.trim()) {
+      const clone = innerLabel.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll('input, textarea, select').forEach((n) => n.remove());
+      if (clone.textContent?.trim()) {
+        return clone.textContent.trim();
+      }
+    }
+
+    const headerOrLegend = parentContainer.querySelector('legend, h3, h4, h5, p');
     if (
       headerOrLegend &&
       headerOrLegend.textContent?.trim() &&
@@ -95,7 +123,7 @@ export function findFieldLabel(element: HTMLElement): string {
     }
   }
 
-  // 5. Placeholder, title or name fallback
+  // 6. Placeholder, title or name fallback
   return (
     element.getAttribute('placeholder') ||
     element.getAttribute('title') ||

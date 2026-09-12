@@ -11,6 +11,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
   const [formData, setFormData] = useState<LLMSettings>(settings);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -35,14 +36,17 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
   }, []);
 
   const testConnection = () => {
+    setTestingConnection(true);
     setTestResult(null);
     chrome.runtime.sendMessage(
       {
         type: 'GENERATE_ANSWER',
         questionPrompt: 'Say "Connection successful!" in 3 words.',
         customInstructions: 'Respond only with connection test confirmation.',
+        llmSettings: formData,
       },
       (res) => {
+        setTestingConnection(false);
         if (res?.success) {
           setTestResult({
             success: true,
@@ -166,9 +170,14 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
               </div>
             </div>
 
-            <p className="text-[11px] text-slate-500">
-              Ensure Ollama is running on your machine (e.g., <code>ollama run llama3.2:3b</code>).
-            </p>
+            <div className="text-[11px] text-slate-500 space-y-1">
+              <p>
+                Ensure Ollama is running on your machine (e.g. <code className="bg-slate-200 px-1 py-0.5 rounded text-slate-700">ollama run llama3.2:3b</code>).
+              </p>
+              <p className="text-slate-400">
+                QuickFiller includes automatic Declarative Net Request rules to handle Origin headers. If running as a background service on Linux and you encounter a 403 Forbidden, allow browser origins via <code className="bg-slate-200 px-1 py-0.5 rounded text-slate-700">Environment="OLLAMA_ORIGINS=*"</code> in your service config.
+              </p>
+            </div>
           </div>
         )}
 
@@ -315,27 +324,60 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
         )}
 
         {/* Test Connection */}
-        <div className="pt-2 flex items-center gap-4">
-          <button
-            type="button"
-            onClick={testConnection}
-            className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium px-4 py-2 rounded-lg transition"
-          >
-            Test Connection
-          </button>
-
-          {testResult && (
-            <div
-              className={`flex items-center gap-2 text-xs ${
-                testResult.success ? 'text-emerald-700' : 'text-rose-700'
-              }`}
+        <div className="pt-2 space-y-3">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              disabled={testingConnection}
+              onClick={testConnection}
+              className="text-xs bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-800 font-medium px-4 py-2 rounded-lg transition flex items-center gap-2"
             >
-              {testResult.success ? (
-                <CheckCircle className="w-4 h-4" />
-              ) : (
-                <AlertCircle className="w-4 h-4" />
-              )}
-              <span>{testResult.message}</span>
+              {testingConnection && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+              {testingConnection ? 'Testing Connection...' : 'Test Connection'}
+            </button>
+
+            {testResult && (
+              <div
+                className={`flex items-center gap-2 text-xs ${
+                  testResult.success ? 'text-emerald-700' : 'text-rose-700'
+                }`}
+              >
+                {testResult.success ? (
+                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                )}
+                <span>{testResult.message}</span>
+              </div>
+            )}
+          </div>
+
+          {testResult && !testResult.success && testResult.message.includes('403') && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-2">
+              <p className="font-semibold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-amber-600" />
+                Ollama 403 Forbidden Troubleshooting
+              </p>
+              <div className="text-[11px] text-amber-800 space-y-1.5 leading-relaxed">
+                <p>
+                  <strong>Step 1:</strong> Reload QuickFiller in <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-[10px]">chrome://extensions</code> so the new Declarative Net Request rules take effect.
+                </p>
+                <p>
+                  <strong>Step 2 (Linux service):</strong> If Ollama runs as a systemd service, allow cross-origin requests by adding <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-[10px]">Environment="OLLAMA_ORIGINS=*"</code>:
+                </p>
+                <pre className="bg-amber-100/70 p-2 rounded text-[10px] font-mono select-all overflow-x-auto">
+sudo systemctl edit ollama.service
+# Add under [Service]:
+# Environment="OLLAMA_ORIGINS=*"
+sudo systemctl restart ollama
+                </pre>
+                <p>
+                  <strong>Step 3 (Terminal):</strong> If you launch Ollama manually from a shell:
+                </p>
+                <pre className="bg-amber-100/70 p-2 rounded text-[10px] font-mono select-all overflow-x-auto">
+OLLAMA_ORIGINS="*" ollama serve
+                </pre>
+              </div>
             </div>
           )}
         </div>

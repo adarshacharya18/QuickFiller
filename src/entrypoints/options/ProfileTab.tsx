@@ -43,21 +43,29 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
           lastName: result.suggestedProfile.personal?.lastName || prev.personal.lastName,
           email: result.suggestedProfile.personal?.email || prev.personal.email,
           phone: result.suggestedProfile.personal?.phone || prev.personal.phone,
+          city: result.suggestedProfile.personal?.city || prev.personal.city,
           linkedinUrl: result.suggestedProfile.personal?.linkedinUrl || prev.personal.linkedinUrl,
           githubUrl: result.suggestedProfile.personal?.githubUrl || prev.personal.githubUrl,
           portfolioUrl: result.suggestedProfile.personal?.portfolioUrl || prev.personal.portfolioUrl,
         },
         summary: result.suggestedProfile.summary || prev.summary,
+        skills: result.suggestedProfile.skills?.length ? result.suggestedProfile.skills : prev.skills,
+        experience: result.suggestedProfile.experience?.length ? result.suggestedProfile.experience : prev.experience,
+        education: result.suggestedProfile.education?.length ? result.suggestedProfile.education : prev.education,
         extractedLinks: result.extractedLinks,
         portfolioDetails: {
           ...prev.portfolioDetails,
           url: result.suggestedProfile.personal?.portfolioUrl || prev.portfolioDetails.url,
+          featuredProjects: result.suggestedProfile.portfolioDetails?.featuredProjects?.length
+            ? result.suggestedProfile.portfolioDetails.featuredProjects
+            : prev.portfolioDetails.featuredProjects,
         },
+        rawResumeText: result.rawText,
         updatedAt: Date.now(),
       }));
 
       setParseNotice(
-        `Successfully extracted text and found ${result.extractedLinks.length} embedded links!`
+        `Successfully extracted resume text! Found ${result.suggestedProfile.experience?.length || 0} work experiences, ${result.suggestedProfile.portfolioDetails?.featuredProjects?.length || 0} projects, ${result.suggestedProfile.skills?.length || 0} skills, and ${result.extractedLinks.length} links!`
       );
     } catch (err: any) {
       alert(`Failed to parse PDF resume: ${err.message || 'Unknown error'}`);
@@ -103,6 +111,64 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
           p.id === id ? { ...p, ...partial } : p
         ),
       },
+    }));
+  };
+
+  const addExperience = () => {
+    const newExp: ExperienceItem = {
+      id: `exp_${Date.now()}`,
+      company: '',
+      role: '',
+      startDate: '',
+      endDate: 'Present',
+      highlights: [''],
+    };
+    setFormData((prev) => ({
+      ...prev,
+      experience: [...prev.experience, newExp],
+    }));
+  };
+
+  const removeExperience = (id: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      experience: prev.experience.filter((e) => e.id !== id),
+    }));
+  };
+
+  const updateExperience = (id: string, partial: Partial<ExperienceItem>) => {
+    setFormData((prev) => ({
+      ...prev,
+      experience: prev.experience.map((e) => (e.id === id ? { ...e, ...partial } : e)),
+    }));
+  };
+
+  const addEducation = () => {
+    const newEdu: EducationItem = {
+      id: `edu_${Date.now()}`,
+      institution: '',
+      degree: '',
+      fieldOfStudy: '',
+      graduationYear: '',
+      gpa: '',
+    };
+    setFormData((prev) => ({
+      ...prev,
+      education: [...prev.education, newEdu],
+    }));
+  };
+
+  const removeEducation = (id: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      education: prev.education.filter((ed) => ed.id !== id),
+    }));
+  };
+
+  const updateEducation = (id: string, partial: Partial<EducationItem>) => {
+    setFormData((prev) => ({
+      ...prev,
+      education: prev.education.map((ed) => (ed.id === id ? { ...ed, ...partial } : ed)),
     }));
   };
 
@@ -414,6 +480,195 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
                     placeholder="Built a fault-tolerant job queue handling 10k req/sec with zero packet loss..."
                     className="w-full text-xs p-2 rounded-md border border-slate-200 bg-white outline-none resize-y"
                   />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Section 3: Work Experience */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+              <Briefcase className="w-5 h-5 text-sky-600" />
+              Work Experience
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Verified roles and companies used by the AI when referencing professional background.
+            </p>
+          </div>
+          <button
+            onClick={addExperience}
+            className="flex items-center gap-1.5 text-xs bg-sky-50 hover:bg-sky-100 text-sky-700 font-medium px-3 py-1.5 rounded-lg transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Experience
+          </button>
+        </div>
+
+        {formData.experience.length === 0 ? (
+          <p className="text-xs text-slate-400 py-3 italic">
+            No work experience added yet. Upload your resume or click 'Add Experience'.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {formData.experience.map((exp) => (
+              <div
+                key={exp.id}
+                className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <input
+                    type="text"
+                    value={exp.company}
+                    onChange={(e) => updateExperience(exp.id, { company: e.target.value })}
+                    placeholder="Company Name (e.g. Universaltech)"
+                    className="font-semibold text-xs text-slate-900 bg-transparent border-b border-slate-300 focus:border-sky-600 outline-none pb-1 w-1/2"
+                  />
+                  <button
+                    onClick={() => removeExperience(exp.id)}
+                    className="text-slate-400 hover:text-rose-600 p-1 rounded transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-1">Role / Title</label>
+                    <input
+                      type="text"
+                      value={exp.role}
+                      onChange={(e) => updateExperience(exp.id, { role: e.target.value })}
+                      placeholder="e.g. Junior Software Developer"
+                      className="w-full text-xs p-2 rounded-md border border-slate-200 bg-white outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-1">Start Date</label>
+                    <input
+                      type="text"
+                      value={exp.startDate}
+                      onChange={(e) => updateExperience(exp.id, { startDate: e.target.value })}
+                      placeholder="e.g. JUN 2025"
+                      className="w-full text-xs p-2 rounded-md border border-slate-200 bg-white outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-1">End Date</label>
+                    <input
+                      type="text"
+                      value={exp.endDate}
+                      onChange={(e) => updateExperience(exp.id, { endDate: e.target.value })}
+                      placeholder="e.g. Present or JUN 2026"
+                      className="w-full text-xs p-2 rounded-md border border-slate-200 bg-white outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] text-slate-500 mb-1">
+                    Key Highlights & Responsibilities (one per line)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={(exp.highlights || []).join('\n')}
+                    onChange={(e) =>
+                      updateExperience(exp.id, {
+                        highlights: e.target.value.split('\n').filter(Boolean),
+                      })
+                    }
+                    placeholder="Built real-time features...&#10;Optimized queries by 40%..."
+                    className="w-full text-xs p-2 rounded-md border border-slate-200 bg-white outline-none resize-y"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Section 4: Education */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-sky-600" />
+              Education
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Degree, university, and academic qualifications.
+            </p>
+          </div>
+          <button
+            onClick={addEducation}
+            className="flex items-center gap-1.5 text-xs bg-sky-50 hover:bg-sky-100 text-sky-700 font-medium px-3 py-1.5 rounded-lg transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Education
+          </button>
+        </div>
+
+        {formData.education.length === 0 ? (
+          <p className="text-xs text-slate-400 py-3 italic">
+            No education added yet. Upload your resume or click 'Add Education'.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {formData.education.map((edu) => (
+              <div
+                key={edu.id}
+                className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <input
+                    type="text"
+                    value={edu.institution}
+                    onChange={(e) => updateEducation(edu.id, { institution: e.target.value })}
+                    placeholder="University / Institution (e.g. Vishwakarma Institute of Technology)"
+                    className="font-semibold text-xs text-slate-900 bg-transparent border-b border-slate-300 focus:border-sky-600 outline-none pb-1 w-2/3"
+                  />
+                  <button
+                    onClick={() => removeEducation(edu.id)}
+                    className="text-slate-400 hover:text-rose-600 p-1 rounded transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-[11px] text-slate-500 mb-1">Degree & Field</label>
+                    <input
+                      type="text"
+                      value={edu.degree}
+                      onChange={(e) => updateEducation(edu.id, { degree: e.target.value })}
+                      placeholder="Bachelor of Technology in Computer Science"
+                      className="w-full text-xs p-2 rounded-md border border-slate-200 bg-white outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-1">Graduation Year</label>
+                    <input
+                      type="text"
+                      value={edu.graduationYear}
+                      onChange={(e) => updateEducation(edu.id, { graduationYear: e.target.value })}
+                      placeholder="2024"
+                      className="w-full text-xs p-2 rounded-md border border-slate-200 bg-white outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-1">GPA / Score</label>
+                    <input
+                      type="text"
+                      value={edu.gpa || ''}
+                      onChange={(e) => updateEducation(edu.id, { gpa: e.target.value })}
+                      placeholder="8.2 CGPA"
+                      className="w-full text-xs p-2 rounded-md border border-slate-200 bg-white outline-none"
+                    />
+                  </div>
                 </div>
               </div>
             ))}

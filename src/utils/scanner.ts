@@ -275,3 +275,39 @@ export function extractJobMetadata(): JobMetadata {
     descriptionSnippet: cleanDesc,
   };
 }
+
+/**
+ * Cleans and validates placeholder strings for format hints.
+ * Filters out generic instructions ("type here...", "describe...") or pure ellipsis ("..."),
+ * and strips trailing ellipsis dots ("e.g. $140k..." -> "e.g. $140k") so UI doesn't look artificially truncated.
+ */
+export function getCleanFormatHint(placeholder?: string): string | null {
+  if (!placeholder) return null;
+  const trimmed = placeholder.trim();
+  if (!trimmed) return null;
+
+  // If purely dots, spaces, dashes, or punctuation (e.g. "...", "…", "---", "-")
+  if (/^[\s.…\-_/]+$/.test(trimmed)) return null;
+
+  // Generic non-informative prompts that aren't format hints
+  const isGeneric =
+    /^(type|enter|write|input|provide|add|your|fill)(\s+(in|your|the|a|an))?(\s+(here|answer|response|text|message|details|comment|description|info))?(\.{2,}|…)?$/i.test(
+      trimmed
+    ) ||
+    /^(optional|n\/a|none|required)(\.{2,}|…)?$/i.test(trimmed) ||
+    /^(describe|explain|tell us|share)\b/i.test(trimmed);
+
+  if (isGeneric) {
+    return null;
+  }
+
+  // Clean trailing ellipsis/dots if they exist at the end
+  // e.g. "e.g. $140,000, 2 weeks notice..." -> "e.g. $140,000, 2 weeks notice"
+  const cleaned = trimmed.replace(/\s*(\.{2,}|…)\s*$/, '').trim();
+
+  // If cleaning resulted in empty or purely dots
+  if (!cleaned || /^[\s.…\-_/]+$/.test(cleaned)) return null;
+
+  return cleaned;
+}
+

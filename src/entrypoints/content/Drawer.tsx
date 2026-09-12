@@ -12,7 +12,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
-import { scanFormFields, extractJobMetadata, DetectedField, JobMetadata } from '../../utils/scanner';
+import { scanFormFields, extractJobMetadata, getCleanFormatHint, DetectedField, JobMetadata } from '../../utils/scanner';
 import { setNativeInputValue } from '../../utils/autofill';
 import { getStorageData } from '../../utils/storage';
 import { StorageData } from '../../types/storage';
@@ -215,11 +215,13 @@ export const Drawer: React.FC = () => {
   const generateAnswerForField = (field: DetectedField, instructions?: string) => {
     setGenerating((prev) => ({ ...prev, [field.id]: true }));
 
+    const cleanFormat = getCleanFormatHint(field.placeholder);
+
     chrome.runtime.sendMessage(
       {
         type: 'GENERATE_ANSWER',
         questionPrompt: field.label || field.placeholder,
-        placeholder: field.placeholder || '',
+        placeholder: cleanFormat || field.placeholder || '',
         isTextarea: field.isTextarea,
         jobContext: jobMetadata,
         customInstructions: instructions,
@@ -269,23 +271,23 @@ export const Drawer: React.FC = () => {
         >
           {/* Header */}
           <div className="bg-slate-900 text-white px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between border-b border-slate-800">
-            <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
               <div className="p-1.5 bg-sky-500/15 border border-sky-500/30 rounded-lg flex-shrink-0">
                 <Zap className="w-4 h-4 text-sky-400" />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 sm:gap-2">
-                  <h3 className="font-semibold text-xs sm:text-sm text-slate-100 truncate">
+                  <h3 className="font-semibold text-xs sm:text-sm text-slate-100 flex-shrink-0">
                     QuickFiller Copilot
                   </h3>
-                  <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-800 text-sky-300 border border-slate-700 flex-shrink-0 truncate max-w-[110px] sm:max-w-[150px]">
+                  <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-800 text-sky-300 border border-slate-700 flex-shrink-0 truncate max-w-[120px] sm:max-w-[220px]">
                     {storage?.llmSettings.provider === 'ollama'
                       ? storage.llmSettings.ollama.model || 'Ollama'
                       : storage?.llmSettings.provider || 'AI'}
                   </span>
                 </div>
                 {jobMetadata?.title && (
-                  <p className="text-[10px] text-slate-400 truncate max-w-[200px] sm:max-w-[340px]">
+                  <p className="text-[10px] text-slate-400 break-words line-clamp-1 max-w-full">
                     {jobMetadata.title} {jobMetadata.company ? `• ${jobMetadata.company}` : ''}
                   </p>
                 )}
@@ -371,6 +373,7 @@ export const Drawer: React.FC = () => {
                   customQuestions.map((field) => {
                     const answer = answers[field.id] || field.value || '';
                     const isGen = generating[field.id] || false;
+                    const formatHint = getCleanFormatHint(field.placeholder);
 
                     return (
                       <div
@@ -392,10 +395,10 @@ export const Drawer: React.FC = () => {
                             </button>
                           </div>
 
-                          {field.placeholder && (
-                            <div className="w-full text-[10px] text-slate-500 font-mono bg-slate-100/90 border border-slate-200/70 px-2.5 py-1 rounded-md leading-relaxed break-words">
-                              <span className="font-semibold text-slate-700 mr-1.5">Format:</span>
-                              <span className="text-slate-600">{field.placeholder}</span>
+                          {formatHint && (
+                            <div className="w-full text-[10px] text-slate-600 font-mono bg-slate-100/90 border border-slate-200/70 px-2.5 py-1.5 rounded-md leading-relaxed break-words whitespace-normal select-text">
+                              <span className="font-semibold text-slate-700 mr-1.5 flex-shrink-0">Format:</span>
+                              <span className="text-slate-600 break-words">{formatHint}</span>
                             </div>
                           )}
                         </div>
@@ -408,7 +411,7 @@ export const Drawer: React.FC = () => {
                             onChange={(e) =>
                               setAnswers((prev) => ({ ...prev, [field.id]: e.target.value }))
                             }
-                            placeholder="Click 'Draft Answer' or write your response..."
+                            placeholder="Click 'Draft Answer' or write your response"
                             className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-800 bg-slate-50/50 focus:bg-white resize-y leading-relaxed"
                           />
                         ) : (
@@ -418,7 +421,7 @@ export const Drawer: React.FC = () => {
                             onChange={(e) =>
                               setAnswers((prev) => ({ ...prev, [field.id]: e.target.value }))
                             }
-                            placeholder={field.placeholder || "Click 'Draft Answer' or write response..."}
+                            placeholder={formatHint || "Click 'Draft Answer' or write response"}
                             className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-800 bg-slate-50/50 focus:bg-white"
                           />
                         )}
@@ -546,8 +549,8 @@ export const Drawer: React.FC = () => {
                           className="p-2.5 bg-white border border-slate-200/80 rounded-xl shadow-xs space-y-1.5 hover:border-slate-300 transition"
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="font-medium text-xs text-slate-900 truncate">
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <span className="font-medium text-xs text-slate-900 break-words flex-1 min-w-0">
                                 {field.label}
                               </span>
                               <span className="text-[9px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded capitalize flex-shrink-0">
@@ -574,14 +577,14 @@ export const Drawer: React.FC = () => {
                           </div>
 
                           {/* Value Preview */}
-                          <div className="flex items-center gap-1.5 text-[11px] min-w-0">
-                            <span className="text-[10px] text-slate-400 flex-shrink-0">Value:</span>
+                          <div className="flex items-start gap-1.5 text-[11px] min-w-0">
+                            <span className="text-[10px] text-slate-400 flex-shrink-0 mt-0.5">Value:</span>
                             {resolvedVal ? (
-                              <span className="font-mono text-[10px] text-sky-800 bg-sky-50 border border-sky-200/70 px-2 py-0.5 rounded-md truncate min-w-0 flex-1 max-w-full" title={resolvedVal}>
+                              <span className="font-mono text-[10px] text-sky-800 bg-sky-50 border border-sky-200/70 px-2 py-0.5 rounded-md min-w-0 flex-1 break-all leading-snug select-text" title={resolvedVal}>
                                 {resolvedVal}
                               </span>
                             ) : (
-                              <span className="text-[10px] text-amber-600 italic truncate min-w-0">
+                              <span className="text-[10px] text-amber-600 italic break-words min-w-0">
                                 Not in profile — add in Options
                               </span>
                             )}
@@ -621,7 +624,7 @@ export const Drawer: React.FC = () => {
                         <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
                           {item.label}
                         </span>
-                        <span className="text-xs font-medium text-slate-800 truncate block mt-0.5">
+                        <span className="text-xs font-medium text-slate-800 break-all block mt-0.5 select-text">
                           {item.value}
                         </span>
                       </div>
@@ -656,7 +659,7 @@ export const Drawer: React.FC = () => {
                         className="p-2.5 mb-2 bg-white border border-slate-200/80 rounded-xl space-y-1 shadow-xs"
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-xs text-slate-800 truncate">
+                          <span className="font-semibold text-xs text-slate-800 break-words flex-1 min-w-0">
                             {proj.title}
                           </span>
                           <button
@@ -671,7 +674,7 @@ export const Drawer: React.FC = () => {
                             {copiedId === proj.id ? 'Copied' : 'Copy'}
                           </button>
                         </div>
-                        <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
+                        <p className="text-[11px] text-slate-600 break-words leading-relaxed select-text">
                           {proj.description}
                         </p>
                       </div>

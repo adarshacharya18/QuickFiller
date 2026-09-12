@@ -19,6 +19,7 @@ export default defineConfig({
       'https://generativelanguage.googleapis.com/*',
       'https://api.openai.com/*',
       'https://api.anthropic.com/*',
+      '<all_urls>',
     ],
     optional_host_permissions: [
       '<all_urls>',

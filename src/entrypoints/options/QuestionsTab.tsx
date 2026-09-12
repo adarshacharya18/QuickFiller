@@ -39,23 +39,23 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({
   };
 
   return (
-    <div className="space-y-8 max-w-4xl pb-16">
+    <div className="space-y-4 sm:space-y-6 max-w-4xl pb-4">
       {/* Section 1: Standard Screening Wizard */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+      <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm space-y-3.5 sm:space-y-4">
         <div>
-          <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-sky-600" />
+          <h3 className="text-sm sm:text-base font-semibold text-slate-900 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 text-sky-600" />
             Standard Screening Wizard
           </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Pre-configure your standard answers to common ATS legal, authorization, and salary screening filters.
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+            Pre-set answers for ATS work authorization, sponsorship, notice, and salary.
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">
-              Legally authorized to work in the country you are applying for?
+              Legally authorized to work in target country?
             </label>
             <select
               value={wizard.authorizedToWork}
@@ -69,7 +69,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({
 
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">
-              Will you now or in the future require visa sponsorship?
+              Will you require visa sponsorship?
             </label>
             <select
               value={wizard.requireSponsorship}
@@ -132,7 +132,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({
               className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
             >
               <option value="Not a veteran">I am not a protected veteran</option>
-              <option value="Veteran">I identify as one or more protected veteran categories</option>
+              <option value="Veteran">I identify as a protected veteran</option>
               <option value="Prefer not to say">I don't wish to answer</option>
             </select>
           </div>
@@ -140,15 +140,15 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({
       </div>
 
       {/* Section 2: Custom Question & Answer Bank */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+      <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm space-y-3.5 sm:space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-              <HelpCircle className="w-5 h-5 text-sky-600" />
-              Approved Question & Answer Bank
+            <h3 className="text-sm sm:text-base font-semibold text-slate-900 flex items-center gap-2">
+              <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5 text-sky-600" />
+              Approved Q&A Bank
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Save your approved answers to past questions so the AI can reference them or reuse them verbatim.
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+              Saved answers the AI can cite or reuse verbatim in job forms.
             </p>
           </div>
           <button
@@ -161,22 +161,22 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({
         </div>
 
         {bank.length === 0 ? (
-          <p className="text-xs text-slate-400 py-4 italic">
+          <p className="text-xs text-slate-400 py-3 italic">
             No custom answers saved yet. Add common behavioral or leadership responses here.
           </p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {bank.map((item) => (
               <div
                 key={item.id}
-                className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2.5"
+                className="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2.5"
               >
                 <div className="flex items-start justify-between gap-3">
                   <input
                     type="text"
                     value={item.questionPrompt}
                     onChange={(e) => updateCustomQuestion(item.id, { questionPrompt: e.target.value })}
-                    placeholder="Question prompt (e.g., 'What is your leadership style?')"
+                    placeholder="Question prompt (e.g. 'Describe your technical leadership style')"
                     className="w-full text-xs font-semibold text-slate-900 bg-transparent border-b border-slate-300 focus:border-sky-600 outline-none pb-1"
                   />
                   <button
@@ -188,7 +188,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({
                 </div>
 
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={item.answer}
                   onChange={(e) => updateCustomQuestion(item.id, { answer: e.target.value })}
                   placeholder="Your approved answer..."
@@ -196,7 +196,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({
                 />
 
                 <div className="flex items-center gap-2">
-                  <Tag className="w-3 h-3 text-slate-400" />
+                  <Tag className="w-3 h-3 text-slate-400 flex-shrink-0" />
                   <input
                     type="text"
                     value={item.tags.join(', ')}
@@ -208,7 +208,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({
                           .filter(Boolean),
                       })
                     }
-                    placeholder="Tags (e.g. leadership, management, conflict-resolution)"
+                    placeholder="Tags (e.g. leadership, conflict, system-design)"
                     className="text-[11px] text-slate-600 bg-transparent border-none outline-none w-full"
                   />
                 </div>
@@ -218,11 +218,14 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({
         )}
       </div>
 
-      {/* Floating Save Button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 flex items-center justify-end max-w-5xl mx-auto z-50">
+      {/* Sticky Save Bar */}
+      <div className="sticky bottom-0 bg-white/95 backdrop-blur-sm border-t border-slate-200 py-3 px-4 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 rounded-b-xl sm:rounded-b-2xl flex items-center justify-between z-20 shadow-sm">
+        <span className="text-[11px] text-slate-500 font-medium truncate max-w-[160px] sm:max-w-xs">
+          {bank.length} Saved Q&A
+        </span>
         <button
           onClick={() => onSaveQuestions(wizard, bank)}
-          className="bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs px-6 py-2.5 rounded-xl shadow-md transition flex items-center gap-2"
+          className="bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs px-5 py-2 rounded-lg shadow-sm transition flex items-center gap-1.5"
         >
           <CheckCircle className="w-4 h-4" />
           Save Screening Answers

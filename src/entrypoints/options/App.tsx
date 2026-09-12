@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, HelpCircle, Cpu, Zap, Check } from 'lucide-react';
+import { User, HelpCircle, Cpu, Zap, Check, Maximize2 } from 'lucide-react';
 import { getStorageData, updateStorageData } from '../../utils/storage';
 import { StorageData, defaultStorageData } from '../../types/storage';
 import { CandidateProfile } from '../../types/profile';
@@ -25,6 +25,14 @@ export const App: React.FC = () => {
   const triggerSaveNotification = () => {
     setSavedBanner(true);
     setTimeout(() => setSavedBanner(false), 2500);
+  };
+
+  const openInFullTab = () => {
+    if (chrome?.tabs?.create) {
+      chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
+    } else {
+      window.open(chrome.runtime.getURL('options.html'), '_blank');
+    }
   };
 
   const handleSaveProfile = async (profile: CandidateProfile) => {
@@ -60,41 +68,54 @@ export const App: React.FC = () => {
     <div className="min-h-screen bg-slate-50 text-slate-800">
       {/* Top Navbar */}
       <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-sky-500/10 border border-sky-500/30 rounded-xl">
-              <Zap className="w-5 h-5 text-sky-400" />
+        <div className="max-w-4xl mx-auto px-3.5 sm:px-6 h-13 sm:h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-sky-500/15 border border-sky-500/30 rounded-lg text-sky-400">
+              <Zap className="w-4 h-4" />
             </div>
             <div>
-              <h1 className="font-bold text-base tracking-tight text-white flex items-center gap-2">
-                QuickFiller
-                <span className="text-[10px] font-medium bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded-full border border-sky-500/30">
-                  Open Source
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm tracking-tight text-white">
+                  QuickFiller
                 </span>
-              </h1>
-              <p className="text-[11px] text-slate-400">
-                Local-First Job Application Copilot & Autofiller
+                <span className="text-[9px] font-semibold bg-sky-500/20 text-sky-300 px-1.5 py-0.2 rounded border border-sky-500/30">
+                  v0.1
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 hidden sm:block">
+                Local-First Job Copilot
               </p>
             </div>
           </div>
 
-          {savedBanner && (
-            <div className="flex items-center gap-2 bg-emerald-500/20 text-emerald-300 text-xs px-3 py-1.5 rounded-lg border border-emerald-500/30 animate-in fade-in">
-              <Check className="w-4 h-4 text-emerald-400" />
-              <span>Changes saved locally</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {savedBanner && (
+              <div className="flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 text-[11px] px-2.5 py-1 rounded-md border border-emerald-500/30 animate-in fade-in">
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Saved locally</span>
+                <span className="sm:hidden">Saved</span>
+              </div>
+            )}
+
+            <button
+              onClick={openInFullTab}
+              title="Open settings in a new browser tab"
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Main Body */}
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      <main className="max-w-4xl mx-auto px-3 sm:px-6 py-3.5 sm:py-6">
         {/* Navigation Tabs */}
-        <div className="flex space-x-1 border-b border-slate-200 mb-8">
+        <div className="flex border-b border-slate-200 mb-4 sm:mb-6">
           {[
-            { id: 'profile', label: 'Candidate Profile & Resume', icon: User },
-            { id: 'questions', label: 'Screening Q&A Bank', icon: HelpCircle },
-            { id: 'settings', label: 'AI / LLM Configuration', icon: Cpu },
+            { id: 'profile', short: 'Profile', label: 'Candidate Profile', icon: User },
+            { id: 'questions', short: 'Q&A Bank', label: 'Screening Q&A', icon: HelpCircle },
+            { id: 'settings', short: 'AI Models', label: 'AI Settings', icon: Cpu },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -102,14 +123,15 @@ export const App: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-2 pb-3.5 px-4 text-xs font-semibold border-b-2 transition ${
+                className={`flex-1 flex items-center justify-center gap-1.5 pb-2.5 sm:pb-3 px-1 sm:px-4 text-xs font-semibold border-b-2 transition ${
                   isActive
                     ? 'border-sky-600 text-sky-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-sky-600' : 'text-slate-400'}`} />
-                {tab.label}
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-sky-600' : 'text-slate-400'}`} />
+                <span className="sm:hidden">{tab.short}</span>
+                <span className="hidden sm:inline">{tab.label}</span>
               </button>
             );
           })}

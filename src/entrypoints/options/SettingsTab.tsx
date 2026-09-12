@@ -63,40 +63,47 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
   };
 
   return (
-    <div className="space-y-8 max-w-4xl pb-16">
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+    <div className="space-y-4 sm:space-y-6 max-w-3xl pb-4">
+      <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm space-y-4 sm:space-y-5">
         <div>
-          <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-            <Cpu className="w-5 h-5 text-sky-600" />
+          <h3 className="text-sm sm:text-base font-semibold text-slate-900 flex items-center gap-2">
+            <Cpu className="w-4 h-4 sm:w-5 sm:h-5 text-sky-600" />
             LLM Engine Configuration
           </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Choose between 100% private local AI (Ollama) or Bring-Your-Own-Key cloud APIs.
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+            Use 100% private local AI (Ollama) or bring your own cloud API key.
           </p>
         </div>
 
         {/* Provider Selector */}
         <div>
           <label className="block text-xs font-medium text-slate-700 mb-2">Active AI Provider</label>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
             {[
-              { id: 'ollama', title: 'Ollama (Local)', desc: '100% Private, Free' },
-              { id: 'gemini', title: 'Google Gemini', desc: 'Fast, High Quality' },
-              { id: 'openai', title: 'OpenAI (GPT-4o)', desc: 'Standard cloud LLM' },
-              { id: 'anthropic', title: 'Anthropic Claude', desc: 'Nuanced writing' },
+              { id: 'ollama', title: 'Ollama', desc: 'Local & Private' },
+              { id: 'gemini', title: 'Gemini', desc: 'Fast Google AI' },
+              { id: 'openai', title: 'OpenAI', desc: 'GPT-4o Mini' },
+              { id: 'anthropic', title: 'Anthropic', desc: 'Claude 3.5' },
             ].map((prov) => (
               <button
                 key={prov.id}
                 type="button"
                 onClick={() => setFormData((p) => ({ ...p, provider: prov.id as LLMProvider }))}
-                className={`p-3.5 rounded-xl border text-left transition ${
+                className={`p-2.5 sm:p-3 rounded-xl border text-left transition ${
                   formData.provider === prov.id
-                    ? 'border-sky-600 bg-sky-50/50 ring-1 ring-sky-600'
-                    : 'border-slate-200 hover:border-slate-300 bg-slate-50/30'
+                    ? 'border-sky-600 bg-sky-50/60 ring-1 ring-sky-600'
+                    : 'border-slate-200 hover:border-slate-300 bg-slate-50/40'
                 }`}
               >
-                <span className="block font-semibold text-xs text-slate-900">{prov.title}</span>
-                <span className="text-[11px] text-slate-500">{prov.desc}</span>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-xs text-slate-900">{prov.title}</span>
+                  {formData.provider === prov.id && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-600"></span>
+                  )}
+                </div>
+                <span className="text-[10px] sm:text-[11px] text-slate-500 block mt-0.5 truncate">
+                  {prov.desc}
+                </span>
               </button>
             ))}
           </div>
@@ -104,8 +111,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
 
         {/* Provider Specific Configuration */}
         {formData.provider === 'ollama' && (
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
                   Ollama Host URL
@@ -120,7 +127,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
                     }))
                   }
                   placeholder="http://localhost:11434"
-                  className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none"
+                  className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
                 />
               </div>
 
@@ -145,7 +152,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
                         ollama: { ...p.ollama, model: e.target.value },
                       }))
                     }
-                    className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none"
+                    className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
                   >
                     {ollamaModels.map((m) => (
                       <option key={m} value={m}>
@@ -164,25 +171,23 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
                       }))
                     }
                     placeholder="llama3.2:3b"
-                    className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none"
+                    className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
                   />
                 )}
               </div>
             </div>
 
-            <div className="text-[11px] text-slate-500 space-y-1">
-              <p>
-                Ensure Ollama is running on your machine (e.g. <code className="bg-slate-200 px-1 py-0.5 rounded text-slate-700">ollama run llama3.2:3b</code>).
-              </p>
-              <p className="text-slate-400">
-                QuickFiller includes automatic Declarative Net Request rules to handle Origin headers. If running as a background service on Linux and you encounter a 403 Forbidden, allow browser origins via <code className="bg-slate-200 px-1 py-0.5 rounded text-slate-700">Environment="OLLAMA_ORIGINS=*"</code> in your service config.
-              </p>
+            <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+              <span>
+                Runs locally via <code className="bg-slate-200/80 px-1 py-0.5 rounded font-mono text-[10px]">{formData.ollama.host || 'http://localhost:11434'}</code>. No data leaves your machine.
+              </span>
             </div>
           </div>
         )}
 
         {formData.provider === 'gemini' && (
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-4">
+          <div className="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">
                 Google Gemini API Key
@@ -198,7 +203,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
                     }))
                   }
                   placeholder="AIzaSy..."
-                  className="w-full text-xs p-2.5 pr-10 rounded-lg border border-slate-200 bg-white outline-none"
+                  className="w-full text-xs p-2.5 pr-10 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
                 />
                 <button
                   type="button"
@@ -220,9 +225,9 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
                     gemini: { ...p.gemini, model: e.target.value },
                   }))
                 }
-                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none"
+                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
               >
-                <option value="gemini-1.5-flash">gemini-1.5-flash (Fast & Cost-Efficient)</option>
+                <option value="gemini-1.5-flash">gemini-1.5-flash (Fast & Recommended)</option>
                 <option value="gemini-1.5-pro">gemini-1.5-pro (Deep reasoning)</option>
               </select>
             </div>
@@ -230,7 +235,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
         )}
 
         {formData.provider === 'openai' && (
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-4">
+          <div className="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">OpenAI API Key</label>
               <div className="relative">
@@ -244,7 +249,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
                     }))
                   }
                   placeholder="sk-..."
-                  className="w-full text-xs p-2.5 pr-10 rounded-lg border border-slate-200 bg-white outline-none"
+                  className="w-full text-xs p-2.5 pr-10 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
                 />
                 <button
                   type="button"
@@ -266,7 +271,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
                     openai: { ...p.openai, model: e.target.value },
                   }))
                 }
-                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none"
+                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
               >
                 <option value="gpt-4o-mini">gpt-4o-mini (Recommended)</option>
                 <option value="gpt-4o">gpt-4o</option>
@@ -276,7 +281,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
         )}
 
         {formData.provider === 'anthropic' && (
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-4">
+          <div className="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">
                 Anthropic API Key
@@ -292,7 +297,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
                     }))
                   }
                   placeholder="sk-ant-..."
-                  className="w-full text-xs p-2.5 pr-10 rounded-lg border border-slate-200 bg-white outline-none"
+                  className="w-full text-xs p-2.5 pr-10 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
                 />
                 <button
                   type="button"
@@ -314,7 +319,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
                     anthropic: { ...p.anthropic, model: e.target.value },
                   }))
                 }
-                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none"
+                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
               >
                 <option value="claude-3-5-haiku-20241022">claude-3-5-haiku (Fast)</option>
                 <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet (Highest quality)</option>
@@ -324,13 +329,13 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
         )}
 
         {/* Test Connection */}
-        <div className="pt-2 space-y-3">
-          <div className="flex items-center gap-4">
+        <div className="pt-1 space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
             <button
               type="button"
               disabled={testingConnection}
               onClick={testConnection}
-              className="text-xs bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-800 font-medium px-4 py-2 rounded-lg transition flex items-center gap-2"
+              className="text-xs bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-800 font-medium px-4 py-2 rounded-lg transition flex items-center justify-center gap-2"
             >
               {testingConnection && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
               {testingConnection ? 'Testing Connection...' : 'Test Connection'}
@@ -338,7 +343,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
 
             {testResult && (
               <div
-                className={`flex items-center gap-2 text-xs ${
+                className={`flex items-center gap-1.5 text-xs ${
                   testResult.success ? 'text-emerald-700' : 'text-rose-700'
                 }`}
               >
@@ -347,33 +352,20 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettin
                 ) : (
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 )}
-                <span>{testResult.message}</span>
+                <span className="truncate max-w-[300px]">{testResult.message}</span>
               </div>
             )}
           </div>
 
           {testResult && !testResult.success && testResult.message.includes('403') && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-2">
-              <p className="font-semibold flex items-center gap-1.5">
-                <AlertCircle className="w-4 h-4 text-amber-600" />
-                Ollama 403 Forbidden Troubleshooting
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1.5">
+              <p className="font-semibold flex items-center gap-1.5 text-amber-800">
+                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                Ollama 403 Forbidden Origin Fix
               </p>
-              <div className="text-[11px] text-amber-800 space-y-1.5 leading-relaxed">
-                <p>
-                  <strong>Step 1:</strong> Reload QuickFiller in <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-[10px]">chrome://extensions</code> so the new Declarative Net Request rules take effect.
-                </p>
-                <p>
-                  <strong>Step 2 (Linux service):</strong> If Ollama runs as a systemd service, allow cross-origin requests by adding <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-[10px]">Environment="OLLAMA_ORIGINS=*"</code>:
-                </p>
-                <pre className="bg-amber-100/70 p-2 rounded text-[10px] font-mono select-all overflow-x-auto">
-sudo systemctl edit ollama.service
-# Add under [Service]:
-# Environment="OLLAMA_ORIGINS=*"
-sudo systemctl restart ollama
-                </pre>
-                <p>
-                  <strong>Step 3 (Terminal):</strong> If you launch Ollama manually from a shell:
-                </p>
+              <div className="text-[11px] text-amber-800 space-y-1">
+                <p>1. Reload QuickFiller in <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-[10px]">chrome://extensions</code> to refresh CORS headers.</p>
+                <p>2. Or launch Ollama with origins allowed:</p>
                 <pre className="bg-amber-100/70 p-2 rounded text-[10px] font-mono select-all overflow-x-auto">
 OLLAMA_ORIGINS="*" ollama serve
                 </pre>
@@ -381,17 +373,20 @@ OLLAMA_ORIGINS="*" ollama serve
             </div>
           )}
         </div>
-      </div>
 
-      {/* Floating Save Button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 flex items-center justify-end max-w-5xl mx-auto z-50">
-        <button
-          onClick={() => onSaveSettings(formData)}
-          className="bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs px-6 py-2.5 rounded-xl shadow-md transition flex items-center gap-2"
-        >
-          <CheckCircle className="w-4 h-4" />
-          Save Settings
-        </button>
+        {/* Sticky Save Bar */}
+        <div className="sticky bottom-0 bg-white/95 backdrop-blur-sm border-t border-slate-200 py-3 px-4 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 rounded-b-xl sm:rounded-b-2xl flex items-center justify-between z-20 shadow-sm">
+          <span className="text-[11px] text-slate-500 font-medium capitalize truncate max-w-[160px] sm:max-w-xs">
+            Model: <strong className="text-slate-800">{formData.provider}</strong>
+          </span>
+          <button
+            onClick={() => onSaveSettings(formData)}
+            className="bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs px-5 py-2 rounded-lg shadow-sm transition flex items-center gap-1.5"
+          >
+            <CheckCircle className="w-4 h-4" />
+            Save Settings
+          </button>
+        </div>
       </div>
     </div>
   );

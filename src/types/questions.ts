@@ -1,19 +1,24 @@
 export type QuestionCategory = 
+  | 'custom'
+  | 'behavioral'
+  | 'technical'
+  | 'compensation'
+  | 'company_specific'
+  | 'culture_fit'
   | 'work_auth'
   | 'visa'
   | 'notice_period'
   | 'salary'
   | 'relocation'
-  | 'eeo'
-  | 'custom'
-  | 'behavioral';
+  | 'eeo';
 
 export interface ScreeningQuestion {
   id: string;
   category: QuestionCategory;
-  questionPrompt: string; // e.g., "Are you legally authorized to work?"
+  questionPrompt: string; // e.g., "Describe a challenging technical project"
   answer: string;
   tags: string[];
+  isPinned?: boolean;
   updatedAt: number;
 }
 

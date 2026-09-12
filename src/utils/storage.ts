@@ -246,6 +246,7 @@ export async function getStorageData(): Promise<StorageData> {
         profile,
         wizardAnswers: result.wizardAnswers || defaultStorageData.wizardAnswers,
         questionBank: result.questionBank || defaultStorageData.questionBank,
+        customPasteBank: result.customPasteBank || defaultStorageData.customPasteBank,
         llmSettings: result.llmSettings || defaultStorageData.llmSettings,
         extensionEnabled: result.extensionEnabled ?? defaultStorageData.extensionEnabled,
       });

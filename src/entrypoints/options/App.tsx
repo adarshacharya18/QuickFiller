@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, HelpCircle, Cpu, Zap, Check, Maximize2 } from 'lucide-react';
 import { getStorageData, updateStorageData } from '../../utils/storage';
-import { StorageData, defaultStorageData } from '../../types/storage';
+import { StorageData, defaultStorageData, CustomPasteItem } from '../../types/storage';
 import { CandidateProfile } from '../../types/profile';
 import { ScreeningWizardAnswers, ScreeningQuestion } from '../../types/questions';
 import { LLMSettings } from '../../types/llm';
@@ -43,10 +43,12 @@ export const App: React.FC = () => {
 
   const handleSaveQuestions = async (
     wizardAnswers: ScreeningWizardAnswers,
-    questionBank: ScreeningQuestion[]
+    questionBank: ScreeningQuestion[],
+    customPasteBank?: CustomPasteItem[]
   ) => {
-    await updateStorageData({ wizardAnswers, questionBank });
-    setData((prev) => ({ ...prev, wizardAnswers, questionBank }));
+    const updatedPasteBank = customPasteBank ?? data.customPasteBank ?? [];
+    await updateStorageData({ wizardAnswers, questionBank, customPasteBank: updatedPasteBank });
+    setData((prev) => ({ ...prev, wizardAnswers, questionBank, customPasteBank: updatedPasteBank }));
     triggerSaveNotification();
   };
 
@@ -58,45 +60,36 @@ export const App: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600"></div>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="flex items-center gap-2 text-slate-500 font-medium text-xs">
+          <Zap className="w-4 h-4 animate-spin text-sky-600" />
+          <span>Loading preferences...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800">
-      {/* Top Navbar */}
-      <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40">
-        <div className="max-w-4xl mx-auto px-3.5 sm:px-6 h-13 sm:h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-1.5 bg-sky-500/15 border border-sky-500/30 rounded-lg text-sky-400">
-              <Zap className="w-4 h-4" />
+    <div className="min-h-screen bg-slate-50/60 font-sans text-slate-800 flex flex-col">
+      {/* Header */}
+      <header className="bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-30 shadow-xs">
+        <div className="max-w-4xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1 bg-sky-500/20 border border-sky-400/30 rounded-lg">
+              <Zap className="w-4 h-4 text-sky-400" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-sm tracking-tight text-white">
-                  QuickFiller
-                </span>
-                <span className="text-[9px] font-semibold bg-sky-500/20 text-sky-300 px-1.5 py-0.2 rounded border border-sky-500/30">
-                  v0.1
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 hidden sm:block">
-                Local-First Job Copilot
-              </p>
+              <h1 className="text-xs sm:text-sm font-bold tracking-tight">QuickFiller Copilot</h1>
+              <p className="text-[10px] text-slate-400">Settings &amp; Candidate Profile</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             {savedBanner && (
-              <div className="flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 text-[11px] px-2.5 py-1 rounded-md border border-emerald-500/30 animate-in fade-in">
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden sm:inline">Saved locally</span>
-                <span className="sm:hidden">Saved</span>
-              </div>
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2 py-0.5 rounded-md animate-in fade-in duration-200">
+                <Check className="w-3 h-3" /> Saved
+              </span>
             )}
-
             <button
               onClick={openInFullTab}
               title="Open settings in a new browser tab"
@@ -146,6 +139,7 @@ export const App: React.FC = () => {
           <QuestionsTab
             wizardAnswers={data.wizardAnswers}
             questionBank={data.questionBank}
+            customPasteBank={data.customPasteBank}
             onSaveQuestions={handleSaveQuestions}
           />
         )}

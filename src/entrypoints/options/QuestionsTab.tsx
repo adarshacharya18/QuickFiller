@@ -1,20 +1,47 @@
 import React, { useState } from 'react';
-import { CheckCircle, HelpCircle, Plus, Trash2, Tag, ShieldCheck } from 'lucide-react';
+import { CheckCircle, HelpCircle, Plus, Trash2, Tag, ShieldCheck, ClipboardList, Sparkles } from 'lucide-react';
 import { ScreeningWizardAnswers, ScreeningQuestion } from '../../types/questions';
+import { CustomPasteItem } from '../../types/storage';
 
 interface QuestionsTabProps {
   wizardAnswers: ScreeningWizardAnswers;
   questionBank: ScreeningQuestion[];
-  onSaveQuestions: (wizard: ScreeningWizardAnswers, bank: ScreeningQuestion[]) => void;
+  customPasteBank?: CustomPasteItem[];
+  onSaveQuestions: (
+    wizard: ScreeningWizardAnswers,
+    bank: ScreeningQuestion[],
+    customPasteBank: CustomPasteItem[]
+  ) => void;
 }
 
 export const QuestionsTab: React.FC<QuestionsTabProps> = ({
   wizardAnswers,
   questionBank,
+  customPasteBank,
   onSaveQuestions,
 }) => {
   const [wizard, setWizard] = useState<ScreeningWizardAnswers>(wizardAnswers);
   const [bank, setBank] = useState<ScreeningQuestion[]>(questionBank);
+  const [pasteBank, setPasteBank] = useState<CustomPasteItem[]>(customPasteBank || []);
+
+  const addCustomPasteItem = (preset?: { label: string; value?: string }) => {
+    const newItem: CustomPasteItem = {
+      id: `paste_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      label: preset?.label || '',
+      value: preset?.value || '',
+    };
+    setPasteBank((prev) => [...prev, newItem]);
+  };
+
+  const updateCustomPasteItem = (id: string, partial: Partial<CustomPasteItem>) => {
+    setPasteBank((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...partial } : item))
+    );
+  };
+
+  const removeCustomPasteItem = (id: string) => {
+    setPasteBank((prev) => prev.filter((item) => item.id !== id));
+  };
 
   const addCustomQuestion = () => {
     const newQ: ScreeningQuestion = {
@@ -218,17 +245,104 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({
         )}
       </div>
 
+      {/* Section 3: Custom Paste Bank */}
+      <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm space-y-3.5 sm:space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm sm:text-base font-semibold text-slate-900 flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-sky-600" />
+              Custom Paste Bank
+            </h3>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+              Custom snippets and links (e.g. LeetCode, Cover Hook, Clearance, Referrals) for 1-click copy &amp; insertion in the Copilot drawer.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => addCustomPasteItem()}
+            className="flex items-center justify-center gap-1.5 text-xs bg-sky-50 hover:bg-sky-100 text-sky-700 font-medium px-3 py-1.5 rounded-lg transition self-start sm:self-auto"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Custom Snippet
+          </button>
+        </div>
+
+        {/* Quick-Add Preset Badges */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+          <span className="text-[10px] text-slate-400 font-medium mr-1 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-amber-500" /> Quick Presets:
+          </span>
+          {[
+            { label: 'LeetCode Profile', value: 'https://leetcode.com/u/' },
+            { label: 'HackerRank Profile', value: 'https://www.hackerrank.com/' },
+            { label: 'Personal Website', value: 'https://' },
+            { label: 'Cover Letter Hook', value: '' },
+            { label: 'Security Clearance', value: 'None / Eligible' },
+            { label: 'Referral Name', value: '' },
+          ].map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => addCustomPasteItem(preset)}
+              className="text-[10px] bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200/80 transition font-medium"
+            >
+              + {preset.label}
+            </button>
+          ))}
+        </div>
+
+        {pasteBank.length === 0 ? (
+          <p className="text-xs text-slate-400 py-3 italic">
+            No custom paste snippets added yet. Use quick presets above or click "Add Custom Snippet".
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {pasteBank.map((item) => (
+              <div
+                key={item.id}
+                className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 hover:border-slate-300 transition"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <input
+                    type="text"
+                    value={item.label}
+                    onChange={(e) => updateCustomPasteItem(item.id, { label: e.target.value })}
+                    placeholder="Snippet Label (e.g. LeetCode)"
+                    className="text-xs font-semibold text-slate-800 bg-transparent border-b border-slate-300 focus:border-sky-600 outline-none pb-0.5 w-full"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeCustomPasteItem(item.id)}
+                    title="Delete snippet"
+                    className="text-slate-400 hover:text-rose-600 p-1 rounded transition flex-shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <textarea
+                  rows={2}
+                  value={item.value}
+                  onChange={(e) => updateCustomPasteItem(item.id, { value: e.target.value })}
+                  placeholder="Snippet value or URL to copy / insert..."
+                  className="w-full text-xs p-2 rounded-lg border border-slate-200 bg-white outline-none resize-y text-slate-700 leading-relaxed font-mono text-[11px]"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Sticky Save Bar */}
       <div className="sticky bottom-0 bg-white/95 backdrop-blur-sm border-t border-slate-200 py-3 px-4 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 rounded-b-xl sm:rounded-b-2xl flex items-center justify-between z-20 shadow-sm">
-        <span className="text-[11px] text-slate-500 font-medium truncate max-w-[160px] sm:max-w-xs">
-          {bank.length} Saved Q&A
+        <span className="text-[11px] text-slate-500 font-medium truncate max-w-[200px] sm:max-w-xs">
+          {bank.length} Q&amp;A • {pasteBank.length} Custom Snippets
         </span>
         <button
-          onClick={() => onSaveQuestions(wizard, bank)}
+          onClick={() => onSaveQuestions(wizard, bank, pasteBank)}
           className="bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs px-5 py-2 rounded-lg shadow-sm transition flex items-center gap-1.5"
         >
           <CheckCircle className="w-4 h-4" />
-          Save Screening Answers
+          Save All Answers &amp; Bank
         </button>
       </div>
     </div>

@@ -11,11 +11,15 @@ import {
   AlertCircle,
   Maximize2,
   Minimize2,
+  Search,
+  Plus,
+  Trash2,
+  ClipboardList,
 } from 'lucide-react';
 import { scanFormFields, extractJobMetadata, getCleanFormatHint, DetectedField, JobMetadata } from '../../utils/scanner';
 import { setNativeInputValue } from '../../utils/autofill';
-import { getStorageData } from '../../utils/storage';
-import { StorageData } from '../../types/storage';
+import { getStorageData, updateStorageData } from '../../utils/storage';
+import { StorageData, CustomPasteItem } from '../../types/storage';
 import { CandidateProfile } from '../../types/profile';
 
 export const Drawer: React.FC = () => {
@@ -32,10 +36,54 @@ export const Drawer: React.FC = () => {
   const [generating, setGenerating] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [insertedId, setInsertedId] = useState<string | null>(null);
+  const [savedBankId, setSavedBankId] = useState<string | null>(null);
   const [autofillBanner, setAutofillBanner] = useState<{
     type: 'success' | 'warning' | 'info';
     message: string;
   } | null>(null);
+
+  // Custom paste bank state
+  const [bankSearch, setBankSearch] = useState('');
+  const [isAddingSnippet, setIsAddingSnippet] = useState(false);
+  const [newSnippetLabel, setNewSnippetLabel] = useState('');
+  const [newSnippetValue, setNewSnippetValue] = useState('');
+
+  const handleAddSnippet = async () => {
+    if (!newSnippetLabel.trim() || !newSnippetValue.trim()) return;
+    const newItem: CustomPasteItem = {
+      id: `paste_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      label: newSnippetLabel.trim(),
+      value: newSnippetValue.trim(),
+    };
+    const current = storage?.customPasteBank || [];
+    const updated = [newItem, ...current];
+    await updateStorageData({ customPasteBank: updated });
+    setStorage((prev) => (prev ? { ...prev, customPasteBank: updated } : prev));
+    setNewSnippetLabel('');
+    setNewSnippetValue('');
+    setIsAddingSnippet(false);
+  };
+
+  const handleDeleteSnippet = async (id: string) => {
+    const current = storage?.customPasteBank || [];
+    const updated = current.filter((item) => item.id !== id);
+    await updateStorageData({ customPasteBank: updated });
+    setStorage((prev) => (prev ? { ...prev, customPasteBank: updated } : prev));
+  };
+
+  const handleSaveAnswerToPasteBank = async (label: string, value: string, id: string) => {
+    const newItem: CustomPasteItem = {
+      id: `paste_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      label: label.slice(0, 60),
+      value,
+    };
+    const current = storage?.customPasteBank || [];
+    const updated = [newItem, ...current];
+    await updateStorageData({ customPasteBank: updated });
+    setStorage((prev) => (prev ? { ...prev, customPasteBank: updated } : prev));
+    setSavedBankId(id);
+    setTimeout(() => setSavedBankId(null), 2500);
+  };
 
   // Scan page and load storage
   const scanPage = () => {
@@ -324,7 +372,7 @@ export const Drawer: React.FC = () => {
             {[
               { id: 'questions', label: 'AI Answers', count: customQuestions.length },
               { id: 'autofill', label: 'Autofill', count: standardFields.length },
-              { id: 'bank', label: 'Paste Bank', count: null },
+              { id: 'bank', label: 'Paste Bank', count: (storage?.customPasteBank?.length || 0) > 0 ? storage!.customPasteBank.length : null },
             ].map((tab) => {
               const isActive = activeTab === tab.id;
               return (
@@ -452,6 +500,24 @@ export const Drawer: React.FC = () => {
                             </div>
 
                             <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleSaveAnswerToPasteBank(field.label, answer, field.id)}
+                                title="Save answer to Paste Bank for 1-click re-use"
+                                className="flex items-center gap-1 text-[11px] text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 px-2 py-1 rounded-md transition font-medium"
+                              >
+                                {savedBankId === field.id ? (
+                                  <>
+                                    <Check className="w-3 h-3 text-sky-600" />
+                                    <span className="text-sky-600">Saved</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <ClipboardList className="w-3 h-3 text-sky-600" />
+                                    <span>To Bank</span>
+                                  </>
+                                )}
+                              </button>
+
                               <button
                                 onClick={() => handleCopy(answer, field.id)}
                                 className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition font-medium"
@@ -598,91 +664,281 @@ export const Drawer: React.FC = () => {
             )}
 
             {/* TAB 3: Quick Paste Bank */}
-            {activeTab === 'bank' && storage && (
-              <div className="space-y-2 text-xs">
-                <p className="text-[11px] text-slate-500 px-0.5">
-                  Pre-configured answers for common screening filters.
-                </p>
+            {activeTab === 'bank' && storage && (() => {
+              const searchQuery = bankSearch.toLowerCase().trim();
 
-                {[
-                  { label: 'Work Authorization', value: storage.wizardAnswers.authorizedToWork },
-                  { label: 'Requires Sponsorship', value: storage.wizardAnswers.requireSponsorship },
-                  { label: 'Notice Period', value: storage.wizardAnswers.noticePeriod },
-                  { label: 'Desired Salary', value: storage.wizardAnswers.desiredSalary },
-                  { label: 'Open to Relocation', value: storage.wizardAnswers.openToRelocation },
-                  { label: 'Portfolio URL', value: storage.profile.personal.portfolioUrl || '' },
-                  { label: 'GitHub URL', value: storage.profile.personal.githubUrl || '' },
-                  { label: 'LinkedIn URL', value: storage.profile.personal.linkedinUrl || '' },
-                ]
-                  .filter((item) => Boolean(item.value))
-                  .map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between gap-2.5 p-2.5 bg-white border border-slate-200/80 rounded-xl shadow-xs hover:border-slate-300 transition"
+              const customSnippets = (storage.customPasteBank || []).filter(
+                (item) =>
+                  !searchQuery ||
+                  item.label.toLowerCase().includes(searchQuery) ||
+                  item.value.toLowerCase().includes(searchQuery)
+              );
+
+              const standardItems = [
+                { label: 'Work Authorization', value: storage.wizardAnswers.authorizedToWork },
+                { label: 'Requires Sponsorship', value: storage.wizardAnswers.requireSponsorship },
+                { label: 'Notice Period', value: storage.wizardAnswers.noticePeriod },
+                { label: 'Desired Salary', value: storage.wizardAnswers.desiredSalary },
+                { label: 'Open to Relocation', value: storage.wizardAnswers.openToRelocation },
+                { label: 'Portfolio URL', value: storage.profile.personal.portfolioUrl || '' },
+                { label: 'GitHub URL', value: storage.profile.personal.githubUrl || '' },
+                { label: 'LinkedIn URL', value: storage.profile.personal.linkedinUrl || '' },
+              ].filter(
+                (item) =>
+                  Boolean(item.value) &&
+                  (!searchQuery ||
+                    item.label.toLowerCase().includes(searchQuery) ||
+                    item.value.toLowerCase().includes(searchQuery))
+              );
+
+              const questionBankItems = (storage.questionBank || []).filter(
+                (q) =>
+                  Boolean(q.questionPrompt && q.answer) &&
+                  (!searchQuery ||
+                    q.questionPrompt.toLowerCase().includes(searchQuery) ||
+                    q.answer.toLowerCase().includes(searchQuery) ||
+                    q.tags?.some((t) => t.toLowerCase().includes(searchQuery)))
+              );
+
+              const projectItems = (storage.profile.portfolioDetails.featuredProjects || []).filter(
+                (proj) =>
+                  !searchQuery ||
+                  proj.title.toLowerCase().includes(searchQuery) ||
+                  proj.description.toLowerCase().includes(searchQuery)
+              );
+
+              const totalResults =
+                customSnippets.length + standardItems.length + questionBankItems.length + projectItems.length;
+
+              return (
+                <div className="space-y-3 text-xs">
+                  {/* Top Bar with Add Snippet Button */}
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-slate-500">
+                      1-click copy &amp; insert for reusable values.
+                    </p>
+                    <button
+                      onClick={() => setIsAddingSnippet(!isAddingSnippet)}
+                      className="flex items-center gap-1 text-[11px] bg-sky-50 text-sky-700 hover:bg-sky-100 font-medium px-2.5 py-1 rounded-md transition flex-shrink-0"
                     >
-                      <div className="min-w-0 flex-1">
-                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
-                          {item.label}
-                        </span>
-                        <span className="text-xs font-medium text-slate-800 break-all block mt-0.5 select-text">
-                          {item.value}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => handleCopy(item.value, `bank_${idx}`)}
-                        className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition flex-shrink-0"
-                      >
-                        {copiedId === `bank_${idx}` ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-600" />
-                            <span className="text-emerald-600">Copied</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3 text-slate-500" />
-                            <span>Copy</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  ))}
+                      <Plus className="w-3 h-3" />
+                      {isAddingSnippet ? 'Cancel' : 'Add Snippet'}
+                    </button>
+                  </div>
 
-                {/* Featured Projects */}
-                {storage.profile.portfolioDetails.featuredProjects.length > 0 && (
-                  <div className="pt-2">
-                    <h5 className="font-semibold text-xs text-slate-700 mb-1.5 px-0.5">
-                      Portfolio Projects
-                    </h5>
-                    {storage.profile.portfolioDetails.featuredProjects.map((proj) => (
-                      <div
-                        key={proj.id}
-                        className="p-2.5 mb-2 bg-white border border-slate-200/80 rounded-xl space-y-1 shadow-xs"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-xs text-slate-800 break-words flex-1 min-w-0">
-                            {proj.title}
-                          </span>
+                  {/* Inline Add Snippet Drawer Form */}
+                  {isAddingSnippet && (
+                    <div className="p-3 bg-white border border-sky-200 rounded-xl shadow-xs space-y-2 animate-in fade-in duration-150">
+                      <h5 className="font-semibold text-xs text-sky-950">New Custom Snippet</h5>
+                      <input
+                        type="text"
+                        value={newSnippetLabel}
+                        onChange={(e) => setNewSnippetLabel(e.target.value)}
+                        placeholder="Label (e.g. LeetCode Profile, Cover Hook)"
+                        className="w-full text-xs p-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-sky-500 outline-none text-slate-800"
+                      />
+                      <textarea
+                        rows={2}
+                        value={newSnippetValue}
+                        onChange={(e) => setNewSnippetValue(e.target.value)}
+                        placeholder="Value or URL to copy/paste..."
+                        className="w-full text-xs p-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-sky-500 outline-none text-slate-800 resize-y"
+                      />
+                      <div className="flex justify-end gap-1.5 pt-0.5">
+                        <button
+                          onClick={() => setIsAddingSnippet(false)}
+                          className="text-[11px] text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded-md transition font-medium"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleAddSnippet}
+                          disabled={!newSnippetLabel.trim() || !newSnippetValue.trim()}
+                          className="text-[11px] bg-sky-600 hover:bg-sky-700 text-white px-3 py-1 rounded-md transition font-medium disabled:opacity-50"
+                        >
+                          Save Snippet
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Search / Filter Bar */}
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                    <input
+                      type="text"
+                      value={bankSearch}
+                      onChange={(e) => setBankSearch(e.target.value)}
+                      placeholder="Search snippets, answers, or links..."
+                      className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500 text-slate-800"
+                    />
+                  </div>
+
+                  {totalResults === 0 && (
+                    <div className="text-center py-8 text-slate-400 space-y-1">
+                      <p className="font-medium text-xs text-slate-600">No matching snippets found</p>
+                      <p className="text-[11px]">
+                        {searchQuery ? `No results for "${searchQuery}"` : 'Add snippets using "Add Snippet" above or in Settings.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* SECTION 1: User Custom Snippets */}
+                  {customSnippets.length > 0 && (
+                    <div className="space-y-1.5">
+                      <h5 className="font-semibold text-[10px] text-sky-800 px-0.5 uppercase tracking-wider flex items-center justify-between">
+                        <span>Custom Snippets ({customSnippets.length})</span>
+                      </h5>
+                      {customSnippets.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between gap-2.5 p-2.5 bg-white border border-sky-100 rounded-xl shadow-xs hover:border-sky-300 transition"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[10px] font-semibold text-sky-700 uppercase tracking-wider block">
+                              {item.label}
+                            </span>
+                            <span className="text-xs font-medium text-slate-800 break-all block mt-0.5 select-text font-mono text-[11px]">
+                              {item.value}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => handleCopy(item.value, item.id)}
+                              className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition"
+                            >
+                              {copiedId === item.id ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span className="text-emerald-600">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3 text-slate-500" />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSnippet(item.id)}
+                              title="Delete snippet"
+                              className="text-slate-300 hover:text-rose-600 p-1 rounded transition"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* SECTION 2: Standard Screening Answers */}
+                  {standardItems.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <h5 className="font-semibold text-[10px] text-slate-400 px-0.5 uppercase tracking-wider">
+                        Standard Answers ({standardItems.length})
+                      </h5>
+                      {standardItems.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between gap-2.5 p-2.5 bg-white border border-slate-200/80 rounded-xl shadow-xs hover:border-slate-300 transition"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                              {item.label}
+                            </span>
+                            <span className="text-xs font-medium text-slate-800 break-all block mt-0.5 select-text">
+                              {item.value}
+                            </span>
+                          </div>
                           <button
-                            onClick={() =>
-                              handleCopy(
-                                `${proj.title}: ${proj.description} (${proj.url || proj.githubUrl || ''})`,
-                                proj.id
-                              )
-                            }
-                            className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-md transition flex-shrink-0 font-medium"
+                            onClick={() => handleCopy(item.value, `std_${idx}`)}
+                            className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition flex-shrink-0"
                           >
-                            {copiedId === proj.id ? 'Copied' : 'Copy'}
+                            {copiedId === `std_${idx}` ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span className="text-emerald-600">Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3 text-slate-500" />
+                                <span>Copy</span>
+                              </>
+                            )}
                           </button>
                         </div>
-                        <p className="text-[11px] text-slate-600 break-words leading-relaxed select-text">
-                          {proj.description}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+                      ))}
+                    </div>
+                  )}
+
+                  {/* SECTION 3: Approved Q&A Bank */}
+                  {questionBankItems.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <h5 className="font-semibold text-[10px] text-slate-400 px-0.5 uppercase tracking-wider">
+                        Approved Q&amp;A Answers ({questionBankItems.length})
+                      </h5>
+                      {questionBankItems.map((q) => (
+                        <div
+                          key={q.id}
+                          className="p-2.5 bg-white border border-slate-200/80 rounded-xl shadow-xs space-y-1 hover:border-slate-300 transition"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-xs text-slate-800 break-words flex-1 min-w-0">
+                              {q.questionPrompt}
+                            </span>
+                            <button
+                              onClick={() => handleCopy(q.answer, q.id)}
+                              className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-md transition flex-shrink-0 font-medium"
+                            >
+                              {copiedId === q.id ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-slate-600 break-words leading-relaxed select-text">
+                            {q.answer}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* SECTION 4: Portfolio Projects */}
+                  {projectItems.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <h5 className="font-semibold text-[10px] text-slate-400 px-0.5 uppercase tracking-wider">
+                        Portfolio Projects ({projectItems.length})
+                      </h5>
+                      {projectItems.map((proj) => (
+                        <div
+                          key={proj.id}
+                          className="p-2.5 bg-white border border-slate-200/80 rounded-xl space-y-1 shadow-xs hover:border-slate-300 transition"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-xs text-slate-800 break-words flex-1 min-w-0">
+                              {proj.title}
+                            </span>
+                            <button
+                              onClick={() =>
+                                handleCopy(
+                                  `${proj.title}: ${proj.description} (${proj.url || proj.githubUrl || ''})`,
+                                  proj.id
+                                )
+                              }
+                              className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-md transition flex-shrink-0 font-medium"
+                            >
+                              {copiedId === proj.id ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-slate-600 break-words leading-relaxed select-text">
+                            {proj.description}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Footer with Options Link */}

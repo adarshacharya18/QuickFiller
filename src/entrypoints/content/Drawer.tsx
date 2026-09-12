@@ -353,7 +353,7 @@ export const Drawer: React.FC = () => {
           </div>
 
           {/* Drawer Body */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-3.5 space-y-3 bg-slate-50/50">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-3.5 space-y-3 bg-slate-50/50">
             {/* TAB 1: Screening Questions */}
             {activeTab === 'questions' && (
               <div className="space-y-3">
@@ -375,11 +375,11 @@ export const Drawer: React.FC = () => {
                     return (
                       <div
                         key={field.id}
-                        className="bg-white rounded-xl p-3 sm:p-3.5 border border-slate-200/80 shadow-xs space-y-2.5"
+                        className="bg-white rounded-xl p-3 sm:p-3.5 border border-slate-200/80 shadow-xs space-y-2.5 min-w-0 overflow-hidden"
                       >
-                        <div className="space-y-1">
+                        <div className="space-y-1.5 min-w-0">
                           <div className="flex items-start justify-between gap-2">
-                            <label className="text-xs font-semibold text-slate-800 leading-snug">
+                            <label className="text-xs font-semibold text-slate-800 leading-snug break-words min-w-0 flex-1">
                               {field.label}
                             </label>
                             <button
@@ -393,9 +393,11 @@ export const Drawer: React.FC = () => {
                           </div>
 
                           {field.placeholder && (
-                            <div className="text-[10px] text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded-md w-fit flex items-center gap-1">
-                              <span className="font-semibold text-slate-600">Format:</span>
-                              <span className="truncate max-w-[240px] sm:max-w-[400px]">{field.placeholder}</span>
+                            <div className="max-w-full min-w-0 inline-flex items-center gap-1.5 text-[10px] text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60 overflow-hidden">
+                              <span className="font-semibold text-slate-600 flex-shrink-0">Format:</span>
+                              <span className="truncate min-w-0 flex-1" title={field.placeholder}>
+                                {field.placeholder}
+                              </span>
                             </div>
                           )}
                         </div>
@@ -574,14 +576,14 @@ export const Drawer: React.FC = () => {
                           </div>
 
                           {/* Value Preview */}
-                          <div className="flex items-center gap-1.5 text-[11px]">
+                          <div className="flex items-center gap-1.5 text-[11px] min-w-0">
                             <span className="text-[10px] text-slate-400 flex-shrink-0">Value:</span>
                             {resolvedVal ? (
-                              <span className="font-mono text-[10px] text-sky-800 bg-sky-50 border border-sky-200/70 px-2 py-0.5 rounded-md truncate max-w-full">
+                              <span className="font-mono text-[10px] text-sky-800 bg-sky-50 border border-sky-200/70 px-2 py-0.5 rounded-md truncate min-w-0 flex-1 max-w-full" title={resolvedVal}>
                                 {resolvedVal}
                               </span>
                             ) : (
-                              <span className="text-[10px] text-amber-600 italic">
+                              <span className="text-[10px] text-amber-600 italic truncate min-w-0">
                                 Not in profile — add in Options
                               </span>
                             )}

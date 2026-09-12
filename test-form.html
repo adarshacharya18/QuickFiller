@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Senior Full Stack Engineer Application - Acme Corp</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      padding: 40px 20px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 32px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+    }
+    h1 { font-size: 24px; margin-bottom: 4px; }
+    .company { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+    .job-desc {
+      background: #f1f5f9;
+      padding: 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #334155;
+      margin-bottom: 28px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 6px;
+      color: #1e293b;
+    }
+    input[type="text"], input[type="email"], input[type="tel"], textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+      outline: none;
+      font-family: inherit;
+    }
+    input:focus, textarea:focus {
+      border-color: #0284c7;
+      box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+    }
+    .row {
+      display: flex;
+      gap: 16px;
+    }
+    .row .form-group {
+      flex: 1;
+    }
+    button.submit-btn {
+      background: #0284c7;
+      color: #ffffff;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.submit-btn:hover {
+      background: #0369a1;
+    }
+    #submitted-data {
+      margin-top: 24px;
+      padding: 16px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      display: none;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Senior Full Stack Engineer</h1>
+    <div class="company">Acme Corp • San Francisco, CA (Remote)</div>
+
+    <div class="job-desc">
+      <strong>About the Role:</strong> Acme Corp is building high-scale distributed developer tools. We are looking for a Senior Engineer experienced with React, TypeScript, Node.js, and cloud systems to design resilient real-time products.
+    </div>
+
+    <form id="job-app-form">
+      <div class="row">
+        <div class="form-group">
+          <label for="first_name">First Name *</label>
+          <input type="text" id="first_name" name="first_name" placeholder="Jane" required />
+        </div>
+        <div class="form-group">
+          <label for="last_name">Last Name *</label>
+          <input type="text" id="last_name" name="last_name" placeholder="Doe" required />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="form-group">
+          <label for="email">Email *</label>
+          <input type="email" id="email" name="email" placeholder="jane@example.com" required />
+        </div>
+        <div class="form-group">
+          <label for="phone">Phone *</label>
+          <input type="tel" id="phone" name="phone" placeholder="+1 (555) 000-0000" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="city">Current City / Location *</label>
+        <input type="text" id="city" name="city" placeholder="San Francisco, CA" />
+      </div>
+
+      <div class="row">
+        <div class="form-group">
+          <label for="linkedin_url">LinkedIn Profile URL</label>
+          <input type="text" id="linkedin_url" name="linkedin_url" placeholder="https://linkedin.com/in/..." />
+        </div>
+        <div class="form-group">
+          <label for="github_url">GitHub Profile URL</label>
+          <input type="text" id="github_url" name="github_url" placeholder="https://github.com/..." />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="portfolio_url">Personal Website or Portfolio</label>
+        <input type="text" id="portfolio_url" name="portfolio_url" placeholder="https://yourportfolio.dev" />
+      </div>
+
+      <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+
+      <h3>Screening Questions</h3>
+
+      <div class="form-group">
+        <label for="q_why_company">Why are you interested in joining Acme Corp as a Senior Full Stack Engineer?</label>
+        <textarea id="q_why_company" name="why_company" rows="4" placeholder="Tell us what excites you about this role..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="q_tech_challenge">Describe a challenging technical project you built, including architectural trade-offs and technologies used.</label>
+        <textarea id="q_tech_challenge" name="tech_challenge" rows="4" placeholder="Share technical details from a real project you worked on..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="q_salary_notice">What are your salary expectations and earliest possible start date / notice period?</label>
+        <input type="text" id="q_salary_notice" name="salary_notice" placeholder="e.g. $140,000, 2 weeks notice" />
+      </div>
+
+      <button type="submit" class="submit-btn">Submit Application</button>
+    </form>
+
+    <div id="submitted-data">
+      <h4 style="margin-top: 0; color: #166534;">Form Submitted Successfully!</h4>
+      <pre id="submitted-json" style="white-space: pre-wrap; font-size: 12px;"></pre>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('job-app-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData.entries());
+      document.getElementById('submitted-json').textContent = JSON.stringify(data, null, 2);
+      document.getElementById('submitted-data').style.display = 'block';
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    });
+  </script>
+</body>
+</html>

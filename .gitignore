@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+.output/
+.wxt/
+dist/
+*.zip
+
+# Environment & local
+.env
+.env.*.local
+*.log
+
+# OS & Editors
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/

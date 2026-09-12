@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, Key, RefreshCw, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Cpu, Key, RefreshCw, CheckCircle, AlertCircle, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { LLMSettings, LLMProvider } from '../../types/llm';
 
 interface SettingsTabProps {
@@ -381,11 +381,51 @@ OLLAMA_ORIGINS="*" ollama serve
           </span>
           <button
             onClick={() => onSaveSettings(formData)}
-            className="bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs px-5 py-2 rounded-lg shadow-sm transition flex items-center gap-1.5"
+            className="bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs px-5 py-2 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer"
           >
             <CheckCircle className="w-4 h-4" />
             Save Settings
           </button>
+        </div>
+      </div>
+
+      {/* Site Access & Shortcut Privacy Guide */}
+      <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div>
+          <h3 className="text-sm sm:text-base font-semibold text-slate-900 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
+            Site Access & Keyboard Shortcut
+          </h3>
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+            QuickFiller is designed with a privacy-first approach. You can restrict site access to run only when clicked.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-800">Extension Site Access</span>
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full">
+                On click
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600">
+              In <code className="bg-slate-200/70 px-1 py-0.5 rounded font-mono text-[10px]">chrome://extensions</code>, set{' '}
+              <em>"Allow this extension to read and change all your data on websites that you visit"</em> to <strong>"On click"</strong>.
+            </p>
+          </div>
+
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-800">Toggle Copilot Shortcut</span>
+              <kbd className="text-[11px] bg-sky-100 text-sky-800 border border-sky-200 px-2 py-0.5 rounded font-mono font-semibold">
+                Alt+Shift+Q
+              </kbd>
+            </div>
+            <p className="text-[11px] text-slate-600">
+              Press <strong className="text-slate-800">Alt+Shift+Q</strong> on any web page to instantly launch or toggle the copilot drawer. Customize in <code className="bg-slate-200/70 px-1 py-0.5 rounded font-mono text-[10px]">chrome://extensions/shortcuts</code>.
+            </p>
+          </div>
         </div>
       </div>
     </div>

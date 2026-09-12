@@ -35,6 +35,36 @@ export default defineBackground(() => {
     });
   }
 
+  // Handle Alt+Shift+Q keyboard shortcut to toggle Copilot Drawer on active tab
+  if (typeof chrome !== 'undefined' && chrome.commands?.onCommand) {
+    chrome.commands.onCommand.addListener(async (command) => {
+      if (command === 'toggle_drawer') {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab?.id && tab.url && !tab.url.startsWith('chrome://')) {
+          try {
+            await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_DRAWER' });
+          } catch {
+            // In on-click mode, dynamically inject content script if not yet loaded
+            try {
+              await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: () => {
+                  (window as any).__QUICKFILLER_AUTO_OPEN__ = true;
+                },
+              });
+              await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                files: ['content-scripts/content.js'],
+              });
+            } catch (err) {
+              console.error('[QuickFiller] Could not inject content script on shortcut:', err);
+            }
+          }
+        }
+      }
+    });
+  }
+
   // Initialize Declarative Net Request rules to prevent 403 Forbidden CORS issues with Ollama
   getStorageData().then((storage) => {
     const host = storage.llmSettings?.ollama?.host || 'http://localhost:11434';
@@ -52,6 +82,32 @@ export default defineBackground(() => {
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type === 'INJECT_AND_TOGGLE_DRAWER') {
+      const tabId = message.tabId;
+      if (tabId) {
+        chrome.tabs.sendMessage(tabId, { type: 'TOGGLE_DRAWER' })
+          .then(() => sendResponse({ success: true }))
+          .catch(async () => {
+            try {
+              await chrome.scripting.executeScript({
+                target: { tabId },
+                func: () => {
+                  (window as any).__QUICKFILLER_AUTO_OPEN__ = true;
+                },
+              });
+              await chrome.scripting.executeScript({
+                target: { tabId },
+                files: ['content-scripts/content.js'],
+              });
+              sendResponse({ success: true, injected: true });
+            } catch (err: any) {
+              sendResponse({ success: false, error: err.message });
+            }
+          });
+        return true;
+      }
+    }
+
     if (message?.type === 'GET_TAB_SOURCE_URL') {
       const tabId = sender.tab?.id;
       const url = tabId ? tabSourceUrls.get(tabId) : undefined;

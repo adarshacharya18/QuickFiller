@@ -19,8 +19,19 @@ export default defineConfig({
       'https://generativelanguage.googleapis.com/*',
       'https://api.openai.com/*',
       'https://api.anthropic.com/*',
+    ],
+    optional_host_permissions: [
       '<all_urls>',
     ],
+    commands: {
+      toggle_drawer: {
+        suggested_key: {
+          default: 'Alt+Shift+Q',
+          mac: 'Alt+Shift+Q',
+        },
+        description: 'Toggle QuickFiller Copilot Drawer on current page',
+      },
+    },
     declarative_net_request: {
       rule_resources: [
         {

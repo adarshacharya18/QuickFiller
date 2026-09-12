@@ -28,7 +28,13 @@ import { StorageData, CustomPasteItem } from '../../types/storage';
 import { CandidateProfile } from '../../types/profile';
 
 export const Drawer: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && (window as any).__QUICKFILLER_AUTO_OPEN__) {
+      (window as any).__QUICKFILLER_AUTO_OPEN__ = false;
+      return true;
+    }
+    return false;
+  });
   const [isExpanded, setIsExpanded] = useState(false);
   const [storage, setStorage] = useState<StorageData | null>(null);
   const [standardFields, setStandardFields] = useState<DetectedField[]>([]);
@@ -161,6 +167,35 @@ export const Drawer: React.FC = () => {
         chrome.storage.onChanged.removeListener(handleStorageChange);
       }
       window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, []);
+
+  // Listen for runtime commands (e.g. keyboard shortcut Alt+Shift+Q or popup launcher)
+  useEffect(() => {
+    const handleMessage = (
+      message: any,
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response?: any) => void
+    ) => {
+      if (message?.type === 'TOGGLE_DRAWER') {
+        setIsOpen((prev) => !prev);
+        sendResponse?.({ success: true });
+      } else if (message?.type === 'OPEN_DRAWER') {
+        setIsOpen(true);
+        sendResponse?.({ success: true });
+      } else if (message?.type === 'CLOSE_DRAWER') {
+        setIsOpen(false);
+        sendResponse?.({ success: true });
+      }
+    };
+
+    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+      chrome.runtime.onMessage.addListener(handleMessage);
+    }
+    return () => {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+        chrome.runtime.onMessage.removeListener(handleMessage);
+      }
     };
   }, []);
 

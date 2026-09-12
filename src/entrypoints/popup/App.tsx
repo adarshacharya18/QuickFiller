@@ -5,6 +5,7 @@ import { StorageData } from '../../types/storage';
 
 export const App: React.FC = () => {
   const [data, setData] = useState<StorageData | null>(null);
+  const [isLaunching, setIsLaunching] = useState(false);
 
   useEffect(() => {
     getStorageData().then(setData);
@@ -15,6 +16,20 @@ export const App: React.FC = () => {
     const newEnabled = !data.extensionEnabled;
     await updateStorageData({ extensionEnabled: newEnabled });
     setData((prev) => (prev ? { ...prev, extensionEnabled: newEnabled } : null));
+  };
+
+  const handleLaunchDrawer = async () => {
+    setIsLaunching(true);
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        chrome.runtime.sendMessage({ type: 'INJECT_AND_TOGGLE_DRAWER', tabId: tab.id });
+      }
+    } finally {
+      setTimeout(() => {
+        window.close();
+      }, 150);
+    }
   };
 
   const openOptions = () => {
@@ -58,6 +73,22 @@ export const App: React.FC = () => {
           {data.extensionEnabled ? 'Active' : 'Disabled'}
         </button>
       </div>
+
+      {/* 1-Click Launch Button for On-Click Site Access */}
+      <button
+        onClick={handleLaunchDrawer}
+        disabled={isLaunching || !data.extensionEnabled}
+        className="w-full flex items-center justify-between px-3 py-2 bg-sky-600 hover:bg-sky-700 active:scale-[0.99] disabled:opacity-50 text-white font-medium rounded-xl transition shadow-xs group cursor-pointer"
+        title="Open QuickFiller Copilot Drawer on this tab (Alt+Shift+Q)"
+      >
+        <div className="flex items-center gap-2">
+          <Zap className="w-4 h-4 fill-white text-white group-hover:scale-110 transition-transform" />
+          <span className="font-semibold text-xs">Launch Copilot on this Page</span>
+        </div>
+        <kbd className="text-[10px] bg-sky-800/80 border border-sky-400/30 px-1.5 py-0.5 rounded font-mono text-sky-100 font-semibold tracking-wide">
+          Alt+Shift+Q
+        </kbd>
+      </button>
 
       {/* Profile Status */}
       <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
@@ -108,11 +139,20 @@ export const App: React.FC = () => {
       {/* Open Options Button */}
       <button
         onClick={openOptions}
-        className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-medium py-2 rounded-xl transition shadow-sm"
+        className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-medium py-2 rounded-xl transition shadow-sm cursor-pointer"
       >
         <Settings className="w-3.5 h-3.5" />
         Open Profile & Settings
       </button>
+
+      {/* Site Access & Privacy Badge */}
+      <div className="flex items-center justify-between px-1 text-[10px] text-slate-400">
+        <span className="flex items-center gap-1">
+          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+          Site Access: On-Click Supported
+        </span>
+        <span className="font-mono text-slate-400">Alt+Shift+Q</span>
+      </div>
     </div>
   );
 };

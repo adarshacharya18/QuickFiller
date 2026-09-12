@@ -9,6 +9,8 @@ import {
   ArrowDownToLine,
   ExternalLink,
   AlertCircle,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { scanFormFields, extractJobMetadata, DetectedField, JobMetadata } from '../../utils/scanner';
 import { setNativeInputValue } from '../../utils/autofill';
@@ -18,6 +20,7 @@ import { CandidateProfile } from '../../types/profile';
 
 export const Drawer: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [storage, setStorage] = useState<StorageData | null>(null);
   const [standardFields, setStandardFields] = useState<DetectedField[]>([]);
   const [customQuestions, setCustomQuestions] = useState<DetectedField[]>([]);
@@ -235,7 +238,7 @@ export const Drawer: React.FC = () => {
   const totalFields = standardFields.length + customQuestions.length;
 
   return (
-    <div className="fixed bottom-5 right-5 z-[2147483647] font-sans text-slate-800 text-sm">
+    <div className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[2147483647] font-sans text-slate-800 text-sm">
       {/* Floating Launcher Button */}
       {!isOpen && (
         <button
@@ -243,13 +246,13 @@ export const Drawer: React.FC = () => {
             setIsOpen(true);
             scanPage();
           }}
-          className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-full shadow-2xl border border-slate-700 transition-all hover:scale-105 active:scale-95"
+          className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full shadow-2xl border border-slate-700 transition-all hover:scale-105 active:scale-95"
         >
           <Zap className="w-4 h-4 text-sky-400 animate-pulse" />
           <span className="font-semibold text-xs tracking-wide">QuickFiller</span>
           {totalFields > 0 && (
             <span className="bg-sky-500/20 text-sky-300 text-[10px] px-2 py-0.5 rounded-full border border-sky-400/30">
-              {totalFields} fields
+              {totalFields}
             </span>
           )}
         </button>
@@ -257,92 +260,111 @@ export const Drawer: React.FC = () => {
 
       {/* Expanded Copilot Drawer */}
       {isOpen && (
-        <div className="flex flex-col w-[430px] h-[620px] max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200">
+        <div
+          className={`flex flex-col transition-all duration-200 ease-in-out bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden ${
+            isExpanded
+              ? 'w-[580px] sm:w-[680px] max-w-[calc(100vw-24px)] h-[640px] sm:h-[680px] max-h-[92vh]'
+              : 'w-[380px] sm:w-[440px] max-w-[calc(100vw-24px)] h-[580px] sm:h-[620px] max-h-[90vh]'
+          }`}
+        >
           {/* Header */}
-          <div className="bg-slate-900 text-white p-4 flex items-center justify-between border-b border-slate-800">
-            <div className="flex items-center gap-2.5">
-              <div className="p-1.5 bg-sky-500/10 border border-sky-500/30 rounded-lg">
+          <div className="bg-slate-900 text-white px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between border-b border-slate-800">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-1.5 bg-sky-500/15 border border-sky-500/30 rounded-lg flex-shrink-0">
                 <Zap className="w-4 h-4 text-sky-400" />
               </div>
-              <div>
-                <h3 className="font-semibold text-sm leading-none text-slate-100 flex items-center gap-2">
-                  QuickFiller Copilot
-                  <span className="text-[10px] font-normal px-2 py-0.5 rounded bg-slate-800 text-sky-300 border border-slate-700">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <h3 className="font-semibold text-xs sm:text-sm text-slate-100 truncate">
+                    QuickFiller Copilot
+                  </h3>
+                  <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-800 text-sky-300 border border-slate-700 flex-shrink-0 truncate max-w-[110px] sm:max-w-[150px]">
                     {storage?.llmSettings.provider === 'ollama'
-                      ? `Ollama (${storage.llmSettings.ollama.model})`
+                      ? storage.llmSettings.ollama.model || 'Ollama'
                       : storage?.llmSettings.provider || 'AI'}
                   </span>
-                </h3>
+                </div>
                 {jobMetadata?.title && (
-                  <p className="text-[11px] text-slate-400 truncate max-w-[260px] mt-1">
+                  <p className="text-[10px] text-slate-400 truncate max-w-[200px] sm:max-w-[340px]">
                     {jobMetadata.title} {jobMetadata.company ? `• ${jobMetadata.company}` : ''}
                   </p>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-1">
+
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                title={isExpanded ? 'Collapse width' : 'Expand to wide view'}
+                className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition"
+              >
+                {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              </button>
               <button
                 onClick={scanPage}
                 title="Rescan form"
                 className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setIsOpen(false)}
                 title="Minimize"
                 className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex border-b border-slate-100 bg-slate-50 text-xs font-medium text-slate-600 px-3 pt-2">
-            <button
-              onClick={() => setActiveTab('questions')}
-              className={`pb-2 px-3 border-b-2 transition ${
-                activeTab === 'questions'
-                  ? 'border-sky-600 text-sky-600 font-semibold'
-                  : 'border-transparent hover:text-slate-900'
-              }`}
-            >
-              Screening Questions ({customQuestions.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('autofill')}
-              className={`pb-2 px-3 border-b-2 transition ${
-                activeTab === 'autofill'
-                  ? 'border-sky-600 text-sky-600 font-semibold'
-                  : 'border-transparent hover:text-slate-900'
-              }`}
-            >
-              Autofill ({standardFields.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('bank')}
-              className={`pb-2 px-3 border-b-2 transition ${
-                activeTab === 'bank'
-                  ? 'border-sky-600 text-sky-600 font-semibold'
-                  : 'border-transparent hover:text-slate-900'
-              }`}
-            >
-              Quick Paste Bank
-            </button>
+          <div className="flex border-b border-slate-200 bg-slate-50/80 px-2 pt-1.5 gap-1">
+            {[
+              { id: 'questions', label: 'AI Answers', count: customQuestions.length },
+              { id: 'autofill', label: 'Autofill', count: standardFields.length },
+              { id: 'bank', label: 'Paste Bank', count: null },
+            ].map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-1 text-xs font-medium border-b-2 transition-all rounded-t-md ${
+                    isActive
+                      ? 'border-sky-600 text-sky-600 font-semibold bg-white shadow-xs'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/60'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  {tab.count !== null && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                        isActive
+                          ? 'bg-sky-100 text-sky-700 font-semibold'
+                          : 'bg-slate-200/70 text-slate-600'
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Drawer Body */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-3.5 space-y-3 bg-slate-50/50">
             {/* TAB 1: Screening Questions */}
             {activeTab === 'questions' && (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {customQuestions.length === 0 ? (
                   <div className="text-center py-12 text-slate-400 space-y-2">
-                    <Sparkles className="w-8 h-8 mx-auto text-slate-300" />
-                    <p className="font-medium text-slate-600">No custom screening questions detected</p>
-                    <p className="text-xs max-w-xs mx-auto">
-                      Navigate to a job application form, or switch to the Autofill tab.
+                    <Sparkles className="w-7 h-7 mx-auto text-slate-300" />
+                    <p className="font-medium text-xs sm:text-sm text-slate-600">
+                      No custom questions detected
+                    </p>
+                    <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                      Navigate to an application form or use the Autofill tab.
                     </p>
                   </div>
                 ) : (
@@ -353,11 +375,11 @@ export const Drawer: React.FC = () => {
                     return (
                       <div
                         key={field.id}
-                        className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm space-y-2.5"
+                        className="bg-white rounded-xl p-3 sm:p-3.5 border border-slate-200/80 shadow-xs space-y-2.5"
                       >
                         <div className="space-y-1">
                           <div className="flex items-start justify-between gap-2">
-                            <label className="text-xs font-semibold text-slate-800 leading-tight">
+                            <label className="text-xs font-semibold text-slate-800 leading-snug">
                               {field.label}
                             </label>
                             <button
@@ -371,9 +393,9 @@ export const Drawer: React.FC = () => {
                           </div>
 
                           {field.placeholder && (
-                            <div className="text-[10px] text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded w-fit flex items-center gap-1">
+                            <div className="text-[10px] text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded-md w-fit flex items-center gap-1">
                               <span className="font-semibold text-slate-600">Format:</span>
-                              <span className="truncate max-w-[280px]">{field.placeholder}</span>
+                              <span className="truncate max-w-[240px] sm:max-w-[400px]">{field.placeholder}</span>
                             </div>
                           )}
                         </div>
@@ -387,7 +409,7 @@ export const Drawer: React.FC = () => {
                               setAnswers((prev) => ({ ...prev, [field.id]: e.target.value }))
                             }
                             placeholder="Click 'Draft Answer' or write your response..."
-                            className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-700 bg-slate-50/60 resize-y"
+                            className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-800 bg-slate-50/50 focus:bg-white resize-y leading-relaxed"
                           />
                         ) : (
                           <input
@@ -397,19 +419,19 @@ export const Drawer: React.FC = () => {
                               setAnswers((prev) => ({ ...prev, [field.id]: e.target.value }))
                             }
                             placeholder={field.placeholder || "Click 'Draft Answer' or write response..."}
-                            className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-700 bg-slate-50/60"
+                            className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-800 bg-slate-50/50 focus:bg-white"
                           />
                         )}
 
                         {/* Actions */}
                         {answer && (
-                          <div className="flex items-center justify-between gap-2 pt-1">
-                            <div className="flex gap-1.5">
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 pt-0.5">
+                            <div className="flex items-center gap-1">
                               <button
                                 onClick={() =>
                                   generateAnswerForField(field, 'Make the answer more concise and punchy.')
                                 }
-                                className="text-[10px] text-slate-500 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition"
+                                className="text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition font-medium"
                               >
                                 Shorter
                               </button>
@@ -420,43 +442,43 @@ export const Drawer: React.FC = () => {
                                     'Highlight specific portfolio project achievements and include the project link.'
                                   )
                                 }
-                                className="text-[10px] text-slate-500 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition"
+                                className="text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition font-medium"
                               >
-                                Add Portfolio
+                                Add Project
                               </button>
                             </div>
 
                             <div className="flex items-center gap-1.5">
                               <button
                                 onClick={() => handleCopy(answer, field.id)}
-                                className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition"
+                                className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition font-medium"
                               >
                                 {copiedId === field.id ? (
                                   <>
                                     <Check className="w-3 h-3 text-emerald-600" />
-                                    <span className="text-[11px] text-emerald-600">Copied</span>
+                                    <span className="text-emerald-600">Copied</span>
                                   </>
                                 ) : (
                                   <>
                                     <Copy className="w-3 h-3" />
-                                    <span className="text-[11px]">Copy</span>
+                                    <span>Copy</span>
                                   </>
                                 )}
                               </button>
 
                               <button
                                 onClick={() => handleInsert(field, answer)}
-                                className="flex items-center gap-1 text-xs bg-slate-900 hover:bg-slate-800 text-white px-3 py-1 rounded-md font-medium transition"
+                                className="flex items-center gap-1 text-[11px] bg-slate-900 hover:bg-slate-800 text-white px-3 py-1 rounded-md font-medium transition"
                               >
                                 {insertedId === field.id ? (
                                   <>
                                     <Check className="w-3 h-3 text-sky-400" />
-                                    <span className="text-[11px]">Inserted</span>
+                                    <span>Inserted</span>
                                   </>
                                 ) : (
                                   <>
                                     <ArrowDownToLine className="w-3 h-3" />
-                                    <span className="text-[11px]">Insert</span>
+                                    <span>Insert</span>
                                   </>
                                 )}
                               </button>
@@ -475,17 +497,17 @@ export const Drawer: React.FC = () => {
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-3 bg-sky-50/70 border border-sky-100 rounded-xl">
                   <div>
-                    <h4 className="font-semibold text-xs text-sky-950">1-Click Heuristic Autofill</h4>
+                    <h4 className="font-semibold text-xs text-sky-950">1-Click Autofill</h4>
                     <p className="text-[11px] text-sky-700">
-                      Fills detected standard fields using your profile.
+                      Fills detected standard inputs from your profile.
                     </p>
                   </div>
                   <button
                     onClick={autofillAllStandard}
-                    className="flex items-center gap-1.5 text-xs bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-sm transition active:scale-95"
+                    className="flex items-center gap-1.5 text-xs bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-xs transition active:scale-95 flex-shrink-0"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    Fill All
+                    Fill All ({standardFields.length})
                   </button>
                 </div>
 
@@ -504,7 +526,7 @@ export const Drawer: React.FC = () => {
                     ) : (
                       <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     )}
-                    <span className="font-medium">{autofillBanner.message}</span>
+                    <span className="font-medium text-[11px]">{autofillBanner.message}</span>
                   </div>
                 )}
 
@@ -521,42 +543,48 @@ export const Drawer: React.FC = () => {
                       return (
                         <div
                           key={field.id}
-                          className="p-2.5 bg-white border border-slate-200 rounded-lg text-xs space-y-1"
+                          className="p-2.5 bg-white border border-slate-200/80 rounded-xl shadow-xs space-y-1.5 hover:border-slate-300 transition"
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="truncate max-w-[240px]">
-                              <span className="font-medium text-slate-800 block truncate">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-medium text-xs text-slate-900 truncate">
                                 {field.label}
                               </span>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[10px] text-slate-400 capitalize">
-                                  Type: {field.type}
-                                </span>
-                                {resolvedVal ? (
-                                  <span className="text-[10px] text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200 truncate max-w-[150px]">
-                                    {resolvedVal}
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] text-amber-600 italic">
-                                    (No profile value)
-                                  </span>
-                                )}
-                              </div>
+                              <span className="text-[9px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded capitalize flex-shrink-0">
+                                {field.type}
+                              </span>
                             </div>
 
                             <button
                               disabled={!resolvedVal}
                               onClick={() => handleInsert(field, resolvedVal)}
-                              className="text-[11px] font-medium text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1 rounded transition"
+                              className="text-[11px] font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed px-2.5 py-1 rounded-md transition flex items-center gap-1 flex-shrink-0"
                             >
                               {insertedId === field.id ? (
                                 <span className="text-emerald-600 flex items-center gap-1">
                                   <Check className="w-3 h-3" /> Inserted
                                 </span>
                               ) : (
-                                'Insert'
+                                <>
+                                  <ArrowDownToLine className="w-3 h-3 text-slate-500" />
+                                  <span>Insert</span>
+                                </>
                               )}
                             </button>
+                          </div>
+
+                          {/* Value Preview */}
+                          <div className="flex items-center gap-1.5 text-[11px]">
+                            <span className="text-[10px] text-slate-400 flex-shrink-0">Value:</span>
+                            {resolvedVal ? (
+                              <span className="font-mono text-[10px] text-sky-800 bg-sky-50 border border-sky-200/70 px-2 py-0.5 rounded-md truncate max-w-full">
+                                {resolvedVal}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-amber-600 italic">
+                                Not in profile — add in Options
+                              </span>
+                            )}
                           </div>
                         </div>
                       );
@@ -568,8 +596,8 @@ export const Drawer: React.FC = () => {
 
             {/* TAB 3: Quick Paste Bank */}
             {activeTab === 'bank' && storage && (
-              <div className="space-y-2.5 text-xs">
-                <p className="text-[11px] text-slate-500">
+              <div className="space-y-2 text-xs">
+                <p className="text-[11px] text-slate-500 px-0.5">
                   Pre-configured answers for common screening filters.
                 </p>
 
@@ -587,19 +615,31 @@ export const Drawer: React.FC = () => {
                   .map((item, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg"
+                      className="flex items-center justify-between gap-2.5 p-2.5 bg-white border border-slate-200/80 rounded-xl shadow-xs hover:border-slate-300 transition"
                     >
-                      <div className="truncate max-w-[260px]">
-                        <span className="text-[10px] text-slate-400 block">{item.label}</span>
-                        <span className="font-medium text-slate-800 truncate block">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          {item.label}
+                        </span>
+                        <span className="text-xs font-medium text-slate-800 truncate block mt-0.5">
                           {item.value}
                         </span>
                       </div>
                       <button
                         onClick={() => handleCopy(item.value, `bank_${idx}`)}
-                        className="text-[11px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded transition"
+                        className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition flex-shrink-0"
                       >
-                        {copiedId === `bank_${idx}` ? 'Copied' : 'Copy'}
+                        {copiedId === `bank_${idx}` ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span className="text-emerald-600">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3 text-slate-500" />
+                            <span>Copy</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   ))}
@@ -607,16 +647,18 @@ export const Drawer: React.FC = () => {
                 {/* Featured Projects */}
                 {storage.profile.portfolioDetails.featuredProjects.length > 0 && (
                   <div className="pt-2">
-                    <h5 className="font-semibold text-xs text-slate-700 mb-1.5">
+                    <h5 className="font-semibold text-xs text-slate-700 mb-1.5 px-0.5">
                       Portfolio Projects
                     </h5>
                     {storage.profile.portfolioDetails.featuredProjects.map((proj) => (
                       <div
                         key={proj.id}
-                        className="p-2.5 mb-2 bg-white border border-slate-200 rounded-lg space-y-1"
+                        className="p-2.5 mb-2 bg-white border border-slate-200/80 rounded-xl space-y-1 shadow-xs"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-slate-800">{proj.title}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-xs text-slate-800 truncate">
+                            {proj.title}
+                          </span>
                           <button
                             onClick={() =>
                               handleCopy(
@@ -624,12 +666,14 @@ export const Drawer: React.FC = () => {
                                 proj.id
                               )
                             }
-                            className="text-[10px] text-slate-600 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded"
+                            className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-md transition flex-shrink-0 font-medium"
                           >
                             {copiedId === proj.id ? 'Copied' : 'Copy'}
                           </button>
                         </div>
-                        <p className="text-[11px] text-slate-600 line-clamp-2">{proj.description}</p>
+                        <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
+                          {proj.description}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -639,11 +683,11 @@ export const Drawer: React.FC = () => {
           </div>
 
           {/* Footer with Options Link */}
-          <div className="p-3 bg-white border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>QuickFiller v0.1.0</span>
+          <div className="px-3.5 py-2.5 bg-white border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span className="text-[11px]">QuickFiller Copilot</span>
             <button
               onClick={() => chrome.runtime.openOptionsPage()}
-              className="flex items-center gap-1 text-sky-600 hover:text-sky-700 font-medium"
+              className="flex items-center gap-1 text-sky-600 hover:text-sky-700 font-medium text-[11px]"
             >
               Open Options <ExternalLink className="w-3 h-3" />
             </button>

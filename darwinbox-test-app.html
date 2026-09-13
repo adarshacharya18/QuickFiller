@@ -936,6 +936,13 @@
     const successBanner = document.getElementById('submission-success-banner');
     const resetBtn = document.getElementById('reset-form-btn');
 
+    // Clean lingering success hash on reload so fresh tests start cleanly
+    if (window.location.hash.includes('success')) {
+      try {
+        window.history.replaceState({}, '', window.location.pathname);
+      } catch {}
+    }
+
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       // Show Darwinbox success alert

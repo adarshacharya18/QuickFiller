@@ -6,11 +6,12 @@ const SESSION_STORAGE_KEY = 'quickfiller_pending_submission';
 const STAGE_EXPIRATION_MS = 15 * 60 * 1000; // 15 minutes
 const SUBMIT_WINDOW_MS = 30 * 1000; // 30 seconds
 
-interface StagedJob {
+export interface StagedJob {
   company: string;
   title: string;
   url: string;
   timestamp: number;
+  submitted: boolean;
 }
 
 export const CONFIRMATION_URL_REGEX =
@@ -22,7 +23,10 @@ export const SUCCESS_TEXT_REGEX =
 /**
  * Saves or updates the currently viewed job candidate into session storage.
  */
-export function stageCurrentJobMetadata(metadata: JobMetadata | null): void {
+export function stageCurrentJobMetadata(
+  metadata: JobMetadata | null,
+  submitted: boolean = true
+): void {
   if (!metadata) return;
   const title = (metadata.title || '').trim() || 'Job Application';
   const company = (metadata.company || '').trim() || 'Company';
@@ -32,6 +36,7 @@ export function stageCurrentJobMetadata(metadata: JobMetadata | null): void {
       title,
       url: window.location.href,
       timestamp: Date.now(),
+      submitted,
     };
     sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(staged));
   } catch {
@@ -41,14 +46,18 @@ export function stageCurrentJobMetadata(metadata: JobMetadata | null): void {
 
 /**
  * Retrieves staged job from session storage if valid and unexpired.
+ * If requireSubmitted is true, only returns if the job was explicitly submitted.
  */
-export function getStagedJobMetadata(): StagedJob | null {
+export function getStagedJobMetadata(requireSubmitted: boolean = false): StagedJob | null {
   try {
     const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
     if (!raw) return null;
     const parsed: StagedJob = JSON.parse(raw);
     if (Date.now() - parsed.timestamp > STAGE_EXPIRATION_MS) {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      return null;
+    }
+    if (requireSubmitted && !parsed.submitted) {
       return null;
     }
     return parsed;
@@ -177,6 +186,29 @@ export function hasVisibleSuccessMessage(): boolean {
   return false;
 }
 
+/**
+ * Checks if the DOM currently contains an active, unsubmitted application form.
+ * If visible input fields exist, the user is looking at the application form, NOT a confirmation page.
+ */
+export function hasActiveFormFields(): boolean {
+  try {
+    const inputs = querySelectorAllDeep<HTMLInputElement | HTMLTextAreaElement>(
+      'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea',
+      document
+    );
+    let visibleCount = 0;
+    for (const input of inputs) {
+      if (isElementVisible(input)) {
+        visibleCount++;
+        if (visibleCount >= 2) return true;
+      }
+    }
+    return visibleCount > 0;
+  } catch {
+    return false;
+  }
+}
+
 export interface SubmissionWatcherOptions {
   onAutoTracked: (app: JobApplication) => void;
 }
@@ -191,26 +223,26 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
 
   // Helper to commit application to local storage
   const commitApplicationIfPending = async (forceCommit = false) => {
-    // Safety check: must either be a redirect confirmation URL OR a recent submit attempt
+    // Safety check 1: must either be a redirect confirmation URL OR a recent submit attempt
     const recentSubmit =
       submitAttemptTimestamp > 0 && Date.now() - submitAttemptTimestamp < SUBMIT_WINDOW_MS;
 
-    if (!isConfirmationUrl() && !recentSubmit && !forceCommit) {
+    if (!recentSubmit && !forceCommit) {
       return;
     }
 
-    let staged = getStagedJobMetadata();
-
-    // Fallback: If no staged metadata exists, extract fresh from page
-    if (!staged) {
-      const fresh = extractJobMetadata();
-      staged = {
-        company: fresh.company || 'Company',
-        title: fresh.title || 'Job Application',
-        url: window.location.href,
-        timestamp: Date.now(),
-      };
+    // Safety check 2: Never commit if the page is currently an active application form without a visible success message
+    if (hasActiveFormFields() && !hasVisibleSuccessMessage()) {
+      return;
     }
+
+    const staged: StagedJob = getStagedJobMetadata() || {
+      company: extractJobMetadata().company || 'Company',
+      title: extractJobMetadata().title || 'Job Application',
+      url: window.location.href,
+      timestamp: Date.now(),
+      submitted: true,
+    };
 
     const storage = await getStorageData();
     if (storage.jobTrackerEnabled === false || storage.autoTrackOnSubmit === false) {
@@ -267,21 +299,24 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     options.onAutoTracked(newApp);
   };
 
-  // 1. Check if user landed on a confirmation page via redirect (with previously staged job)
-  if (isConfirmationUrl() && getStagedJobMetadata()) {
-    commitApplicationIfPending(true);
+  // 1. Check if user landed on a confirmation page via redirect (must have an explicitly submitted staged job)
+  if (isConfirmationUrl()) {
+    const staged = getStagedJobMetadata(true);
+    if (staged && (!hasActiveFormFields() || hasVisibleSuccessMessage())) {
+      commitApplicationIfPending(true);
+    }
   }
 
   const handleUserSubmitIntent = () => {
     submitAttemptTimestamp = Date.now();
     const meta = extractJobMetadata();
-    stageCurrentJobMetadata(meta);
+    stageCurrentJobMetadata(meta, true);
 
     // Staggered check intervals to capture SPA DOM updates
     [100, 300, 700, 1500].forEach((delay) => {
       setTimeout(() => {
         if (!isListening) return;
-        if (hasVisibleSuccessMessage() || isConfirmationUrl()) {
+        if (hasVisibleSuccessMessage() || (isConfirmationUrl() && !hasActiveFormFields())) {
           commitApplicationIfPending();
         }
       }, delay);
@@ -312,7 +347,7 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     const recentSubmit =
       submitAttemptTimestamp > 0 && Date.now() - submitAttemptTimestamp < SUBMIT_WINDOW_MS;
 
-    if (recentSubmit && (hasVisibleSuccessMessage() || isConfirmationUrl())) {
+    if (recentSubmit && (hasVisibleSuccessMessage() || (isConfirmationUrl() && !hasActiveFormFields()))) {
       commitApplicationIfPending();
     }
   });
@@ -323,8 +358,13 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     if (!isListening) return;
     if (window.location.href !== lastUrl) {
       lastUrl = window.location.href;
-      if (isConfirmationUrl() && getStagedJobMetadata()) {
-        commitApplicationIfPending(true);
+      if (isConfirmationUrl()) {
+        const recentSubmit =
+          submitAttemptTimestamp > 0 && Date.now() - submitAttemptTimestamp < SUBMIT_WINDOW_MS;
+        const staged = getStagedJobMetadata(true);
+        if ((recentSubmit || staged) && (!hasActiveFormFields() || hasVisibleSuccessMessage())) {
+          commitApplicationIfPending(true);
+        }
       }
     }
   }, 1000);
@@ -332,8 +372,11 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
   document.addEventListener('click', handleClick, true);
   document.addEventListener('submit', handleSubmit, true);
   window.addEventListener('popstate', () => {
-    if (isConfirmationUrl() && getStagedJobMetadata()) {
-      commitApplicationIfPending(true);
+    if (isConfirmationUrl()) {
+      const staged = getStagedJobMetadata(true);
+      if (staged && (!hasActiveFormFields() || hasVisibleSuccessMessage())) {
+        commitApplicationIfPending(true);
+      }
     }
   });
 

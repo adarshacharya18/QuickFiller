@@ -30,7 +30,7 @@ import { StorageData, CustomPasteItem } from '../../types/storage';
 import { CandidateProfile } from '../../types/profile';
 import { JobApplication, ApplicationStatus } from '../../types/applications';
 import { cleanCoverLetterOutput } from '../../utils/llm/coverLetterPrompt';
-import { initSubmissionWatcher, stageCurrentJobMetadata } from '../../utils/submissionWatcher';
+import { initSubmissionWatcher } from '../../utils/submissionWatcher';
 
 export const Drawer: React.FC = () => {
   const [isOpen, setIsOpen] = useState<boolean>(() => {
@@ -221,7 +221,6 @@ export const Drawer: React.FC = () => {
     setCustomQuestions(cq);
     const meta = extractJobMetadata();
     setJobMetadata(meta);
-    stageCurrentJobMetadata(meta);
   };
 
   const refreshStorage = async () => {

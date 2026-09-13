@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { User, HelpCircle, Cpu, Zap, Check, Maximize2 } from 'lucide-react';
+import { User, HelpCircle, Cpu, Zap, Check, Maximize2, Briefcase } from 'lucide-react';
 import { getStorageData, updateStorageData } from '../../utils/storage';
 import { StorageData, defaultStorageData, CustomPasteItem } from '../../types/storage';
 import { CandidateProfile } from '../../types/profile';
 import { ScreeningWizardAnswers, ScreeningQuestion } from '../../types/questions';
 import { LLMSettings } from '../../types/llm';
+import { JobApplication } from '../../types/applications';
 import { ProfileTab } from './ProfileTab';
 import { QuestionsTab } from './QuestionsTab';
 import { SettingsTab } from './SettingsTab';
+import { ApplicationsTab } from './ApplicationsTab';
 
 export const App: React.FC = () => {
   const [data, setData] = useState<StorageData>(defaultStorageData);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'profile' | 'questions' | 'settings'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'questions' | 'applications' | 'settings'>('profile');
   const [savedBanner, setSavedBanner] = useState(false);
 
   useEffect(() => {
@@ -49,6 +51,18 @@ export const App: React.FC = () => {
     const updatedPasteBank = customPasteBank ?? data.customPasteBank ?? [];
     await updateStorageData({ wizardAnswers, questionBank, customPasteBank: updatedPasteBank });
     setData((prev) => ({ ...prev, wizardAnswers, questionBank, customPasteBank: updatedPasteBank }));
+    triggerSaveNotification();
+  };
+
+  const handleSaveApplications = async (applications: JobApplication[]) => {
+    await updateStorageData({ applications });
+    setData((prev) => ({ ...prev, applications }));
+    triggerSaveNotification();
+  };
+
+  const handleToggleJobTracker = async (jobTrackerEnabled: boolean) => {
+    await updateStorageData({ jobTrackerEnabled });
+    setData((prev) => ({ ...prev, jobTrackerEnabled }));
     triggerSaveNotification();
   };
 
@@ -108,6 +122,7 @@ export const App: React.FC = () => {
           {[
             { id: 'profile', short: 'Profile', label: 'Candidate Profile', icon: User },
             { id: 'questions', short: 'Q&A Bank', label: 'Screening Q&A', icon: HelpCircle },
+            { id: 'applications', short: 'Tracker', label: 'Job Tracker', icon: Briefcase },
             { id: 'settings', short: 'AI Models', label: 'AI Settings', icon: Cpu },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -144,8 +159,22 @@ export const App: React.FC = () => {
           />
         )}
 
+        {activeTab === 'applications' && (
+          <ApplicationsTab
+            applications={data.applications || []}
+            jobTrackerEnabled={data.jobTrackerEnabled ?? true}
+            onSaveApplications={handleSaveApplications}
+            onToggleJobTracker={handleToggleJobTracker}
+          />
+        )}
+
         {activeTab === 'settings' && (
-          <SettingsTab settings={data.llmSettings} onSaveSettings={handleSaveSettings} />
+          <SettingsTab
+            settings={data.llmSettings}
+            onSaveSettings={handleSaveSettings}
+            jobTrackerEnabled={data.jobTrackerEnabled ?? true}
+            onToggleJobTracker={handleToggleJobTracker}
+          />
         )}
       </main>
     </div>

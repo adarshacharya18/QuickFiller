@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, Key, RefreshCw, CheckCircle, AlertCircle, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { Cpu, Key, RefreshCw, CheckCircle, AlertCircle, Eye, EyeOff, ShieldCheck, Briefcase } from 'lucide-react';
 import { LLMSettings, LLMProvider } from '../../types/llm';
 
 interface SettingsTabProps {
   settings: LLMSettings;
   onSaveSettings: (settings: LLMSettings) => void;
+  jobTrackerEnabled?: boolean;
+  onToggleJobTracker?: (enabled: boolean) => void;
 }
 
-export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onSaveSettings }) => {
+export const SettingsTab: React.FC<SettingsTabProps> = ({
+  settings,
+  onSaveSettings,
+  jobTrackerEnabled = true,
+  onToggleJobTracker,
+}) => {
   const [formData, setFormData] = useState<LLMSettings>(settings);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
@@ -388,6 +395,39 @@ OLLAMA_ORIGINS="*" ollama serve
           </button>
         </div>
       </div>
+
+      {/* Job Application Tracker Toggle Card */}
+      {onToggleJobTracker && (
+        <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm sm:text-base font-semibold text-slate-900 flex items-center gap-2">
+              <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-sky-600" />
+              Job Application Tracker
+            </h3>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1 max-w-xl">
+              Show a 1-click &quot;Track Job&quot; button in the QuickFiller drawer on job application pages. Applications and statuses are stored 100% locally on your machine.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 self-end sm:self-auto flex-shrink-0">
+            <button
+              onClick={() => onToggleJobTracker(!jobTrackerEnabled)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden ${
+                jobTrackerEnabled ? 'bg-sky-600' : 'bg-slate-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  jobTrackerEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <span className="text-xs font-semibold text-slate-800 w-16">
+              {jobTrackerEnabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Site Access & Shortcut Privacy Guide */}
       <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm space-y-4">

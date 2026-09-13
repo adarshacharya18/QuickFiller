@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Sparkles,
   Copy,
@@ -19,6 +19,7 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  BookmarkPlus,
 } from 'lucide-react';
 import { scanFormFields, extractJobMetadata, getCleanFormatHint, DetectedField, JobMetadata } from '../../utils/scanner';
 import { setNativeInputValue, insertTextAtCursor, CursorTargetInfo } from '../../utils/autofill';
@@ -26,6 +27,7 @@ import { deriveJobPostingUrl, extractInlineJD } from '../../utils/jdResolver';
 import { getStorageData, updateStorageData } from '../../utils/storage';
 import { StorageData, CustomPasteItem } from '../../types/storage';
 import { CandidateProfile } from '../../types/profile';
+import { JobApplication, ApplicationStatus } from '../../types/applications';
 import { cleanCoverLetterOutput } from '../../utils/llm/coverLetterPrompt';
 
 export const Drawer: React.FC = () => {
@@ -118,6 +120,88 @@ export const Drawer: React.FC = () => {
     setStorage((prev) => (prev ? { ...prev, customPasteBank: updated } : prev));
     setSavedBankId(id);
     setTimeout(() => setSavedBankId(null), 2500);
+  };
+
+  // Job Tracker State & Handlers
+  const [showTrackerMenu, setShowTrackerMenu] = useState(false);
+  const [justTrackedAnim, setJustTrackedAnim] = useState(false);
+
+  const normalizeUrl = (urlStr?: string) => {
+    if (!urlStr) return '';
+    try {
+      const u = new URL(urlStr);
+      return (u.origin + u.pathname).replace(/\/$/, '').toLowerCase();
+    } catch {
+      return urlStr.toLowerCase();
+    }
+  };
+
+  const currentTrackedApp = useMemo(() => {
+    if (!storage?.applications || storage.applications.length === 0) return null;
+    const currentNorm = normalizeUrl(window.location.href);
+    const byUrl = storage.applications.find((a) => normalizeUrl(a.url) === currentNorm);
+    if (byUrl) return byUrl;
+
+    if (jobMetadata?.company && jobMetadata?.title) {
+      const compNorm = jobMetadata.company.trim().toLowerCase();
+      const titleNorm = jobMetadata.title.trim().toLowerCase();
+      return (
+        storage.applications.find(
+          (a) =>
+            a.company.trim().toLowerCase() === compNorm &&
+            a.title.trim().toLowerCase() === titleNorm
+        ) || null
+      );
+    }
+    return null;
+  }, [storage?.applications, jobMetadata]);
+
+  const handleTrackCurrentJob = async () => {
+    const newApp: JobApplication = {
+      id: `app_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      company:
+        jobMetadata?.company ||
+        window.location.hostname.replace('www.', '').split('.')[0] ||
+        'Company',
+      title:
+        jobMetadata?.title ||
+        document.title.split(/[-|–]/)[0]?.trim() ||
+        'Job Application',
+      url: window.location.href,
+      appliedDate: new Date().toISOString(),
+      status: 'Applied',
+      notes: '',
+      updatedAt: new Date().toISOString(),
+    };
+
+    const currentApps = storage?.applications || [];
+    const updated = [newApp, ...currentApps];
+    await updateStorageData({ applications: updated });
+    setStorage((prev) => (prev ? { ...prev, applications: updated } : prev));
+    setJustTrackedAnim(true);
+    setTimeout(() => setJustTrackedAnim(false), 2000);
+  };
+
+  const handleUpdateTrackedStatus = async (newStatus: ApplicationStatus) => {
+    if (!currentTrackedApp) return;
+    const currentApps = storage?.applications || [];
+    const updated = currentApps.map((a) =>
+      a.id === currentTrackedApp.id
+        ? { ...a, status: newStatus, updatedAt: new Date().toISOString() }
+        : a
+    );
+    await updateStorageData({ applications: updated });
+    setStorage((prev) => (prev ? { ...prev, applications: updated } : prev));
+    setShowTrackerMenu(false);
+  };
+
+  const handleRemoveTrackedJob = async () => {
+    if (!currentTrackedApp) return;
+    const currentApps = storage?.applications || [];
+    const updated = currentApps.filter((a) => a.id !== currentTrackedApp.id);
+    await updateStorageData({ applications: updated });
+    setStorage((prev) => (prev ? { ...prev, applications: updated } : prev));
+    setShowTrackerMenu(false);
   };
 
   // Scan page and load storage
@@ -690,7 +774,74 @@ export const Drawer: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-0.5 flex-shrink-0">
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {/* Job Tracker Button */}
+              {storage?.jobTrackerEnabled !== false && (
+                <div className="relative mr-1">
+                  {!currentTrackedApp ? (
+                    <button
+                      onClick={handleTrackCurrentJob}
+                      className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-400/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                      title="Save this job application to your local tracker"
+                    >
+                      <BookmarkPlus className="w-3 h-3 text-sky-400" />
+                      <span className="hidden sm:inline">Track Job</span>
+                      <span className="sm:hidden">Track</span>
+                    </button>
+                  ) : (
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowTrackerMenu(!showTrackerMenu)}
+                        className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md transition-all cursor-pointer ${
+                          justTrackedAnim
+                            ? 'bg-emerald-500 text-white animate-pulse'
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30'
+                        }`}
+                        title="Application is tracked! Click to update status or remove"
+                      >
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span className="max-w-[70px] truncate">{currentTrackedApp.status}</span>
+                        <ChevronDown className="w-2.5 h-2.5 text-emerald-400/70" />
+                      </button>
+
+                      {showTrackerMenu && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={() => setShowTrackerMenu(false)}
+                          />
+                          <div className="absolute right-0 mt-1.5 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100 text-xs">
+                            <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 border-b border-slate-700/80 uppercase tracking-wider">
+                              Update Status
+                            </div>
+                            {(['Bookmarked', 'Applied', 'Interviewing', 'Offer', 'Rejected'] as ApplicationStatus[]).map((st) => (
+                              <button
+                                key={st}
+                                onClick={() => handleUpdateTrackedStatus(st)}
+                                className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between hover:bg-slate-700/70 transition cursor-pointer ${
+                                  currentTrackedApp.status === st ? 'text-sky-400 font-semibold' : 'text-slate-300'
+                                }`}
+                              >
+                                <span>{st}</span>
+                                {currentTrackedApp.status === st && <Check className="w-3 h-3" />}
+                              </button>
+                            ))}
+                            <div className="border-t border-slate-700/80 my-1" />
+                            <button
+                              onClick={handleRemoveTrackedJob}
+                              className="w-full text-left px-2.5 py-1 text-[10px] text-red-400 hover:bg-red-900/30 transition flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Remove from Tracker
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
                 title={isExpanded ? 'Collapse width' : 'Expand to wide view'}

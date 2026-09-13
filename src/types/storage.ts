@@ -1,6 +1,7 @@
 import { CandidateProfile, defaultProfile } from './profile';
 import { ScreeningQuestion, ScreeningWizardAnswers, defaultWizardAnswers } from './questions';
 import { LLMSettings, defaultLLMSettings } from './llm';
+import { JobApplication } from './applications';
 
 export interface CustomPasteItem {
   id: string;
@@ -14,6 +15,8 @@ export interface StorageData {
   questionBank: ScreeningQuestion[];
   customPasteBank: CustomPasteItem[];
   llmSettings: LLMSettings;
+  applications: JobApplication[];
+  jobTrackerEnabled: boolean;
   extensionEnabled: boolean;
 }
 
@@ -23,5 +26,7 @@ export const defaultStorageData: StorageData = {
   questionBank: [],
   customPasteBank: [],
   llmSettings: defaultLLMSettings,
+  applications: [],
+  jobTrackerEnabled: true,
   extensionEnabled: true,
 };

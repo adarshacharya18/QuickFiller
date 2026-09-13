@@ -248,6 +248,8 @@ export async function getStorageData(): Promise<StorageData> {
         questionBank: result.questionBank || defaultStorageData.questionBank,
         customPasteBank: result.customPasteBank || defaultStorageData.customPasteBank,
         llmSettings: result.llmSettings || defaultStorageData.llmSettings,
+        applications: result.applications || defaultStorageData.applications,
+        jobTrackerEnabled: result.jobTrackerEnabled ?? defaultStorageData.jobTrackerEnabled,
         extensionEnabled: result.extensionEnabled ?? defaultStorageData.extensionEnabled,
       });
     });

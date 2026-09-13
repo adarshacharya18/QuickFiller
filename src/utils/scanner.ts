@@ -31,22 +31,28 @@ export function isElementVisible(elem: HTMLElement): boolean {
   if (!elem) return false;
   if (elem.style.display === 'none' || elem.style.visibility === 'hidden') return false;
 
-  const style = window.getComputedStyle(elem);
-  if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+  if (elem.closest('[hidden], [style*="display: none"], [style*="display:none"]')) {
     return false;
   }
 
-  // If element has layout dimensions or rects
-  if (elem.offsetWidth > 0 || elem.offsetHeight > 0 || elem.getClientRects().length > 0) {
-    return true;
+  try {
+    const style = window.getComputedStyle(elem);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+      return false;
+    }
+
+    if (style.position === 'fixed' || style.position === 'sticky') {
+      return elem.getClientRects().length > 0;
+    }
+  } catch {
+    return false;
   }
 
-  // Fixed/sticky elements have offsetParent === null by CSS spec
-  if (style.position === 'fixed' || style.position === 'sticky') {
-    return true;
+  if (elem.offsetParent === null) {
+    return false;
   }
 
-  return elem.offsetParent !== null;
+  return elem.offsetWidth > 0 || elem.offsetHeight > 0 || elem.getClientRects().length > 0;
 }
 
 export function findFieldLabel(element: HTMLElement): string {

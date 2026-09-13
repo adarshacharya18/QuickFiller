@@ -1,9 +1,10 @@
-import { JobMetadata, extractJobMetadata } from './scanner';
+import { JobMetadata, extractJobMetadata, isElementVisible } from './scanner';
 import { JobApplication } from '../types/applications';
 import { getStorageData, updateStorageData } from './storage';
 
 const SESSION_STORAGE_KEY = 'quickfiller_pending_submission';
 const STAGE_EXPIRATION_MS = 15 * 60 * 1000; // 15 minutes
+const SUBMIT_WINDOW_MS = 30 * 1000; // 30 seconds
 
 interface StagedJob {
   company: string;
@@ -113,20 +114,25 @@ export function isSubmitTriggerElement(elem: HTMLElement | null): boolean {
 }
 
 /**
- * Checks if the current page URL or DOM indicates a successful application submission.
+ * Checks if the current URL is an ATS confirmation URL.
  */
-export function isSubmissionSuccessState(): boolean {
-  // 1. URL pattern check
-  if (CONFIRMATION_URL_REGEX.test(window.location.href)) {
-    return true;
-  }
+export function isConfirmationUrl(url: string = window.location.href): boolean {
+  return CONFIRMATION_URL_REGEX.test(url);
+}
 
-  // 2. DOM text check on prominent headers, alerts, and success containers
+/**
+ * Checks if the DOM currently contains a VISIBLE submission success message.
+ * Strictly ignores hidden elements (e.g. display: none or hidden parent modals).
+ */
+export function hasVisibleSuccessMessage(): boolean {
   const prominentElements = document.querySelectorAll(
     'h1, h2, h3, h4, h5, [role="alert"], [data-automation-id*="success"], [data-automation-id*="confirmation"], [id*="submitted"], [id*="success"], [class*="submitted"], [class*="success"], .confirmation, .success'
   );
 
   for (const el of Array.from(prominentElements)) {
+    if (!isElementVisible(el as HTMLElement)) {
+      continue;
+    }
     const content = (el.textContent || '').trim();
     if (content && SUCCESS_TEXT_REGEX.test(content)) {
       return true;
@@ -148,8 +154,16 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
   let isListening = true;
   let submitAttemptTimestamp = 0;
 
-  // Helper to commit application
-  const commitApplicationIfPending = async () => {
+  // Helper to commit application to local storage
+  const commitApplicationIfPending = async (forceCommit = false) => {
+    // Safety check: must either be a redirect confirmation URL OR a recent submit attempt
+    const recentSubmit =
+      submitAttemptTimestamp > 0 && Date.now() - submitAttemptTimestamp < SUBMIT_WINDOW_MS;
+
+    if (!isConfirmationUrl() && !recentSubmit && !forceCommit) {
+      return;
+    }
+
     let staged = getStagedJobMetadata();
 
     // Fallback: If no staged metadata exists, extract fresh from page
@@ -174,7 +188,6 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     // Prevent duplicate entries
     const isAlreadyTracked = currentApps.some((a) => {
       const normAppUrl = a.url.split('?')[0].replace(/\/$/, '').toLowerCase();
-      // Only match URL if not a generic local file or test form
       if (normAppUrl === normalizedStagedUrl && !normalizedStagedUrl.includes('test-form.html')) {
         return true;
       }
@@ -182,7 +195,6 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
         a.company.toLowerCase() === staged!.company.toLowerCase() &&
         a.title.toLowerCase() === staged!.title.toLowerCase()
       ) {
-        // Debounce: allow re-tracking if older than 2 minutes
         const diffMs = Date.now() - new Date(a.appliedDate || 0).getTime();
         return diffMs < 2 * 60 * 1000;
       }
@@ -191,6 +203,7 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
 
     if (isAlreadyTracked) {
       clearStagedJobMetadata();
+      submitAttemptTimestamp = 0;
       return;
     }
 
@@ -208,63 +221,54 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     const updatedApps = [newApp, ...currentApps];
     await updateStorageData({ applications: updatedApps });
     clearStagedJobMetadata();
+    submitAttemptTimestamp = 0;
 
     options.onAutoTracked(newApp);
   };
 
-  // 1. Check if user landed on a confirmation page immediately on load (post-redirect)
-  if (isSubmissionSuccessState()) {
-    commitApplicationIfPending();
+  // 1. Check if user landed on a confirmation page via redirect (with previously staged job)
+  if (isConfirmationUrl() && getStagedJobMetadata()) {
+    commitApplicationIfPending(true);
   }
+
+  const handleUserSubmitIntent = () => {
+    submitAttemptTimestamp = Date.now();
+    const meta = extractJobMetadata();
+    stageCurrentJobMetadata(meta);
+
+    // Staggered check intervals to capture SPA DOM updates
+    [100, 300, 700, 1500].forEach((delay) => {
+      setTimeout(() => {
+        if (!isListening) return;
+        if (hasVisibleSuccessMessage() || isConfirmationUrl()) {
+          commitApplicationIfPending();
+        }
+      }, delay);
+    });
+  };
 
   // 2. Click listener for submit buttons
   const handleClick = (e: MouseEvent) => {
     if (!isListening) return;
     const target = e.target as HTMLElement | null;
     if (isSubmitTriggerElement(target)) {
-      submitAttemptTimestamp = Date.now();
-      const meta = extractJobMetadata();
-      stageCurrentJobMetadata(meta);
-
-      setTimeout(() => {
-        if (isSubmissionSuccessState()) {
-          commitApplicationIfPending();
-        }
-      }, 100);
-      setTimeout(() => {
-        if (isSubmissionSuccessState()) {
-          commitApplicationIfPending();
-        }
-      }, 400);
+      handleUserSubmitIntent();
     }
   };
 
   // 3. Form submit event listener
   const handleSubmit = (e: SubmitEvent) => {
     if (!isListening) return;
-    submitAttemptTimestamp = Date.now();
-
-    const meta = extractJobMetadata();
-    stageCurrentJobMetadata(meta);
-
-    setTimeout(() => {
-      if (isSubmissionSuccessState()) {
-        commitApplicationIfPending();
-      }
-    }, 100);
-    setTimeout(() => {
-      if (isSubmissionSuccessState()) {
-        commitApplicationIfPending();
-      }
-    }, 400);
+    handleUserSubmitIntent();
   };
 
   // 4. DOM MutationObserver to catch in-page SPA success states
   const observer = new MutationObserver(() => {
     if (!isListening) return;
+    const recentSubmit =
+      submitAttemptTimestamp > 0 && Date.now() - submitAttemptTimestamp < SUBMIT_WINDOW_MS;
 
-    // Check if success text appeared
-    if (isSubmissionSuccessState()) {
+    if (recentSubmit && (hasVisibleSuccessMessage() || isConfirmationUrl())) {
       commitApplicationIfPending();
     }
   });
@@ -275,8 +279,8 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     if (!isListening) return;
     if (window.location.href !== lastUrl) {
       lastUrl = window.location.href;
-      if (isSubmissionSuccessState()) {
-        commitApplicationIfPending();
+      if (isConfirmationUrl() && getStagedJobMetadata()) {
+        commitApplicationIfPending(true);
       }
     }
   }, 1000);
@@ -284,7 +288,9 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
   document.addEventListener('click', handleClick, true);
   document.addEventListener('submit', handleSubmit, true);
   window.addEventListener('popstate', () => {
-    if (isSubmissionSuccessState()) commitApplicationIfPending();
+    if (isConfirmationUrl() && getStagedJobMetadata()) {
+      commitApplicationIfPending(true);
+    }
   });
 
   observer.observe(document.body, {

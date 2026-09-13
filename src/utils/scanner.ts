@@ -61,6 +61,16 @@ export function isElementVisible(elem: HTMLElement): boolean {
   return true;
 }
 
+function extractCleanText(el: HTMLElement): string {
+  const clone = el.cloneNode(true) as HTMLElement;
+  clone
+    .querySelectorAll(
+      'input, textarea, select, abbr, .requiredAsterisk, [class*="required"], [data-automation-id*="required"], [data-automation-id*="Asterisk"]'
+    )
+    .forEach((n) => n.remove());
+  return (clone.textContent || '').replace(/\s*[\*:]\s*$/, '').trim();
+}
+
 export function findFieldLabel(element: HTMLElement): string {
   const rootNode = element.getRootNode() as Document | ShadowRoot;
 
@@ -69,13 +79,15 @@ export function findFieldLabel(element: HTMLElement): string {
     try {
       if (rootNode && 'querySelector' in rootNode) {
         const localLabel = rootNode.querySelector(`label[for="${CSS.escape(element.id)}"]`);
-        if (localLabel && localLabel.textContent?.trim()) {
-          return localLabel.textContent.trim();
+        if (localLabel) {
+          const txt = extractCleanText(localLabel as HTMLElement);
+          if (txt) return txt;
         }
       }
       const docLabel = document.querySelector(`label[for="${CSS.escape(element.id)}"]`);
-      if (docLabel && docLabel.textContent?.trim()) {
-        return docLabel.textContent.trim();
+      if (docLabel) {
+        const txt = extractCleanText(docLabel as HTMLElement);
+        if (txt) return txt;
       }
     } catch {
       // Ignore CSS escape or querySelector errors
@@ -84,18 +96,15 @@ export function findFieldLabel(element: HTMLElement): string {
 
   // 2. Wrapping <label>
   const parentLabel = element.closest('label');
-  if (parentLabel && parentLabel.textContent?.trim()) {
-    const clone = parentLabel.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll('input, textarea, select').forEach((n) => n.remove());
-    if (clone.textContent?.trim()) {
-      return clone.textContent.trim();
-    }
+  if (parentLabel) {
+    const txt = extractCleanText(parentLabel);
+    if (txt) return txt;
   }
 
   // 3. ARIA attributes
   const ariaLabel = element.getAttribute('aria-label');
   if (ariaLabel && ariaLabel.trim()) {
-    return ariaLabel.trim();
+    return ariaLabel.replace(/\s*[\*:]\s*$/, '').trim();
   }
 
   const ariaLabelledBy = element.getAttribute('aria-labelledby');
@@ -104,11 +113,15 @@ export function findFieldLabel(element: HTMLElement): string {
     const texts = ids
       .map((id) => {
         try {
+          let el: HTMLElement | null = null;
           if (rootNode && 'getElementById' in rootNode) {
-            const el = (rootNode as Document).getElementById(id);
-            if (el?.textContent?.trim()) return el.textContent.trim();
+            el = (rootNode as Document).getElementById(id);
           }
-          return document.getElementById(id)?.textContent?.trim();
+          if (!el) {
+            el = document.getElementById(id);
+          }
+          if (el) return extractCleanText(el);
+          return null;
         } catch {
           return null;
         }
@@ -119,28 +132,30 @@ export function findFieldLabel(element: HTMLElement): string {
     }
   }
 
-  // 4. Preceding sibling label or container
+  // 4. Preceding sibling label or container (including Workday [data-automation-id="formLabel"])
   let prev = element.previousElementSibling;
   while (prev) {
-    if (prev.tagName === 'LABEL' || prev.querySelector('label')) {
-      const lbl = prev.tagName === 'LABEL' ? prev : prev.querySelector('label');
-      if (lbl && lbl.textContent?.trim()) {
-        const clone = lbl.cloneNode(true) as HTMLElement;
-        clone.querySelectorAll('input, textarea, select').forEach((n) => n.remove());
-        if (clone.textContent?.trim()) return clone.textContent.trim();
+    if (prev.tagName === 'LABEL' || prev.querySelector('label, [data-automation-id="formLabel"]')) {
+      const lbl = (prev.tagName === 'LABEL' ? prev : prev.querySelector('label, [data-automation-id="formLabel"]')) as HTMLElement;
+      if (lbl) {
+        const txt = extractCleanText(lbl);
+        if (txt) return txt;
       }
     }
     prev = prev.previousElementSibling;
   }
 
-  // 5. Ancestor container label lookup (e.g. form group, fieldset)
-  const container = element.closest('.form-group, .field, [class*="form-item"], [class*="field-"], tr, td, li');
+  // 5. Ancestor container label lookup (e.g. Workday [data-automation-id^="formField-"], form group, fieldset)
+  const container = element.closest(
+    '.form-group, .field, [class*="form-item"], [class*="field-"], [data-automation-id^="formField-"], [data-automation-id*="formField"], [data-automation-id="formField"], tr, td, li'
+  );
   if (container) {
-    const lbl = container.querySelector('label, [class*="label"], span.title, div.title');
-    if (lbl && lbl.textContent?.trim()) {
-      const clone = lbl.cloneNode(true) as HTMLElement;
-      clone.querySelectorAll('input, textarea, select').forEach((n) => n.remove());
-      if (clone.textContent?.trim()) return clone.textContent.trim();
+    const lbl = container.querySelector(
+      'label, [data-automation-id="formLabel"], [class*="label"], span.title, div.title'
+    ) as HTMLElement;
+    if (lbl) {
+      const txt = extractCleanText(lbl);
+      if (txt) return txt;
     }
   }
 
@@ -213,6 +228,11 @@ export function classifyField(
   ).toLowerCase();
   const ariaLabel = (element.getAttribute('aria-label') || '').toLowerCase();
 
+  // Also inspect container automation id (Workday formField container convention: div[data-automation-id="formField-legalNameSection_firstName"])
+  const containerAutomationId = (
+    element.closest('[data-automation-id*="formField-"], [data-automation-id*="formField"]')?.getAttribute('data-automation-id') || ''
+  ).toLowerCase();
+
   // Also inspect host custom element if inside Shadow DOM (e.g. Darwinbox dbx-ds-text-input)
   let hostName = '';
   let hostLabel = '';
@@ -247,10 +267,50 @@ export function classifyField(
     // Ignore
   }
 
-  const text = `${label} ${hostLabel} ${name} ${hostName} ${id} ${placeholder} ${hostPlaceholder} ${autocomplete} ${automationId} ${hostAutomationId} ${ariaLabel}`.toLowerCase();
+  // Workday high-confidence direct data-automation-id checks
+  const combinedAutoId = `${automationId} ${containerAutomationId} ${hostAutomationId}`;
+  if (
+    /legalnamesection_firstname|preferrednamesection_firstname|\bfirstname\b/.test(combinedAutoId)
+  ) {
+    return 'firstName';
+  }
+  if (
+    /legalnamesection_lastname|preferrednamesection_lastname|\blastname\b/.test(combinedAutoId)
+  ) {
+    return 'lastName';
+  }
+  if (/\bemail\b|contactinformation_email/.test(combinedAutoId)) {
+    return 'email';
+  }
+  if (/phone[-_]?number|phonenumber|contactinformation_phone/.test(combinedAutoId)) {
+    return 'phone';
+  }
+  if (/addresssection_postalcode|\bpostalcode\b|\bzipcode\b/.test(combinedAutoId)) {
+    return 'postalCode';
+  }
+  if (/addresssection_countryregion|countryregion|\bregion\b|\bstate\b/.test(combinedAutoId)) {
+    return 'state';
+  }
+  if (/addresssection_city|\bcity\b/.test(combinedAutoId)) {
+    return 'city';
+  }
+  if (/linkedinquestion|linkedinurl|\blinkedin\b/.test(combinedAutoId)) {
+    return 'linkedin';
+  }
+  if (/githubquestion|\bgithub\b/.test(combinedAutoId)) {
+    return 'github';
+  }
+  if (/websitequestion|portfolioquestion|\bwebsite\b|\bportfolio\b/.test(combinedAutoId)) {
+    return 'portfolio';
+  }
+  if (/coverletter|cover[-_]?letter|statementofpurpose/.test(combinedAutoId)) {
+    return 'cover_letter';
+  }
+
+  const text = `${label} ${hostLabel} ${name} ${hostName} ${id} ${placeholder} ${hostPlaceholder} ${autocomplete} ${automationId} ${containerAutomationId} ${hostAutomationId} ${ariaLabel}`.toLowerCase();
 
   // Explicit cover letter detection
-  if (/cover[-_\s]?letter|statement of interest|motivation[-_\s]?letter|letter of motivation/i.test(text)) {
+  if (/cover[-_\s]?letter|statement\s*of\s*(purpose|interest)|motivation[-_\s]?letter|letter\s*of\s*motivation/i.test(text)) {
     return 'cover_letter';
   }
 
@@ -258,13 +318,13 @@ export function classifyField(
     return 'custom_question';
   }
 
-  if (/(first[-_\s]?name|^first$|given[-_\s]?name|fname)/i.test(text)) {
+  if (/(first[-_\s]?name|^first$|given[-_\s]?name|fname|legalnamesection_firstname|preferrednamesection_firstname)/i.test(text)) {
     return 'firstName';
   }
-  if (/(last[-_\s]?name|^last$|family[-_\s]?name|surname|lname)/i.test(text)) {
+  if (/(last[-_\s]?name|^last$|family[-_\s]?name|surname|lname|legalnamesection_lastname|preferrednamesection_lastname)/i.test(text)) {
     return 'lastName';
   }
-  if (/(full[-_\s]?name|^name$|candidate[-_\s]?name)/i.test(text)) {
+  if (/(full[-_\s]?name|^name$|candidate[-_\s]?name|legalname\b)/i.test(text)) {
     return 'fullName';
   }
   if (element.type === 'email' || /email|e-mail/i.test(text)) {
@@ -282,22 +342,22 @@ export function classifyField(
   if (/portfolio|website|personal[-_\s]?url|personal[-_\s]?site/i.test(text)) {
     return 'portfolio';
   }
-  if (/(postal[-_\s]?code|zip[-_\s]?code|^zip$)/i.test(text)) {
-    return 'postalCode';
-  }
-  if (/(state|province|region)/i.test(text)) {
-    return 'state';
-  }
-  if (/(city|location|address[-_\s]?city)/i.test(text)) {
-    return 'city';
-  }
-
   // If input is text and label looks like a screening question
   if (
-    label.length > 20 ||
+    label.length > 25 ||
     /\?|why|describe|years of|experience|salary|authorized|sponsorship|notice/i.test(label)
   ) {
     return 'custom_question';
+  }
+
+  if (/(postal[-_\s]?code|zip[-_\s]?code|^zip$|addresssection_postalcode)/i.test(text)) {
+    return 'postalCode';
+  }
+  if (/(\bstate\b|\bprovince\b|\bregion\b|countryregion|addresssection_countryregion)/i.test(text)) {
+    return 'state';
+  }
+  if (/(city|location|address[-_\s]?city|addresssection_city)/i.test(text)) {
+    return 'city';
   }
 
   return 'custom_question';
@@ -409,7 +469,9 @@ export function scanFormFields(): {
 
 export function extractJobMetadata(): JobMetadata {
   const title =
-    document.querySelector('h1, .job-title, [class*="job-title"], [class*="position-title"], [class*="jobTitle"]')?.textContent?.trim() ||
+    document.querySelector(
+      '[data-automation-id="jobPostingHeader"], h1, .job-title, [class*="job-title"], [class*="position-title"], [class*="jobTitle"]'
+    )?.textContent?.trim() ||
     document.title.split(/[-|–|—|\|]/)[0]?.trim() ||
     'Job Application';
 
@@ -444,6 +506,48 @@ export function extractJobMetadata(): JobMetadata {
       const sub = hostname.split('.')[0] || '';
       const cleanSub = sub.replace(/hrms$/i, '').replace(/[-_]/g, ' ');
       company = cleanSub ? cleanSub.charAt(0).toUpperCase() + cleanSub.slice(1) : 'Company';
+    }
+  } else if (hostname.includes('myworkdayjobs.com') || hostname.includes('workday.com')) {
+    // Workday: <company>.myworkdayjobs.com or multi-tenant /en-US/<company>/job/...
+    const domCompany = document
+      .querySelector(
+        '[data-automation-id="companyName"], [data-automation-id="legalEntity"], [data-automation-id="bannerLogo"] img[alt], .company, [class*="company-name"], [data-automation-id*="company"], [data-qa*="company"], .org-name, .header-company-name'
+      )
+      ?.textContent?.split(/[•|\-|—|\|]/)[0]
+      ?.trim();
+
+    const logoAlt = document
+      .querySelector('[data-automation-id="bannerLogo"] img[alt], [data-automation-id="site-banner"] img[alt]')
+      ?.getAttribute('alt');
+    const metaCompany = document.querySelector('meta[property="og:site_name"]')?.getAttribute('content');
+
+    if (domCompany) {
+      company = domCompany;
+    } else if (logoAlt) {
+      company = logoAlt.replace(/logo|careers|jobs/gi, '').trim();
+    } else if (metaCompany) {
+      company = metaCompany;
+    } else {
+      // 1. Subdomain check: e.g. nvidia.myworkdayjobs.com
+      const parts = hostname.split('.');
+      let sub = parts[0] || '';
+      if (sub.toLowerCase() === 'www' && parts.length > 1) {
+        sub = parts[1];
+      }
+      if (sub && sub !== 'myworkdayjobs' && !/^wd\d+$/i.test(sub)) {
+        const cleanSub = sub.replace(/[-_]/g, ' ');
+        company = cleanSub.charAt(0).toUpperCase() + cleanSub.slice(1);
+      } else {
+        // 2. Multi-tenant path: /en-US/disney/job/... -> disney
+        const segments = window.location.pathname.split('/').filter(Boolean);
+        const tenantIndex = /^[a-z]{2}(-[A-Z]{2})?$/i.test(segments[0] || '') ? 1 : 0;
+        if (segments[tenantIndex]) {
+          const cleanSeg = segments[tenantIndex].replace(/[-_]/g, ' ');
+          company = cleanSeg.charAt(0).toUpperCase() + cleanSeg.slice(1);
+        } else {
+          company = 'Workday Job';
+        }
+      }
     }
   } else {
     // 1. Try explicit DOM element (.company, [class*="company"], [data-automation-id*="company"])

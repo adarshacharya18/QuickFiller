@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Senior Distributed Systems Engineer - Workday Technologies Careers</title>
+  <meta property="og:site_name" content="Workday Technologies" />
+  <meta name="description" content="Apply for Senior Distributed Systems Engineer at Workday Technologies" />
+  <style>
+    :root {
+      --wkd-primary: #0875e1;
+      --wkd-primary-hover: #065cb3;
+      --wkd-navy: #053767;
+      --wkd-bg: #f5f7f9;
+      --wkd-card-bg: #ffffff;
+      --wkd-border: #d2dbe5;
+      --wkd-text-main: #2e3943;
+      --wkd-text-muted: #5e6d7a;
+      --wkd-success: #1a8238;
+      --wkd-success-bg: #eaf6ec;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--wkd-bg);
+      color: var(--wkd-text-main);
+      padding: 32px 16px;
+      line-height: 1.5;
+    }
+
+    .page-container {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* Testing Guide Banner */
+    .test-banner {
+      background: linear-gradient(135deg, #053767, #0875e1);
+      color: #ffffff;
+      padding: 20px 24px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 16px rgba(8, 117, 225, 0.2);
+    }
+    .test-banner h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .test-banner p {
+      font-size: 13.5px;
+      opacity: 0.94;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+    .test-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .test-step-card {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 12.5px;
+    }
+    .test-step-card strong {
+      display: block;
+      color: #bae6fd;
+      margin-bottom: 4px;
+    }
+
+    /* Workday Canvas Header */
+    .wkd-header {
+      background: var(--wkd-card-bg);
+      border: 1px solid var(--wkd-border);
+      border-radius: 12px 12px 0 0;
+      padding: 24px 32px;
+      border-bottom: 1px solid var(--wkd-border);
+    }
+    .wkd-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .wkd-logo {
+      width: 36px;
+      height: 36px;
+      background: #f97316;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 800;
+      font-size: 16px;
+      box-shadow: 0 2px 6px rgba(249, 115, 22, 0.35);
+    }
+    .wkd-company-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--wkd-navy);
+      letter-spacing: 0.2px;
+    }
+    .wkd-job-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 6px;
+    }
+    .wkd-meta-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--wkd-text-muted);
+    }
+    .wkd-meta-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* Step Progress Indicator */
+    .wkd-stepper {
+      display: flex;
+      background: #f8fafc;
+      border-left: 1px solid var(--wkd-border);
+      border-right: 1px solid var(--wkd-border);
+      padding: 16px 32px;
+      overflow-x: auto;
+      gap: 20px;
+    }
+    .wkd-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--wkd-text-muted);
+      white-space: nowrap;
+    }
+    .wkd-step.active {
+      color: var(--wkd-primary);
+      font-weight: 600;
+    }
+    .wkd-step-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      background: #e2e8f0;
+      color: #475569;
+    }
+    .wkd-step.active .wkd-step-num {
+      background: var(--wkd-primary);
+      color: #ffffff;
+    }
+
+    /* Main Application Body */
+    .wkd-card-body {
+      background: var(--wkd-card-bg);
+      border: 1px solid var(--wkd-border);
+      border-top: none;
+      padding: 32px;
+      border-radius: 0 0 12px 12px;
+    }
+
+    .wkd-section {
+      margin-bottom: 32px;
+    }
+    .wkd-section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--wkd-navy);
+      border-bottom: 2px solid #eef2f6;
+      padding-bottom: 8px;
+      margin-bottom: 20px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .form-grid-full {
+      grid-column: 1 / -1;
+    }
+
+    /* Workday Canvas Form Field Container */
+    [data-automation-id^="formField-"] {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    [data-automation-id="formLabel"] {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #334155;
+    }
+    .requiredAsterisk {
+      color: #dc2626;
+      margin-left: 3px;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    /* Inputs */
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="url"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid var(--wkd-border);
+      border-radius: 6px;
+      font-size: 14px;
+      color: #1e293b;
+      background: #fff;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      font-family: inherit;
+    }
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--wkd-primary);
+      box-shadow: 0 0 0 3px rgba(8, 117, 225, 0.15);
+    }
+    textarea {
+      resize: vertical;
+    }
+
+    /* Action Buttons */
+    .wkd-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 36px;
+      padding-top: 20px;
+      border-top: 1px solid #eef2f6;
+    }
+    .btn-canvas-primary {
+      background: var(--wkd-primary);
+      color: #ffffff;
+      border: none;
+      padding: 12px 28px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(8, 117, 225, 0.3);
+      transition: background 0.15s ease, transform 0.1s ease;
+    }
+    .btn-canvas-primary:hover {
+      background: var(--wkd-primary-hover);
+    }
+    .btn-canvas-secondary {
+      background: transparent;
+      color: #475569;
+      border: 1.5px solid #cbd5e1;
+      padding: 11px 24px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .btn-canvas-secondary:hover {
+      background: #f1f5f9;
+    }
+
+    /* Success Confirmation Screen */
+    #confirmation-view {
+      display: none;
+      background: #ffffff;
+      border: 1px solid var(--wkd-border);
+      border-radius: 12px;
+      padding: 48px 32px;
+      text-align: center;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+    }
+    .success-icon-wrap {
+      width: 64px;
+      height: 64px;
+      background: var(--wkd-success-bg);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      color: var(--wkd-success);
+      font-size: 32px;
+    }
+    .success-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 10px;
+    }
+    .success-desc {
+      font-size: 15px;
+      color: var(--wkd-text-muted);
+      max-width: 520px;
+      margin: 0 auto 24px;
+      line-height: 1.6;
+    }
+
+    /* Diagnostic Live Inspector Panel */
+    .inspector-panel {
+      margin-top: 32px;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 12px;
+      padding: 20px 24px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12.5px;
+    }
+    .inspector-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 8px;
+    }
+    .inspector-title {
+      font-weight: 700;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-inspect {
+      background: #0284c7;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-inspect:hover {
+      background: #0369a1;
+    }
+    .inspector-output {
+      max-height: 280px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      background: #090d16;
+      padding: 14px;
+      border-radius: 8px;
+      border: 1px solid #1e293b;
+      color: #a5f3fc;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+
+    <!-- Developer Testing Guide -->
+    <div class="test-banner">
+      <h2>⚡ Workday Candidate Portal (`myworkdayjobs.com`) Interactive Test App</h2>
+      <p>
+        This test harness implements Workday's exact Canvas Design System React architecture, utilizing
+        <code>data-automation-id="formField-..."</code> container hierarchies, <code>data-automation-id="formLabel"</code>,
+        and Workday standard automation IDs. Use this page to test QuickFiller's Workday scanner and submission watcher!
+      </p>
+      <div class="test-steps">
+        <div class="test-step-card">
+          <strong>1. Test Workday Scanner</strong>
+          Open the QuickFiller extension popup. Notice that Job Title (<em>Senior Distributed Systems Engineer</em>) and Company (<em>Workday Technologies</em>) are detected instantly.
+        </div>
+        <div class="test-step-card">
+          <strong>2. Test Workday Autofill</strong>
+          Click "Auto-Fill Application". All 10 standard Workday fields and screening questions will populate seamlessly.
+        </div>
+        <div class="test-step-card">
+          <strong>3. Test Submission Tracking</strong>
+          Click "Submit Application" below. QuickFiller detects the Workday submit button and tracks the application upon confirmation!
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Application View -->
+    <div id="application-view">
+      <!-- Workday Header -->
+      <div class="wkd-header">
+        <div class="wkd-brand">
+          <div class="wkd-logo">W</div>
+          <span class="wkd-company-name" data-automation-id="companyName">Workday Technologies</span>
+        </div>
+        <h2 class="wkd-job-title" data-automation-id="jobPostingHeader">Senior Distributed Systems Engineer</h2>
+        <div class="wkd-meta-tags">
+          <span class="wkd-meta-item">📍 Pleasanton, CA (Hybrid)</span>
+          <span class="wkd-meta-item">💼 Full-time</span>
+          <span class="wkd-meta-item">🏢 Enterprise Cloud Platform</span>
+          <span class="wkd-meta-item">🆔 JR-104829</span>
+        </div>
+      </div>
+
+      <!-- Stepper Wizard -->
+      <div class="wkd-stepper">
+        <div class="wkd-step active">
+          <span class="wkd-step-num">1</span>
+          <span>My Information</span>
+        </div>
+        <div class="wkd-step">
+          <span class="wkd-step-num">2</span>
+          <span>My Experience</span>
+        </div>
+        <div class="wkd-step">
+          <span class="wkd-step-num">3</span>
+          <span>Application Questions</span>
+        </div>
+        <div class="wkd-step">
+          <span class="wkd-step-num">4</span>
+          <span>Review and Submit</span>
+        </div>
+      </div>
+
+      <!-- Application Form Body -->
+      <div class="wkd-card-body">
+        <form id="workday-application-form" onsubmit="event.preventDefault();">
+          <!-- Section 1: Candidate Legal Name & Contact -->
+          <div class="wkd-section">
+            <h3 class="wkd-section-title">Legal Name & Contact Information</h3>
+            <div class="form-grid">
+              <div data-automation-id="formField-legalNameSection_firstName">
+                <label data-automation-id="formLabel" id="lbl-firstName">
+                  First Name
+                  <abbr class="requiredAsterisk" title="required" aria-hidden="true">*</abbr>
+                </label>
+                <div data-automation-id="formInput">
+                  <input
+                    data-automation-id="legalNameSection_firstName"
+                    id="input-firstName"
+                    aria-labelledby="lbl-firstName"
+                    type="text"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div data-automation-id="formField-legalNameSection_lastName">
+                <label data-automation-id="formLabel" id="lbl-lastName">
+                  Last Name
+                  <abbr class="requiredAsterisk" title="required" aria-hidden="true">*</abbr>
+                </label>
+                <div data-automation-id="formInput">
+                  <input
+                    data-automation-id="legalNameSection_lastName"
+                    id="input-lastName"
+                    aria-labelledby="lbl-lastName"
+                    type="text"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div data-automation-id="formField-contactInformation_email">
+                <label data-automation-id="formLabel" id="lbl-email">
+                  Email Address
+                  <abbr class="requiredAsterisk" title="required" aria-hidden="true">*</abbr>
+                </label>
+                <div data-automation-id="formInput">
+                  <input
+                    data-automation-id="email"
+                    id="input-email"
+                    aria-labelledby="lbl-email"
+                    type="email"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div data-automation-id="formField-phone-number">
+                <label data-automation-id="formLabel" id="lbl-phone">
+                  Phone Number
+                  <abbr class="requiredAsterisk" title="required" aria-hidden="true">*</abbr>
+                </label>
+                <div data-automation-id="formInput">
+                  <input
+                    data-automation-id="phone-number"
+                    id="input-phone"
+                    aria-labelledby="lbl-phone"
+                    type="tel"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Address Information -->
+          <div class="wkd-section">
+            <h3 class="wkd-section-title">Address Information</h3>
+            <div class="form-grid">
+              <div data-automation-id="formField-addressSection_addressLine1" class="form-grid-full">
+                <label data-automation-id="formLabel">Street Address</label>
+                <div data-automation-id="formInput">
+                  <input data-automation-id="addressSection_addressLine1" type="text" />
+                </div>
+              </div>
+
+              <div data-automation-id="formField-addressSection_city">
+                <label data-automation-id="formLabel">City</label>
+                <div data-automation-id="formInput">
+                  <input data-automation-id="addressSection_city" type="text" />
+                </div>
+              </div>
+
+              <div data-automation-id="formField-addressSection_countryRegion">
+                <label data-automation-id="formLabel">State / Province / Region</label>
+                <div data-automation-id="formInput">
+                  <input data-automation-id="addressSection_countryRegion" type="text" />
+                </div>
+              </div>
+
+              <div data-automation-id="formField-addressSection_postalCode">
+                <label data-automation-id="formLabel">Postal / Zip Code</label>
+                <div data-automation-id="formInput">
+                  <input data-automation-id="addressSection_postalCode" type="text" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: Online Profiles & Links -->
+          <div class="wkd-section">
+            <h3 class="wkd-section-title">Online Profiles & Web Presence</h3>
+            <div class="form-grid">
+              <div data-automation-id="formField-linkedinQuestion">
+                <label data-automation-id="formLabel">LinkedIn Profile URL</label>
+                <div data-automation-id="formInput">
+                  <input data-automation-id="linkedinQuestion" type="url" placeholder="https://linkedin.com/in/username" />
+                </div>
+              </div>
+
+              <div data-automation-id="formField-githubQuestion">
+                <label data-automation-id="formLabel">GitHub Profile URL</label>
+                <div data-automation-id="formInput">
+                  <input data-automation-id="githubQuestion" type="url" placeholder="https://github.com/username" />
+                </div>
+              </div>
+
+              <div data-automation-id="formField-websiteQuestion" class="form-grid-full">
+                <label data-automation-id="formLabel">Portfolio / Personal Website</label>
+                <div data-automation-id="formInput">
+                  <input data-automation-id="websiteQuestion" type="url" placeholder="https://yourportfolio.dev" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 4: Application Questions & Cover Letter -->
+          <div class="wkd-section">
+            <h3 class="wkd-section-title">Application Questions & Cover Letter</h3>
+            <div class="form-grid">
+              <div data-automation-id="formField-coverLetter" class="form-grid-full">
+                <label data-automation-id="formLabel">Cover Letter / Statement of Purpose</label>
+                <div data-automation-id="formInput">
+                  <textarea data-automation-id="coverLetter" rows="4" placeholder="Share why you are interested in this position..."></textarea>
+                </div>
+              </div>
+
+              <div data-automation-id="formField-question-1" class="form-grid-full">
+                <label data-automation-id="formLabel">Are you legally authorized to work in the country you are applying for?</label>
+                <div data-automation-id="formInput">
+                  <input data-automation-id="textInputBox" type="text" placeholder="Yes / No" />
+                </div>
+              </div>
+
+              <div data-automation-id="formField-question-2" class="form-grid-full">
+                <label data-automation-id="formLabel">What is your notice period and target base compensation?</label>
+                <div data-automation-id="formInput">
+                  <textarea data-automation-id="textAreaBox" rows="2" placeholder="e.g. 30 days notice, $170k target base"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="wkd-actions">
+            <button
+              type="button"
+              data-automation-id="page-navigation-back-button"
+              class="btn-canvas-secondary"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              data-automation-id="bottom-submit-button"
+              id="workday-submit-btn"
+              class="btn-canvas-primary"
+            >
+              Submit Application
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Confirmation View (Shown when candidate submits) -->
+    <div data-automation-id="applicationSubmitted" id="confirmation-view">
+      <div class="success-icon-wrap">✓</div>
+      <div data-automation-id="statusBanner">
+        <h2 class="success-title" data-automation-id="heading">Thank you for your application!</h2>
+        <p class="success-desc">
+          Your application for <strong>Senior Distributed Systems Engineer</strong> at
+          <strong>Workday Technologies</strong> has been successfully submitted. Our recruiting team
+          will review your profile and reach out regarding next steps.
+        </p>
+      </div>
+      <button
+        type="button"
+        id="reset-form-btn"
+        class="btn-canvas-secondary"
+        style="margin-top: 16px;"
+      >
+        ↺ Reset Form to Test Again
+      </button>
+    </div>
+
+    <!-- Diagnostic Live Inspector Panel -->
+    <div class="inspector-panel">
+      <div class="inspector-header">
+        <span class="inspector-title">🔍 QuickFiller Workday Scanner & DOM Inspector</span>
+        <button type="button" class="btn-inspect" id="btn-run-scan">Inspect Workday DOM</button>
+      </div>
+      <div class="inspector-output" id="inspector-log">Click "Inspect Workday DOM" to analyze standard fields, containers, and metadata...</div>
+    </div>
+
+  </div>
+
+  <script>
+    // Live Submission Simulator
+    const submitBtn = document.getElementById('workday-submit-btn');
+    const applicationView = document.getElementById('application-view');
+    const confirmationView = document.getElementById('confirmation-view');
+    const resetBtn = document.getElementById('reset-form-btn');
+    const btnRunScan = document.getElementById('btn-run-scan');
+    const inspectorLog = document.getElementById('inspector-log');
+
+    submitBtn.addEventListener('click', () => {
+      // Simulate Workday SPA client-side route change
+      applicationView.style.display = 'none';
+      confirmationView.style.display = 'block';
+      window.location.hash = '#applicationSubmitted';
+      logStatus('✅ Form submitted! Workday confirmation view mounted with data-automation-id="applicationSubmitted" and hash #applicationSubmitted.');
+    });
+
+    resetBtn.addEventListener('click', () => {
+      confirmationView.style.display = 'none';
+      applicationView.style.display = 'block';
+      window.location.hash = '';
+      logStatus('🔄 Form reset to initial unsubmitted state.');
+    });
+
+    function logStatus(msg) {
+      inspectorLog.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n\n` + inspectorLog.textContent;
+    }
+
+    // Client-side DOM Scanner Simulation (mirrors scanner.ts)
+    btnRunScan.addEventListener('click', () => {
+      const titleEl = document.querySelector('[data-automation-id="jobPostingHeader"]');
+      const companyEl = document.querySelector('[data-automation-id="companyName"]');
+      const fields = document.querySelectorAll('input:not([type="hidden"]), textarea');
+
+      let output = `=== WORKDAY METADATA EXTRACTION ===\n`;
+      output += `Job Title: "${titleEl ? titleEl.textContent.trim() : 'N/A'}"\n`;
+      output += `Company:   "${companyEl ? companyEl.textContent.trim() : 'N/A'}"\n`;
+      output += `Page URL:  ${window.location.href}\n\n`;
+
+      output += `=== SCANNED WORKDAY CANDIDATE FIELDS (${fields.length} detected) ===\n`;
+      fields.forEach((field, i) => {
+        const container = field.closest('[data-automation-id^="formField-"]');
+        const containerAutoId = container ? container.getAttribute('data-automation-id') : 'None';
+        const labelEl = container ? container.querySelector('[data-automation-id="formLabel"]') : null;
+        let cleanLabel = 'Unknown';
+        if (labelEl) {
+          const clone = labelEl.cloneNode(true);
+          clone.querySelectorAll('abbr, .requiredAsterisk').forEach(n => n.remove());
+          cleanLabel = clone.textContent.trim();
+        }
+
+        const autoId = field.getAttribute('data-automation-id') || 'None';
+        output += `[#${i + 1}] Label: "${cleanLabel}" | Tag: <${field.tagName.toLowerCase()}> | autoId: "${autoId}" | Container: "${containerAutoId}"\n`;
+      });
+
+      const submitTrigger = document.querySelector('[data-automation-id="bottom-submit-button"]');
+      output += `\n=== SUBMIT WATCHER HOOK ===\n`;
+      output += `Submit Button: data-automation-id="${submitTrigger ? submitTrigger.getAttribute('data-automation-id') : 'None'}"\n`;
+      output += `Confirmation URL Match: ${/#applicationSubmitted|\/applicationSubmitted/i.test(window.location.href) ? 'CONFIRMED' : 'Awaiting Submission'}\n`;
+
+      inspectorLog.textContent = output;
+    });
+
+    // Auto-run scanner on load
+    window.addEventListener('DOMContentLoaded', () => {
+      btnRunScan.click();
+    });
+  </script>
+</body>
+</html>

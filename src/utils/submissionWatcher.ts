@@ -15,7 +15,7 @@ export interface StagedJob {
 }
 
 export const CONFIRMATION_URL_REGEX =
-  /(\/confirmation|\/thank-you|\/thanks|\/applied|\/submitted|application_submitted|\/success|applied=true|status=success|submitted=1)/i;
+  /(\/applicationsubmitted|\/applicationconfirmation|\/confirmation|\/thank-you|\/thanks|\/applied|\/submitted|application[-_]?submitted|application[-_]?confirmation|\/success|applied=true|status=success|submitted=1)/i;
 
 export const SUCCESS_TEXT_REGEX =
   /((application|form|submission) (has been )?(successfully )?submitted|(application|form|submission) submitted successfully|thank you for (your application|applying)|your (application|form) (has been|was) received|(application|form) (received|complete)|we('ve| have) received your application|we appreciate your interest in|submission successful|successfully submitted)/i;
@@ -83,15 +83,6 @@ export function clearStagedJobMetadata(): void {
 export function isSubmitTriggerElement(elem: HTMLElement | null): boolean {
   if (!elem) return false;
 
-  // 1. Direct submit input or button
-  if (elem.tagName === 'INPUT' && (elem as HTMLInputElement).type === 'submit') {
-    return true;
-  }
-  if (elem.tagName === 'BUTTON' && (elem as HTMLButtonElement).type === 'submit') {
-    return true;
-  }
-
-  // 2. ATS / Web Component specific attributes (Workday, Greenhouse, Ashby, Lever, Darwinbox)
   const tagName = elem.tagName.toLowerCase();
   const automationId = (elem.getAttribute('data-automation-id') || '').toLowerCase();
   const dataQa = (elem.getAttribute('data-qa') || '').toLowerCase();
@@ -99,10 +90,30 @@ export function isSubmitTriggerElement(elem: HTMLElement | null): boolean {
   const className = (typeof elem.className === 'string' ? elem.className : '').toLowerCase();
   const role = (elem.getAttribute('role') || '').toLowerCase();
   const type = (elem.getAttribute('type') || '').toLowerCase();
+  const text = (elem.textContent || '').trim();
 
+  // Negative check: never trigger on Back, Cancel, Previous, Close, Remove, Add, etc.
+  if (
+    /^(back|cancel|previous|prev|close|add|remove|delete|save for later)$/i.test(text) ||
+    /back-button|cancel-button|prev-button|close-button|delete-button|remove-button|add-button/i.test(automationId)
+  ) {
+    return false;
+  }
+
+  // 1. Direct submit input or button
+  if (elem.tagName === 'INPUT' && (elem as HTMLInputElement).type === 'submit') {
+    return true;
+  }
+  if (elem.tagName === 'BUTTON' && (type === 'submit' || (elem as HTMLButtonElement).type === 'submit')) {
+    return true;
+  }
+
+  // 2. ATS / Web Component specific attributes (Workday, Greenhouse, Ashby, Lever, Darwinbox)
   if (
     type === 'submit' ||
     automationId.includes('submit') ||
+    automationId === 'bottom-submit-button' ||
+    automationId === 'page-navigation-submit-button' ||
     dataQa.includes('submit') ||
     id.includes('submit') ||
     className.includes('submit-btn') ||
@@ -116,7 +127,7 @@ export function isSubmitTriggerElement(elem: HTMLElement | null): boolean {
   if (tagName.includes('button') || tagName.startsWith('dbx-ds-') || role === 'button') {
     const hostLabel = elem.getAttribute('label') || elem.getAttribute('text') || elem.getAttribute('value') || '';
     if (
-      /^(submit(\s*(application|form))?|apply(\s*now)?|complete\s*application|send\s*application)$/i.test(
+      /^(submit(\s*(application|form|now))?|apply(\s*now)?|review\s*(and|&)\s*submit|complete\s*(application|submission)|send\s*application)$/i.test(
         hostLabel.trim()
       )
     ) {
@@ -125,9 +136,8 @@ export function isSubmitTriggerElement(elem: HTMLElement | null): boolean {
   }
 
   // 4. Button / link text content inspection
-  const text = (elem.textContent || '').trim();
   if (
-    /^(submit(\s*(application|form))?|apply(\s*now)?|complete\s*application|send\s*application)$/i.test(
+    /^(submit(\s*(application|form|now))?|apply(\s*now)?|review\s*(and|&)\s*submit|complete\s*(application|submission)|send\s*application)$/i.test(
       text
     )
   ) {
@@ -168,6 +178,17 @@ export function isConfirmationUrl(url: string = window.location.href): boolean {
  * Strictly ignores hidden elements (e.g. display: none or hidden parent modals).
  */
 export function hasVisibleSuccessMessage(): boolean {
+  // Check Workday specific status banners and success containers
+  const workdaySuccess = document.querySelector(
+    '[data-automation-id="applicationSubmitted"], [data-automation-id="applicationConfirmation"], [data-automation-id="statusBanner"], [data-automation-id="successMessage"], [data-automation-id="alert-success"]'
+  );
+  if (workdaySuccess && isElementVisible(workdaySuccess as HTMLElement)) {
+    const txt = (workdaySuccess.textContent || '').trim();
+    if (txt && (SUCCESS_TEXT_REGEX.test(txt) || /submitted|thank you|success|congratulations/i.test(txt))) {
+      return true;
+    }
+  }
+
   const prominentElements = querySelectorAllDeep<HTMLElement>(
     'h1, h2, h3, h4, h5, [role="alert"], [data-automation-id*="success"], [data-automation-id*="confirmation"], [id*="submitted"], [id*="success"], [class*="submitted"], [class*="success"], .confirmation, .success',
     document

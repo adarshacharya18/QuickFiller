@@ -123,6 +123,35 @@ export default defineBackground(() => {
       return false;
     }
 
+    if (message?.type === 'OPEN_JOB_TRACKER' || message?.type === 'OPEN_OPTIONS_TAB') {
+      const tabName = message.tab || (message.type === 'OPEN_JOB_TRACKER' ? 'applications' : 'profile');
+      const targetUrl = chrome.runtime.getURL(`options.html?tab=${encodeURIComponent(tabName)}#${encodeURIComponent(tabName)}`);
+
+      if (typeof chrome !== 'undefined' && chrome.tabs?.query) {
+        chrome.tabs.query({ url: chrome.runtime.getURL('options.html*') })
+          .then(async (tabs) => {
+            if (tabs.length > 0 && tabs[0].id) {
+              await chrome.tabs.update(tabs[0].id, { url: targetUrl, active: true });
+              if (tabs[0].windowId && chrome.windows?.update) {
+                await chrome.windows.update(tabs[0].windowId, { focused: true });
+              }
+            } else {
+              await chrome.tabs.create({ url: targetUrl });
+            }
+            sendResponse({ success: true });
+          })
+          .catch(() => {
+            chrome.tabs.create({ url: targetUrl });
+            sendResponse({ success: true });
+          });
+        return true;
+      } else {
+        chrome.tabs.create({ url: targetUrl });
+        sendResponse({ success: true });
+        return false;
+      }
+    }
+
     if (message?.type === 'FETCH_EXTERNAL_JD') {
       const { url } = message;
       if (!url) {

@@ -21,6 +21,7 @@ import {
   ChevronUp,
   BookmarkPlus,
   CheckCircle,
+  Briefcase,
 } from 'lucide-react';
 import { scanFormFields, extractJobMetadata, getCleanFormatHint, DetectedField, JobMetadata } from '../../utils/scanner';
 import { setNativeInputValue, insertTextAtCursor, CursorTargetInfo } from '../../utils/autofill';
@@ -212,6 +213,15 @@ export const Drawer: React.FC = () => {
     await updateStorageData({ applications: updated });
     setStorage((prev) => (prev ? { ...prev, applications: updated } : prev));
     setShowTrackerMenu(false);
+  };
+
+  const handleOpenJobTracker = () => {
+    try {
+      chrome.runtime.sendMessage({ type: 'OPEN_JOB_TRACKER' });
+    } catch {
+      const url = chrome.runtime?.getURL ? chrome.runtime.getURL('options.html?tab=applications#applications') : 'options.html?tab=applications#applications';
+      window.open(url, '_blank');
+    }
   };
 
   // Scan page and load storage
@@ -876,6 +886,12 @@ export const Drawer: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={handleOpenJobTracker}
+                  className="text-[11px] text-sky-300 hover:text-white underline font-semibold cursor-pointer"
+                >
+                  View Tracker
+                </button>
                 <button
                   onClick={async () => {
                     const current = (await getStorageData()).applications || [];
@@ -1915,16 +1931,31 @@ export const Drawer: React.FC = () => {
           {/* Footer with Job Tracker & Options Link */}
           <div className="px-3.5 py-2.5 bg-white border-t border-slate-200/80 flex items-center justify-between text-xs text-slate-500">
             <div className="flex items-center gap-2">
-              {/* Job Tracker Button */}
+              {/* Job Tracker Navigation Button */}
+              <button
+                onClick={handleOpenJobTracker}
+                className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-2xs"
+                title="Open your Job Tracker dashboard in options"
+              >
+                <Briefcase className="w-3.5 h-3.5 text-sky-600" />
+                <span>Job Tracker</span>
+                {(storage?.applications?.length || 0) > 0 && (
+                  <span className="bg-sky-200/80 text-sky-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+                    {storage!.applications.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Track Current Job Button */}
               {storage?.jobTrackerEnabled !== false && (
                 <div className="relative">
                   {!currentTrackedApp ? (
                     <button
                       onClick={handleTrackCurrentJob}
-                      className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-2xs"
+                      className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                       title="Save this job application to your local tracker"
                     >
-                      <BookmarkPlus className="w-3.5 h-3.5 text-sky-600" />
+                      <BookmarkPlus className="w-3.5 h-3.5 text-slate-500" />
                       <span>Track Job</span>
                     </button>
                   ) : (
@@ -1939,7 +1970,7 @@ export const Drawer: React.FC = () => {
                         title="Application is tracked! Click to update status or remove"
                       >
                         <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="max-w-[90px] truncate">{currentTrackedApp.status}</span>
+                        <span className="max-w-[80px] truncate">{currentTrackedApp.status}</span>
                         <ChevronUp className="w-3 h-3 text-emerald-600/70" />
                       </button>
 
@@ -1949,8 +1980,22 @@ export const Drawer: React.FC = () => {
                             className="fixed inset-0 z-40"
                             onClick={() => setShowTrackerMenu(false)}
                           />
-                          <div className="absolute left-0 bottom-full mb-2 w-44 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100 text-xs">
-                            <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 border-b border-slate-700/80 uppercase tracking-wider">
+                          <div className="absolute left-0 bottom-full mb-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100 text-xs">
+                            <button
+                              onClick={() => {
+                                setShowTrackerMenu(false);
+                                handleOpenJobTracker();
+                              }}
+                              className="w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between text-sky-400 hover:bg-slate-700/70 transition cursor-pointer font-medium border-b border-slate-700/80"
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <Briefcase className="w-3 h-3" />
+                                Open in Job Tracker
+                              </span>
+                              <ExternalLink className="w-3 h-3" />
+                            </button>
+
+                            <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                               Update Status
                             </div>
                             {(['Bookmarked', 'Applied', 'Interviewing', 'Offer', 'Rejected'] as ApplicationStatus[]).map((st) => (
@@ -1984,9 +2029,9 @@ export const Drawer: React.FC = () => {
 
             <button
               onClick={() => chrome.runtime.openOptionsPage()}
-              className="flex items-center gap-1 text-sky-600 hover:text-sky-700 font-medium text-[11px] cursor-pointer"
+              className="flex items-center gap-1 text-slate-500 hover:text-slate-800 font-medium text-[11px] cursor-pointer"
             >
-              Open Options <ExternalLink className="w-3 h-3" />
+              <span>Options</span> <ExternalLink className="w-3 h-3" />
             </button>
           </div>
         </div>

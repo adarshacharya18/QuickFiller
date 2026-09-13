@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, Settings, ExternalLink, Check, User, Cpu, ShieldCheck } from 'lucide-react';
+import { Zap, Settings, ExternalLink, Check, User, Cpu, ShieldCheck, Briefcase } from 'lucide-react';
 import { getStorageData, updateStorageData } from '../../utils/storage';
 import { StorageData } from '../../types/storage';
 
@@ -34,6 +34,13 @@ export const App: React.FC = () => {
 
   const openOptions = () => {
     chrome.runtime.openOptionsPage();
+  };
+
+  const openJobTracker = () => {
+    chrome.runtime.sendMessage({ type: 'OPEN_JOB_TRACKER' });
+    setTimeout(() => {
+      window.close();
+    }, 150);
   };
 
   if (!data) {
@@ -136,14 +143,31 @@ export const App: React.FC = () => {
         </span>
       </div>
 
-      {/* Open Options Button */}
-      <button
-        onClick={openOptions}
-        className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-medium py-2 rounded-xl transition shadow-sm cursor-pointer"
-      >
-        <Settings className="w-3.5 h-3.5" />
-        Open Profile & Settings
-      </button>
+      {/* Action Buttons */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={openJobTracker}
+          className="flex items-center justify-center gap-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 font-semibold py-2 rounded-xl transition shadow-xs cursor-pointer text-xs"
+          title="Open Job Tracker dashboard"
+        >
+          <Briefcase className="w-3.5 h-3.5 text-sky-600" />
+          <span>Job Tracker</span>
+          {(data.applications?.length || 0) > 0 && (
+            <span className="bg-sky-200/80 text-sky-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+              {data.applications.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={openOptions}
+          className="flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-medium py-2 rounded-xl transition shadow-xs cursor-pointer text-xs"
+          title="Open Profile & Settings"
+        >
+          <Settings className="w-3.5 h-3.5" />
+          <span>Settings</span>
+        </button>
+      </div>
 
       {/* Site Access & Privacy Badge */}
       <div className="flex items-center justify-between px-1 text-[10px] text-slate-400">

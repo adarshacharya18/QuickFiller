@@ -11,10 +11,30 @@ import { QuestionsTab } from './QuestionsTab';
 import { SettingsTab } from './SettingsTab';
 import { ApplicationsTab } from './ApplicationsTab';
 
+export const parseTabFromUrl = (): 'profile' | 'questions' | 'applications' | 'settings' => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab')?.toLowerCase();
+    if (tabParam === 'applications' || tabParam === 'tracker' || tabParam === 'jobs') return 'applications';
+    if (tabParam === 'questions' || tabParam === 'qa') return 'questions';
+    if (tabParam === 'settings' || tabParam === 'models') return 'settings';
+    if (tabParam === 'profile') return 'profile';
+
+    const hash = window.location.hash.toLowerCase();
+    if (hash === '#applications' || hash === '#tracker' || hash === '#jobs') return 'applications';
+    if (hash === '#questions' || hash === '#qa') return 'questions';
+    if (hash === '#settings' || hash === '#models') return 'settings';
+    if (hash === '#profile') return 'profile';
+  } catch {
+    // Ignore
+  }
+  return 'profile';
+};
+
 export const App: React.FC = () => {
   const [data, setData] = useState<StorageData>(defaultStorageData);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'profile' | 'questions' | 'applications' | 'settings'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'questions' | 'applications' | 'settings'>(parseTabFromUrl);
   const [savedBanner, setSavedBanner] = useState(false);
 
   useEffect(() => {
@@ -22,7 +42,26 @@ export const App: React.FC = () => {
       setData(storage);
       setLoading(false);
     });
+
+    const handleUrlChange = () => {
+      setActiveTab(parseTabFromUrl());
+    };
+    window.addEventListener('hashchange', handleUrlChange);
+    window.addEventListener('popstate', handleUrlChange);
+    return () => {
+      window.removeEventListener('hashchange', handleUrlChange);
+      window.removeEventListener('popstate', handleUrlChange);
+    };
   }, []);
+
+  const handleTabChange = (tab: 'profile' | 'questions' | 'applications' | 'settings') => {
+    setActiveTab(tab);
+    try {
+      window.history.replaceState(null, '', `?tab=${tab}#${tab}`);
+    } catch {
+      // Ignore
+    }
+  };
 
   const triggerSaveNotification = () => {
     setSavedBanner(true);
@@ -136,7 +175,7 @@ export const App: React.FC = () => {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => handleTabChange(tab.id as any)}
                 className={`flex-1 flex items-center justify-center gap-1.5 pb-2.5 sm:pb-3 px-1 sm:px-4 text-xs font-semibold border-b-2 transition ${
                   isActive
                     ? 'border-sky-600 text-sky-600'

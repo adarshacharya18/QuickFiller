@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ChevronUp,
   BookmarkPlus,
+  CheckCircle,
 } from 'lucide-react';
 import { scanFormFields, extractJobMetadata, getCleanFormatHint, DetectedField, JobMetadata } from '../../utils/scanner';
 import { setNativeInputValue, insertTextAtCursor, CursorTargetInfo } from '../../utils/autofill';
@@ -29,6 +30,7 @@ import { StorageData, CustomPasteItem } from '../../types/storage';
 import { CandidateProfile } from '../../types/profile';
 import { JobApplication, ApplicationStatus } from '../../types/applications';
 import { cleanCoverLetterOutput } from '../../utils/llm/coverLetterPrompt';
+import { initSubmissionWatcher, stageCurrentJobMetadata } from '../../utils/submissionWatcher';
 
 export const Drawer: React.FC = () => {
   const [isOpen, setIsOpen] = useState<boolean>(() => {
@@ -125,6 +127,14 @@ export const Drawer: React.FC = () => {
   // Job Tracker State & Handlers
   const [showTrackerMenu, setShowTrackerMenu] = useState(false);
   const [justTrackedAnim, setJustTrackedAnim] = useState(false);
+  const [autoTrackedToast, setAutoTrackedToast] = useState<JobApplication | null>(null);
+
+  useEffect(() => {
+    if (autoTrackedToast) {
+      const timer = setTimeout(() => setAutoTrackedToast(null), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [autoTrackedToast]);
 
   const normalizeUrl = (urlStr?: string) => {
     if (!urlStr) return '';
@@ -209,7 +219,9 @@ export const Drawer: React.FC = () => {
     const { standardFields: std, customQuestions: cq } = scanFormFields();
     setStandardFields(std);
     setCustomQuestions(cq);
-    setJobMetadata(extractJobMetadata());
+    const meta = extractJobMetadata();
+    setJobMetadata(meta);
+    stageCurrentJobMetadata(meta);
   };
 
   const refreshStorage = async () => {
@@ -217,6 +229,17 @@ export const Drawer: React.FC = () => {
     setStorage(data);
     return data;
   };
+
+  // Mount submission watcher to auto-track applications upon form submit or confirmation
+  useEffect(() => {
+    const unwatch = initSubmissionWatcher({
+      onAutoTracked: (app) => {
+        setAutoTrackedToast(app);
+        refreshStorage();
+      },
+    });
+    return () => unwatch();
+  }, []);
 
   useEffect(() => {
     refreshStorage();
@@ -721,6 +744,41 @@ export const Drawer: React.FC = () => {
 
   return (
     <div className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[2147483647] font-sans text-slate-800 text-sm">
+      {/* Auto-Tracked Toast when collapsed */}
+      {!isOpen && autoTrackedToast && (
+        <div className="mb-2 bg-slate-900 border border-emerald-500/40 text-white p-3 rounded-2xl shadow-2xl flex items-center justify-between gap-3 text-xs animate-in fade-in slide-in-from-bottom-2 duration-200 max-w-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <div className="truncate">
+              <p className="font-bold text-emerald-300 text-[11px]">Application Tracked!</p>
+              <p className="text-[10px] text-slate-300 truncate">
+                {autoTrackedToast.title} • {autoTrackedToast.company}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={async () => {
+                const current = (await getStorageData()).applications || [];
+                const filtered = current.filter((a) => a.id !== autoTrackedToast.id);
+                await updateStorageData({ applications: filtered });
+                refreshStorage();
+                setAutoTrackedToast(null);
+              }}
+              className="text-[10px] text-emerald-400 hover:text-emerald-200 underline font-semibold cursor-pointer"
+            >
+              Undo
+            </button>
+            <button
+              onClick={() => setAutoTrackedToast(null)}
+              className="text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Floating Launcher Button */}
       {!isOpen && (
         <button
@@ -865,6 +923,39 @@ export const Drawer: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Auto-Tracked Toast inside open drawer */}
+          {autoTrackedToast && (
+            <div className="bg-emerald-950/95 border-b border-emerald-800/80 text-white px-3.5 py-2 flex items-center justify-between text-xs animate-in fade-in duration-150">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                <div className="truncate">
+                  <span className="font-semibold text-emerald-300">Tracked on submit:</span>{' '}
+                  <span className="text-slate-200">{autoTrackedToast.title} ({autoTrackedToast.company})</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={async () => {
+                    const current = (await getStorageData()).applications || [];
+                    const filtered = current.filter((a) => a.id !== autoTrackedToast.id);
+                    await updateStorageData({ applications: filtered });
+                    refreshStorage();
+                    setAutoTrackedToast(null);
+                  }}
+                  className="text-[11px] text-emerald-300 hover:text-white underline font-semibold cursor-pointer"
+                >
+                  Undo
+                </button>
+                <button
+                  onClick={() => setAutoTrackedToast(null)}
+                  className="text-slate-400 hover:text-white cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Tab Navigation */}
           <div className="flex border-b border-slate-200 bg-slate-50/80 px-2 pt-1.5 gap-1">

@@ -250,6 +250,7 @@ export async function getStorageData(): Promise<StorageData> {
         llmSettings: result.llmSettings || defaultStorageData.llmSettings,
         applications: result.applications || defaultStorageData.applications,
         jobTrackerEnabled: result.jobTrackerEnabled ?? defaultStorageData.jobTrackerEnabled,
+        autoTrackOnSubmit: result.autoTrackOnSubmit ?? defaultStorageData.autoTrackOnSubmit,
         extensionEnabled: result.extensionEnabled ?? defaultStorageData.extensionEnabled,
       });
     });

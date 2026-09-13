@@ -21,8 +21,10 @@ import { downloadApplicationsCsv } from '../../utils/csvExport';
 interface ApplicationsTabProps {
   applications: JobApplication[];
   jobTrackerEnabled: boolean;
+  autoTrackOnSubmit?: boolean;
   onSaveApplications: (applications: JobApplication[]) => void;
   onToggleJobTracker: (enabled: boolean) => void;
+  onToggleAutoTrackOnSubmit?: (enabled: boolean) => void;
 }
 
 const ALL_STATUSES: ApplicationStatus[] = [
@@ -36,8 +38,10 @@ const ALL_STATUSES: ApplicationStatus[] = [
 export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
   applications,
   jobTrackerEnabled,
+  autoTrackOnSubmit = true,
   onSaveApplications,
   onToggleJobTracker,
+  onToggleAutoTrackOnSubmit,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -158,23 +162,46 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-medium text-slate-600">Drawer Tracker:</span>
-          <button
-            onClick={() => onToggleJobTracker(!jobTrackerEnabled)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden ${
-              jobTrackerEnabled ? 'bg-sky-600' : 'bg-slate-300'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                jobTrackerEnabled ? 'translate-x-6' : 'translate-x-1'
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs font-medium text-slate-600">Drawer Button:</span>
+            <button
+              onClick={() => onToggleJobTracker(!jobTrackerEnabled)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-hidden ${
+                jobTrackerEnabled ? 'bg-sky-600' : 'bg-slate-300'
               }`}
-            />
-          </button>
-          <span className="text-xs font-semibold text-slate-800">
-            {jobTrackerEnabled ? 'Enabled' : 'Disabled'}
-          </span>
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                  jobTrackerEnabled ? 'translate-x-4' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <span className="text-xs font-semibold text-slate-800">
+              {jobTrackerEnabled ? 'On' : 'Off'}
+            </span>
+          </div>
+
+          {onToggleAutoTrackOnSubmit && (
+            <div className="flex items-center gap-2.5">
+              <span className="text-xs font-medium text-slate-600">Auto-track on Submit:</span>
+              <button
+                onClick={() => onToggleAutoTrackOnSubmit(!autoTrackOnSubmit)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-hidden ${
+                  autoTrackOnSubmit ? 'bg-sky-600' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                    autoTrackOnSubmit ? 'translate-x-4' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <span className="text-xs font-semibold text-slate-800">
+                {autoTrackOnSubmit ? 'On' : 'Off'}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

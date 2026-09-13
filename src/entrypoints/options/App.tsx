@@ -66,6 +66,12 @@ export const App: React.FC = () => {
     triggerSaveNotification();
   };
 
+  const handleToggleAutoTrackOnSubmit = async (autoTrackOnSubmit: boolean) => {
+    await updateStorageData({ autoTrackOnSubmit });
+    setData((prev) => ({ ...prev, autoTrackOnSubmit }));
+    triggerSaveNotification();
+  };
+
   const handleSaveSettings = async (llmSettings: LLMSettings) => {
     await updateStorageData({ llmSettings });
     setData((prev) => ({ ...prev, llmSettings }));
@@ -163,8 +169,10 @@ export const App: React.FC = () => {
           <ApplicationsTab
             applications={data.applications || []}
             jobTrackerEnabled={data.jobTrackerEnabled ?? true}
+            autoTrackOnSubmit={data.autoTrackOnSubmit ?? true}
             onSaveApplications={handleSaveApplications}
             onToggleJobTracker={handleToggleJobTracker}
+            onToggleAutoTrackOnSubmit={handleToggleAutoTrackOnSubmit}
           />
         )}
 
@@ -173,7 +181,9 @@ export const App: React.FC = () => {
             settings={data.llmSettings}
             onSaveSettings={handleSaveSettings}
             jobTrackerEnabled={data.jobTrackerEnabled ?? true}
+            autoTrackOnSubmit={data.autoTrackOnSubmit ?? true}
             onToggleJobTracker={handleToggleJobTracker}
+            onToggleAutoTrackOnSubmit={handleToggleAutoTrackOnSubmit}
           />
         )}
       </main>

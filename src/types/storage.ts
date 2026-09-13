@@ -17,6 +17,7 @@ export interface StorageData {
   llmSettings: LLMSettings;
   applications: JobApplication[];
   jobTrackerEnabled: boolean;
+  autoTrackOnSubmit: boolean;
   extensionEnabled: boolean;
 }
 
@@ -28,5 +29,6 @@ export const defaultStorageData: StorageData = {
   llmSettings: defaultLLMSettings,
   applications: [],
   jobTrackerEnabled: true,
+  autoTrackOnSubmit: true,
   extensionEnabled: true,
 };

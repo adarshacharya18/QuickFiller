@@ -6,14 +6,18 @@ interface SettingsTabProps {
   settings: LLMSettings;
   onSaveSettings: (settings: LLMSettings) => void;
   jobTrackerEnabled?: boolean;
+  autoTrackOnSubmit?: boolean;
   onToggleJobTracker?: (enabled: boolean) => void;
+  onToggleAutoTrackOnSubmit?: (enabled: boolean) => void;
 }
 
 export const SettingsTab: React.FC<SettingsTabProps> = ({
   settings,
   onSaveSettings,
   jobTrackerEnabled = true,
+  autoTrackOnSubmit = true,
   onToggleJobTracker,
+  onToggleAutoTrackOnSubmit,
 }) => {
   const [formData, setFormData] = useState<LLMSettings>(settings);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
@@ -424,6 +428,38 @@ OLLAMA_ORIGINS="*" ollama serve
             </button>
             <span className="text-xs font-semibold text-slate-800 w-16">
               {jobTrackerEnabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-track on Submit Sub-card */}
+      {onToggleAutoTrackOnSubmit && jobTrackerEnabled && (
+        <div className="bg-white p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 -mt-2">
+          <div>
+            <h4 className="text-xs sm:text-sm font-semibold text-slate-900">
+              Auto-Track on Application Submission
+            </h4>
+            <p className="text-[11px] text-slate-500 mt-0.5 max-w-xl">
+              Automatically logs the application when an ATS form submission or confirmation page (e.g. <em>/thank-you</em>, <em>/confirmation</em>) is detected. Displays a non-intrusive toast notification with an Undo option.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 self-end sm:self-auto flex-shrink-0">
+            <button
+              onClick={() => onToggleAutoTrackOnSubmit(!autoTrackOnSubmit)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-hidden ${
+                autoTrackOnSubmit ? 'bg-sky-600' : 'bg-slate-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                  autoTrackOnSubmit ? 'translate-x-4' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <span className="text-xs font-semibold text-slate-800 w-16">
+              {autoTrackOnSubmit ? 'Enabled' : 'Disabled'}
             </span>
           </div>
         </div>

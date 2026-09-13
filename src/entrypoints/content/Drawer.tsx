@@ -810,16 +810,23 @@ export const Drawer: React.FC = () => {
         >
           {/* Header */}
           <div className="bg-slate-900 text-white px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between border-b border-slate-800">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
               <div className="p-1.5 bg-sky-500/15 border border-sky-500/30 rounded-lg flex-shrink-0">
                 <Zap className="w-4 h-4 text-sky-400" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 sm:gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                   <h3 className="font-semibold text-xs sm:text-sm text-slate-100 flex-shrink-0">
                     QuickFiller Copilot
                   </h3>
-                  <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-800 text-sky-300 border border-slate-700 flex-shrink-0 truncate max-w-[120px] sm:max-w-[220px]">
+                  <span
+                    className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 border border-slate-700 flex-shrink-0 truncate max-w-[140px] sm:max-w-[240px]"
+                    title={
+                      storage?.llmSettings.provider === 'ollama'
+                        ? storage.llmSettings.ollama.model || 'Ollama'
+                        : storage?.llmSettings.provider || 'AI'
+                    }
+                  >
                     {storage?.llmSettings.provider === 'ollama'
                       ? storage.llmSettings.ollama.model || 'Ollama'
                       : storage?.llmSettings.provider || 'AI'}
@@ -834,91 +841,24 @@ export const Drawer: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-1 flex-shrink-0">
-              {/* Job Tracker Button */}
-              {storage?.jobTrackerEnabled !== false && (
-                <div className="relative mr-1">
-                  {!currentTrackedApp ? (
-                    <button
-                      onClick={handleTrackCurrentJob}
-                      className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-400/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                      title="Save this job application to your local tracker"
-                    >
-                      <BookmarkPlus className="w-3 h-3 text-sky-400" />
-                      <span className="hidden sm:inline">Track Job</span>
-                      <span className="sm:hidden">Track</span>
-                    </button>
-                  ) : (
-                    <div className="relative">
-                      <button
-                        onClick={() => setShowTrackerMenu(!showTrackerMenu)}
-                        className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md transition-all cursor-pointer ${
-                          justTrackedAnim
-                            ? 'bg-emerald-500 text-white animate-pulse'
-                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30'
-                        }`}
-                        title="Application is tracked! Click to update status or remove"
-                      >
-                        <Check className="w-3 h-3 text-emerald-400" />
-                        <span className="max-w-[70px] truncate">{currentTrackedApp.status}</span>
-                        <ChevronDown className="w-2.5 h-2.5 text-emerald-400/70" />
-                      </button>
-
-                      {showTrackerMenu && (
-                        <>
-                          <div
-                            className="fixed inset-0 z-40"
-                            onClick={() => setShowTrackerMenu(false)}
-                          />
-                          <div className="absolute right-0 mt-1.5 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100 text-xs">
-                            <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 border-b border-slate-700/80 uppercase tracking-wider">
-                              Update Status
-                            </div>
-                            {(['Bookmarked', 'Applied', 'Interviewing', 'Offer', 'Rejected'] as ApplicationStatus[]).map((st) => (
-                              <button
-                                key={st}
-                                onClick={() => handleUpdateTrackedStatus(st)}
-                                className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between hover:bg-slate-700/70 transition cursor-pointer ${
-                                  currentTrackedApp.status === st ? 'text-sky-400 font-semibold' : 'text-slate-300'
-                                }`}
-                              >
-                                <span>{st}</span>
-                                {currentTrackedApp.status === st && <Check className="w-3 h-3" />}
-                              </button>
-                            ))}
-                            <div className="border-t border-slate-700/80 my-1" />
-                            <button
-                              onClick={handleRemoveTrackedJob}
-                              className="w-full text-left px-2.5 py-1 text-[10px] text-red-400 hover:bg-red-900/30 transition flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                              Remove from Tracker
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
                 title={isExpanded ? 'Collapse width' : 'Expand to wide view'}
-                className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition"
+                className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition cursor-pointer"
               >
                 {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
               </button>
               <button
                 onClick={scanPage}
                 title="Rescan form"
-                className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition"
+                className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setIsOpen(false)}
                 title="Minimize"
-                className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition"
+                className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -1972,12 +1912,79 @@ export const Drawer: React.FC = () => {
             })()}
           </div>
 
-          {/* Footer with Options Link */}
-          <div className="px-3.5 py-2.5 bg-white border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span className="text-[11px]">QuickFiller Copilot</span>
+          {/* Footer with Job Tracker & Options Link */}
+          <div className="px-3.5 py-2.5 bg-white border-t border-slate-200/80 flex items-center justify-between text-xs text-slate-500">
+            <div className="flex items-center gap-2">
+              {/* Job Tracker Button */}
+              {storage?.jobTrackerEnabled !== false && (
+                <div className="relative">
+                  {!currentTrackedApp ? (
+                    <button
+                      onClick={handleTrackCurrentJob}
+                      className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-2xs"
+                      title="Save this job application to your local tracker"
+                    >
+                      <BookmarkPlus className="w-3.5 h-3.5 text-sky-600" />
+                      <span>Track Job</span>
+                    </button>
+                  ) : (
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowTrackerMenu(!showTrackerMenu)}
+                        className={`flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all cursor-pointer shadow-2xs ${
+                          justTrackedAnim
+                            ? 'bg-emerald-500 text-white animate-pulse'
+                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                        }`}
+                        title="Application is tracked! Click to update status or remove"
+                      >
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="max-w-[90px] truncate">{currentTrackedApp.status}</span>
+                        <ChevronUp className="w-3 h-3 text-emerald-600/70" />
+                      </button>
+
+                      {showTrackerMenu && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={() => setShowTrackerMenu(false)}
+                          />
+                          <div className="absolute left-0 bottom-full mb-2 w-44 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100 text-xs">
+                            <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 border-b border-slate-700/80 uppercase tracking-wider">
+                              Update Status
+                            </div>
+                            {(['Bookmarked', 'Applied', 'Interviewing', 'Offer', 'Rejected'] as ApplicationStatus[]).map((st) => (
+                              <button
+                                key={st}
+                                onClick={() => handleUpdateTrackedStatus(st)}
+                                className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between hover:bg-slate-700/70 transition cursor-pointer ${
+                                  currentTrackedApp.status === st ? 'text-sky-400 font-semibold' : 'text-slate-300'
+                                }`}
+                              >
+                                <span>{st}</span>
+                                {currentTrackedApp.status === st && <Check className="w-3 h-3" />}
+                              </button>
+                            ))}
+                            <div className="border-t border-slate-700/80 my-1" />
+                            <button
+                              onClick={handleRemoveTrackedJob}
+                              className="w-full text-left px-2.5 py-1 text-[10px] text-red-400 hover:bg-red-900/30 transition flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Remove from Tracker
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => chrome.runtime.openOptionsPage()}
-              className="flex items-center gap-1 text-sky-600 hover:text-sky-700 font-medium text-[11px]"
+              className="flex items-center gap-1 text-sky-600 hover:text-sky-700 font-medium text-[11px] cursor-pointer"
             >
               Open Options <ExternalLink className="w-3 h-3" />
             </button>

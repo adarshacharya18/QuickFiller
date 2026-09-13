@@ -26,6 +26,7 @@ import { deriveJobPostingUrl, extractInlineJD } from '../../utils/jdResolver';
 import { getStorageData, updateStorageData } from '../../utils/storage';
 import { StorageData, CustomPasteItem } from '../../types/storage';
 import { CandidateProfile } from '../../types/profile';
+import { cleanCoverLetterOutput } from '../../utils/llm/coverLetterPrompt';
 
 export const Drawer: React.FC = () => {
   const [isOpen, setIsOpen] = useState<boolean>(() => {
@@ -503,7 +504,7 @@ export const Drawer: React.FC = () => {
       });
 
       if (resp?.success && resp.answer) {
-        setGeneratedCoverLetter(resp.answer);
+        setGeneratedCoverLetter(cleanCoverLetterOutput(resp.answer));
       } else {
         setBankNotice({
           type: 'info',
@@ -524,23 +525,26 @@ export const Drawer: React.FC = () => {
 
   // 4. Insert Cover Letter into form or at cursor
   const handleInsertCoverLetter = (letter: string) => {
-    if (!letter) return;
+    const cleanText = cleanCoverLetterOutput(letter);
+    if (!cleanText) return;
     const clField = customQuestions.find((q) => q.type === 'cover_letter');
     if (clField) {
-      handleInsert(clField, letter);
+      handleInsert(clField, cleanText);
       setInsertedId('cover_letter_btn');
       setTimeout(() => setInsertedId(null), 2000);
       return;
     }
 
-    handleInsertAtCursor(letter, 'cover_letter_btn');
+    handleInsertAtCursor(cleanText, 'cover_letter_btn');
   };
 
   // 5. Save Cover Letter to Bank
   const handleSaveCoverLetterToBank = async (letter: string) => {
+    const cleanText = cleanCoverLetterOutput(letter);
+    if (!cleanText) return;
     const company = targetCompany.trim() || jobMetadata?.company || 'Company';
     const role = targetRole.trim() || jobMetadata?.title || 'Role';
-    await handleSaveAnswerToPasteBank(`Cover Letter: ${role} at ${company}`, letter, 'cover_letter_save');
+    await handleSaveAnswerToPasteBank(`Cover Letter: ${role} at ${company}`, cleanText, 'cover_letter_save');
   };
 
   const autofillAllStandard = async () => {

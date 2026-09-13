@@ -8,6 +8,7 @@ import { extractCleanJDFromHtml, isValidJobDescription } from '../utils/jdResolv
 import {
   buildCoverLetterSystemPrompt,
   buildCoverLetterUserPrompt,
+  cleanCoverLetterOutput,
 } from '../utils/llm/coverLetterPrompt';
 import { isSafeExternalUrl } from '../utils/security';
 
@@ -188,7 +189,8 @@ export default defineBackground(() => {
 
           const userPrompt = buildCoverLetterUserPrompt(options);
 
-          const answer = await generateAnswer(activeSettings, systemPrompt, userPrompt);
+          const rawAnswer = await generateAnswer(activeSettings, systemPrompt, userPrompt);
+          const answer = cleanCoverLetterOutput(rawAnswer);
           sendResponse({ success: true, answer });
         })
         .catch((err) => {

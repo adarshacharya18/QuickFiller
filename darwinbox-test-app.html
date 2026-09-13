@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Senior Frontend Engineer - LeadSquared Careers</title>
+  <meta property="og:site_name" content="LeadSquared" />
+  <meta name="description" content="LeadSquared Careers - Apply for Senior Frontend Engineer in Bangalore" />
+  <style>
+    :root {
+      --dbx-primary: #1e40af;
+      --dbx-primary-hover: #1d4ed8;
+      --dbx-bg: #f4f6fb;
+      --dbx-card-bg: #ffffff;
+      --dbx-border: #e2e8f0;
+      --dbx-text-main: #0f172a;
+      --dbx-text-muted: #64748b;
+      --dbx-success-bg: #ecfdf5;
+      --dbx-success-border: #a7f3d0;
+      --dbx-success-text: #065f46;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--dbx-bg);
+      color: var(--dbx-text-main);
+      padding: 32px 16px;
+      line-height: 1.5;
+    }
+
+    .page-container {
+      max-width: 820px;
+      margin: 0 auto;
+    }
+
+    /* Testing Guide Banner */
+    .test-banner {
+      background: linear-gradient(135deg, #1e3a8a, #2563eb);
+      color: #ffffff;
+      padding: 20px 24px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.18);
+    }
+    .test-banner h2 {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .test-banner p {
+      font-size: 13.5px;
+      opacity: 0.92;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+    .test-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .test-step-card {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 12.5px;
+    }
+    .test-step-card strong {
+      display: block;
+      color: #93c5fd;
+      margin-bottom: 3px;
+    }
+
+    /* Darwinbox Header */
+    .portal-header {
+      background: var(--dbx-card-bg);
+      border: 1px solid var(--dbx-border);
+      border-radius: 12px 12px 0 0;
+      padding: 24px 32px;
+      border-bottom: 1px solid var(--dbx-border);
+    }
+    .portal-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .brand-badge {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background: #2563eb;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 20px;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+    }
+    .header-company-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .header-tagline {
+      font-size: 12.5px;
+      color: var(--dbx-text-muted);
+    }
+
+    .job-title-header {
+      margin-top: 8px;
+    }
+    h1.job-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+    .job-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--dbx-text-muted);
+    }
+    .job-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* Job Description */
+    .job-posting-description {
+      background: #f8fafc;
+      border-left: 3px solid #2563eb;
+      padding: 14px 18px;
+      margin: 18px 0 6px 0;
+      border-radius: 0 6px 6px 0;
+      font-size: 13px;
+      color: #334155;
+    }
+    .job-posting-description strong {
+      color: #0f172a;
+    }
+
+    /* Form Container */
+    .portal-body {
+      background: var(--dbx-card-bg);
+      border: 1px solid var(--dbx-border);
+      border-top: none;
+      border-radius: 0 0 12px 12px;
+      padding: 32px;
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e293b;
+      margin: 24px 0 16px 0;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title:first-of-type {
+      margin-top: 0;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 640px) {
+      .grid-2, .grid-3 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .submit-container {
+      margin-top: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+      padding-top: 20px;
+      border-top: 1px solid #f1f5f9;
+    }
+
+    /* Success confirmation state */
+    .success-card {
+      display: none;
+      background: var(--dbx-success-bg);
+      border: 1px solid var(--dbx-success-border);
+      color: var(--dbx-success-text);
+      padding: 24px;
+      border-radius: 10px;
+      margin-top: 24px;
+      text-align: center;
+      animation: fadeIn 0.3s ease;
+    }
+    .success-card h3 {
+      font-size: 19px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .success-card p {
+      font-size: 14px;
+      opacity: 0.95;
+      margin-bottom: 16px;
+    }
+    .success-card .app-id {
+      display: inline-block;
+      background: #d1fae5;
+      color: #065f46;
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+    }
+
+    /* Live Reactive Form Inspector */
+    .inspector-card {
+      background: #1e293b;
+      color: #f8fafc;
+      padding: 20px 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+      margin-top: 24px;
+    }
+    .inspector-card h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #38bdf8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .live-badge {
+      background: #0284c7;
+      color: #fff;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-weight: 600;
+    }
+    .inspector-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+    }
+    .inspector-table th {
+      text-align: left;
+      padding: 6px 8px;
+      color: #94a3b8;
+      border-bottom: 1px solid #334155;
+    }
+    .inspector-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #334155;
+      color: #e2e8f0;
+      word-break: break-word;
+    }
+    .inspector-table tr:hover td {
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .val-empty {
+      color: #64748b;
+      font-style: italic;
+    }
+    .val-filled {
+      color: #4ade80;
+      font-weight: 600;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-container">
+
+    <!-- Instructions for user -->
+    <div class="test-banner">
+      <h2>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+        </svg>
+        Darwinbox Tech Stack Test Rig (Angular + Stencil Web Components + Open Shadow DOM)
+      </h2>
+      <p>
+        This portal replicates Darwinbox's exact architecture: custom elements (<code>&lt;dbx-ds-text-input&gt;</code>, <code>&lt;dbx-ds-textarea&gt;</code>, <code>&lt;dbx-ds-button&gt;</code>) with <strong>Open Shadow DOM</strong> and Angular Reactive Form bindings (<code>formcontrolname</code>, <code>ng-reflect-name</code>).
+      </p>
+      <div class="test-steps">
+        <div class="test-step-card">
+          <strong>1. Field Scanning</strong>
+          Open QuickFiller Drawer (<code>Alt+Shift+Q</code>). Notice all fields are discovered through Shadow DOM!
+        </div>
+        <div class="test-step-card">
+          <strong>2. Autofill Action</strong>
+          Click "Autofill Application". Notice the inputs fill and the Reactive State Inspector updates live.
+        </div>
+        <div class="test-step-card">
+          <strong>3. AI Insertion</strong>
+          Generate a Cover Letter / Answer & click "Insert". Text is injected directly into the Shadow DOM textarea.
+        </div>
+        <div class="test-step-card">
+          <strong>4. Submit Tracking</strong>
+          Click "Submit Application". The Job Tracker captures the submission and records LeadSquared!
+        </div>
+      </div>
+    </div>
+
+    <!-- Angular Root Application -->
+    <app-root>
+      <!-- Darwinbox Portal Header -->
+      <div class="portal-header">
+        <div class="portal-brand">
+          <div class="brand-badge">LS</div>
+          <div>
+            <div class="header-company-name">LeadSquared</div>
+            <div class="header-tagline">Darwinbox Candidate Portal v2.4 • Job ID: LS-IND-2026</div>
+          </div>
+        </div>
+
+        <div class="job-title-header">
+          <h1 class="job-title">Senior Frontend Engineer</h1>
+          <div class="job-meta">
+            <div class="job-meta-item">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+              Bangalore, Karnataka (Hybrid)
+            </div>
+            <div class="job-meta-item">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+              Engineering • Core UI Platform
+            </div>
+            <div class="job-meta-item">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Full-time
+            </div>
+          </div>
+
+          <div class="job-posting-description" data-automation-id="job-posting-description">
+            <strong>About LeadSquared:</strong> LeadSquared is a high-velocity sales execution SaaS platform. We are seeking a Senior Frontend Engineer to build resilient, accessible, and high-performance Web Components and Angular client applications. You will collaborate with cross-functional teams to enhance application workflows, optimize render cycles, and drive frontend system excellence.
+          </div>
+        </div>
+      </div>
+
+      <!-- Application Form Body -->
+      <div class="portal-body">
+        <form id="candidate-application-form">
+
+          <!-- Personal Information Section -->
+          <div class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Personal Information
+          </div>
+
+          <div class="grid-2">
+            <dbx-ds-form-field label="First Name" required="true">
+              <dbx-ds-text-input
+                name="firstName"
+                formcontrolname="firstName"
+                ng-reflect-name="firstName"
+                label="First Name"
+                placeholder="e.g. Adarsh"
+                data-automation-id="input-firstName"
+              ></dbx-ds-text-input>
+            </dbx-ds-form-field>
+
+            <dbx-ds-form-field label="Last Name" required="true">
+              <dbx-ds-text-input
+                name="lastName"
+                formcontrolname="lastName"
+                ng-reflect-name="lastName"
+                label="Last Name"
+                placeholder="e.g. Acharya"
+                data-automation-id="input-lastName"
+              ></dbx-ds-text-input>
+            </dbx-ds-form-field>
+          </div>
+
+          <div class="grid-2">
+            <dbx-ds-form-field label="Email Address" required="true">
+              <dbx-ds-text-input
+                name="email"
+                type="email"
+                formcontrolname="email"
+                ng-reflect-name="email"
+                label="Email Address"
+                placeholder="e.g. adarsh@example.com"
+                data-automation-id="input-email"
+              ></dbx-ds-text-input>
+            </dbx-ds-form-field>
+
+            <dbx-ds-form-field label="Phone Number" required="true">
+              <dbx-ds-text-input
+                name="phone"
+                type="tel"
+                formcontrolname="phone"
+                ng-reflect-name="phone"
+                label="Phone Number"
+                placeholder="e.g. +91 9876543210"
+                data-automation-id="input-phone"
+              ></dbx-ds-text-input>
+            </dbx-ds-form-field>
+          </div>
+
+          <!-- Professional Profiles -->
+          <div class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            Professional Links
+          </div>
+
+          <div class="grid-2">
+            <dbx-ds-form-field label="LinkedIn Profile" required="false">
+              <dbx-ds-text-input
+                name="linkedin"
+                formcontrolname="linkedin"
+                ng-reflect-name="linkedin"
+                label="LinkedIn Profile"
+                placeholder="https://linkedin.com/in/username"
+                data-automation-id="input-linkedin"
+              ></dbx-ds-text-input>
+            </dbx-ds-form-field>
+
+            <dbx-ds-form-field label="GitHub Profile" required="false">
+              <dbx-ds-text-input
+                name="github"
+                formcontrolname="github"
+                ng-reflect-name="github"
+                label="GitHub Profile"
+                placeholder="https://github.com/username"
+                data-automation-id="input-github"
+              ></dbx-ds-text-input>
+            </dbx-ds-form-field>
+          </div>
+
+          <dbx-ds-form-field label="Portfolio / Personal Website" required="false">
+            <dbx-ds-text-input
+              name="portfolio"
+              formcontrolname="portfolio"
+              ng-reflect-name="portfolio"
+              label="Portfolio / Website"
+              placeholder="https://yourportfolio.dev"
+              data-automation-id="input-portfolio"
+            ></dbx-ds-text-input>
+          </dbx-ds-form-field>
+
+          <!-- Address Location Section -->
+          <div class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            Location Details
+          </div>
+
+          <div class="grid-3">
+            <dbx-ds-form-field label="City">
+              <dbx-ds-text-input
+                name="city"
+                formcontrolname="city"
+                ng-reflect-name="city"
+                label="City"
+                placeholder="e.g. Bangalore"
+                data-automation-id="input-city"
+              ></dbx-ds-text-input>
+            </dbx-ds-form-field>
+
+            <dbx-ds-form-field label="State / Province">
+              <dbx-ds-text-input
+                name="state"
+                formcontrolname="state"
+                ng-reflect-name="state"
+                label="State"
+                placeholder="e.g. Karnataka"
+                data-automation-id="input-state"
+              ></dbx-ds-text-input>
+            </dbx-ds-form-field>
+
+            <dbx-ds-form-field label="Postal Code">
+              <dbx-ds-text-input
+                name="postalCode"
+                formcontrolname="postalCode"
+                ng-reflect-name="postalCode"
+                label="Postal Code"
+                placeholder="e.g. 560001"
+                data-automation-id="input-postalCode"
+              ></dbx-ds-text-input>
+            </dbx-ds-form-field>
+          </div>
+
+          <!-- Screening Questions & Cover Letter -->
+          <div class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            Screening & Cover Letter
+          </div>
+
+          <dbx-ds-form-field label="Why are you interested in joining LeadSquared?">
+            <dbx-ds-textarea
+              name="whyLeadSquared"
+              formcontrolname="whyLeadSquared"
+              ng-reflect-name="whyLeadSquared"
+              label="Why are you interested in joining LeadSquared?"
+              placeholder="Describe your motivations, relevant frontend experience, and what excites you about this role..."
+              rows="3"
+              data-automation-id="textarea-whyLeadSquared"
+            ></dbx-ds-textarea>
+          </dbx-ds-form-field>
+
+          <dbx-ds-form-field label="Cover Letter">
+            <dbx-ds-textarea
+              name="coverLetter"
+              formcontrolname="coverLetter"
+              ng-reflect-name="coverLetter"
+              label="Cover Letter"
+              placeholder="Paste or generate your tailored cover letter here..."
+              rows="5"
+              data-automation-id="textarea-coverLetter"
+            ></dbx-ds-textarea>
+          </dbx-ds-form-field>
+
+          <!-- Submit Button Component -->
+          <div class="submit-container">
+            <dbx-ds-button
+              type="submit"
+              label="Submit Application"
+              data-automation-id="submit-button"
+            ></dbx-ds-button>
+          </div>
+
+        </form>
+
+        <!-- Darwinbox Submission Success Alert State -->
+        <div id="submission-success-banner" class="success-card" role="alert" data-automation-id="success-message">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 12px auto; display: block;">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+          </svg>
+          <h3>Your application has been submitted successfully!</h3>
+          <p>Thank you for applying to LeadSquared. Our talent acquisition team has received your application.</p>
+          <div class="app-id">Application Ref: #LS-APP-a6aa650f812d09</div>
+          <div>
+            <button
+              type="button"
+              id="reset-form-btn"
+              style="padding: 8px 16px; background: #065f46; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;"
+            >
+              Submit Another Application
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Live Angular State Inspector -->
+      <div class="inspector-card">
+        <h3>
+          <span>Angular Reactive Form State (<code>CandidateFormGroup</code>)</span>
+          <span class="live-badge">SYNCED VIA COMPOSED EVENTS</span>
+        </h3>
+        <p style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">
+          When QuickFiller autofills inputs or inserts generated text into Shadow DOM, events (<code>input</code>, <code>change</code>, <code>dbxInput</code>) bubble up and update this live state:
+        </p>
+        <table class="inspector-table">
+          <thead>
+            <tr>
+              <th style="width: 25%;">FormControl</th>
+              <th style="width: 20%;">Shadow DOM Host</th>
+              <th>Current Live Value</th>
+            </tr>
+          </thead>
+          <tbody id="state-table-body">
+            <!-- Populated via script -->
+          </tbody>
+        </table>
+      </div>
+
+    </app-root>
+
+  </div>
+
+  <!-- Web Component Definitions mimicking Darwinbox Stencil.js library -->
+  <script>
+    // 1. <dbx-ds-form-field>
+    class DbxDsFormField extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+      }
+
+      connectedCallback() {
+        const label = this.getAttribute('label') || '';
+        const required = this.getAttribute('required') === 'true';
+
+        this.shadowRoot.innerHTML = `
+          <style>
+            :host {
+              display: block;
+              margin-bottom: 18px;
+            }
+            .dbx-label {
+              display: flex;
+              align-items: center;
+              gap: 4px;
+              font-size: 13px;
+              font-weight: 600;
+              color: #334155;
+              margin-bottom: 6px;
+            }
+            .required-star {
+              color: #ef4444;
+              font-weight: 700;
+            }
+          </style>
+          <div class="form-field-wrapper">
+            ${label ? `<label class="dbx-label">${label}${required ? '<span class="required-star">*</span>' : ''}</label>` : ''}
+            <slot></slot>
+          </div>
+        `;
+      }
+    }
+    customElements.define('dbx-ds-form-field', DbxDsFormField);
+
+    // 2. <dbx-ds-text-input> (Shadow DOM input component)
+    class DbxDsTextInput extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+      }
+
+      get value() {
+        return this._input ? this._input.value : (this.getAttribute('value') || '');
+      }
+
+      set value(val) {
+        if (this._input) {
+          this._input.value = val;
+        }
+        this.setAttribute('value', val);
+        this.syncWithAngular(val);
+      }
+
+      connectedCallback() {
+        const placeholder = this.getAttribute('placeholder') || '';
+        const type = this.getAttribute('type') || 'text';
+        const name = this.getAttribute('name') || '';
+        const initialVal = this.getAttribute('value') || '';
+
+        this.shadowRoot.innerHTML = `
+          <style>
+            :host {
+              display: block;
+              width: 100%;
+            }
+            .dbx-input {
+              width: 100%;
+              padding: 9px 12px;
+              font-size: 14px;
+              color: #0f172a;
+              background: #ffffff;
+              border: 1px solid #cbd5e1;
+              border-radius: 6px;
+              box-sizing: border-box;
+              outline: none;
+              font-family: inherit;
+              transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            }
+            .dbx-input:focus {
+              border-color: #2563eb;
+              box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+            }
+            .dbx-input::placeholder {
+              color: #94a3b8;
+            }
+          </style>
+          <input
+            class="dbx-input"
+            type="${type}"
+            name="${name}"
+            placeholder="${placeholder}"
+            value="${initialVal}"
+          />
+        `;
+
+        this._input = this.shadowRoot.querySelector('input');
+
+        // Forward inner input events with composed: true and fire Darwinbox Stencil events
+        this._input.addEventListener('input', (e) => {
+          const val = this._input.value;
+          this.setAttribute('value', val);
+          this.dispatchEvent(new CustomEvent('dbxInput', { bubbles: true, composed: true, detail: { value: val } }));
+          this.syncWithAngular(val);
+        });
+
+        this._input.addEventListener('change', (e) => {
+          const val = this._input.value;
+          this.setAttribute('value', val);
+          this.dispatchEvent(new CustomEvent('dbxChange', { bubbles: true, composed: true, detail: { value: val } }));
+          this.syncWithAngular(val);
+        });
+      }
+
+      syncWithAngular(val) {
+        const formCtrlName = this.getAttribute('formcontrolname') || this.getAttribute('name');
+        if (window.angularFormInstance && formCtrlName) {
+          window.angularFormInstance.patchValue(formCtrlName, val);
+        }
+      }
+    }
+    customElements.define('dbx-ds-text-input', DbxDsTextInput);
+
+    // 3. <dbx-ds-textarea> (Shadow DOM textarea component)
+    class DbxDsTextarea extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+      }
+
+      get value() {
+        return this._textarea ? this._textarea.value : (this.getAttribute('value') || '');
+      }
+
+      set value(val) {
+        if (this._textarea) {
+          this._textarea.value = val;
+        }
+        this.setAttribute('value', val);
+        this.syncWithAngular(val);
+      }
+
+      connectedCallback() {
+        const placeholder = this.getAttribute('placeholder') || '';
+        const name = this.getAttribute('name') || '';
+        const rows = this.getAttribute('rows') || '4';
+        const initialVal = this.getAttribute('value') || '';
+
+        this.shadowRoot.innerHTML = `
+          <style>
+            :host {
+              display: block;
+              width: 100%;
+            }
+            .dbx-textarea {
+              width: 100%;
+              padding: 10px 12px;
+              font-size: 14px;
+              color: #0f172a;
+              background: #ffffff;
+              border: 1px solid #cbd5e1;
+              border-radius: 6px;
+              box-sizing: border-box;
+              outline: none;
+              font-family: inherit;
+              resize: vertical;
+              line-height: 1.5;
+              transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            }
+            .dbx-textarea:focus {
+              border-color: #2563eb;
+              box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+            }
+            .dbx-textarea::placeholder {
+              color: #94a3b8;
+            }
+          </style>
+          <textarea
+            class="dbx-textarea"
+            name="${name}"
+            rows="${rows}"
+            placeholder="${placeholder}"
+          >${initialVal}</textarea>
+        `;
+
+        this._textarea = this.shadowRoot.querySelector('textarea');
+
+        this._textarea.addEventListener('input', (e) => {
+          const val = this._textarea.value;
+          this.setAttribute('value', val);
+          this.dispatchEvent(new CustomEvent('dbxInput', { bubbles: true, composed: true, detail: { value: val } }));
+          this.syncWithAngular(val);
+        });
+
+        this._textarea.addEventListener('change', (e) => {
+          const val = this._textarea.value;
+          this.setAttribute('value', val);
+          this.dispatchEvent(new CustomEvent('dbxChange', { bubbles: true, composed: true, detail: { value: val } }));
+          this.syncWithAngular(val);
+        });
+      }
+
+      syncWithAngular(val) {
+        const formCtrlName = this.getAttribute('formcontrolname') || this.getAttribute('name');
+        if (window.angularFormInstance && formCtrlName) {
+          window.angularFormInstance.patchValue(formCtrlName, val);
+        }
+      }
+    }
+    customElements.define('dbx-ds-textarea', DbxDsTextarea);
+
+    // 4. <dbx-ds-button> (Shadow DOM button component)
+    class DbxDsButton extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+      }
+
+      connectedCallback() {
+        const label = this.getAttribute('label') || 'Submit';
+        const type = this.getAttribute('type') || 'button';
+
+        this.shadowRoot.innerHTML = `
+          <style>
+            :host {
+              display: inline-block;
+            }
+            .dbx-btn {
+              background: #1e40af;
+              color: #ffffff;
+              border: none;
+              padding: 10px 24px;
+              border-radius: 6px;
+              font-size: 14px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: background 0.15s ease, transform 0.05s ease;
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              gap: 8px;
+            }
+            .dbx-btn:hover {
+              background: #1d4ed8;
+            }
+            .dbx-btn:active {
+              transform: scale(0.98);
+            }
+          </style>
+          <button class="dbx-btn" type="${type}">${label}</button>
+        `;
+
+        const btn = this.shadowRoot.querySelector('button');
+        btn.addEventListener('click', (e) => {
+          if (type === 'submit') {
+            const form = this.closest('form');
+            if (form) {
+              const submitEvt = new Event('submit', { bubbles: true, cancelable: true });
+              form.dispatchEvent(submitEvt);
+            }
+          }
+        });
+      }
+    }
+    customElements.define('dbx-ds-button', DbxDsButton);
+
+    // 5. Angular Form Simulation Controller
+    class SimulatedAngularForm {
+      constructor() {
+        this.fields = [
+          'firstName', 'lastName', 'email', 'phone',
+          'linkedin', 'github', 'portfolio',
+          'city', 'state', 'postalCode',
+          'whyLeadSquared', 'coverLetter'
+        ];
+        this.state = {};
+        this.fields.forEach(f => this.state[f] = '');
+        this.renderInspector();
+      }
+
+      patchValue(name, val) {
+        if (this.state.hasOwnProperty(name)) {
+          this.state[name] = val;
+          this.updateRow(name, val);
+        }
+      }
+
+      renderInspector() {
+        const tbody = document.getElementById('state-table-body');
+        tbody.innerHTML = '';
+        this.fields.forEach((f) => {
+          const tr = document.createElement('tr');
+          tr.id = `row-${f}`;
+          tr.innerHTML = `
+            <td style="color: #60a5fa; font-weight: 600;">${f}</td>
+            <td style="color: #94a3b8;">&lt;${f.includes('Letter') || f.includes('why') ? 'dbx-ds-textarea' : 'dbx-ds-text-input'}&gt;</td>
+            <td class="field-val val-empty">null</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      updateRow(name, val) {
+        const tr = document.getElementById(`row-${name}`);
+        if (!tr) return;
+        const td = tr.querySelector('.field-val');
+        if (!val) {
+          td.className = 'field-val val-empty';
+          td.textContent = 'null';
+        } else {
+          td.className = 'field-val val-filled';
+          td.textContent = `"${val.length > 50 ? val.slice(0, 50) + '...' : val}"`;
+        }
+      }
+    }
+
+    window.angularFormInstance = new SimulatedAngularForm();
+
+    // Form submission listener
+    const form = document.getElementById('candidate-application-form');
+    const successBanner = document.getElementById('submission-success-banner');
+    const resetBtn = document.getElementById('reset-form-btn');
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      // Show Darwinbox success alert
+      form.style.display = 'none';
+      successBanner.style.display = 'block';
+
+      // Set Darwinbox success hash so confirmation URL is also testable
+      try {
+        window.history.pushState({}, '', '#/ms/candidatev2/main/applications/a6aa650f812d09/success');
+      } catch {}
+    });
+
+    resetBtn.addEventListener('click', () => {
+      successBanner.style.display = 'none';
+      form.style.display = 'block';
+      try {
+        window.history.pushState({}, '', window.location.pathname);
+      } catch {}
+    });
+  </script>
+</body>
+</html>

@@ -220,10 +220,16 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     const currentApps = storage.applications || [];
     const normalizedStagedUrl = staged.url.split('?')[0].replace(/\/$/, '').toLowerCase();
 
-    // Prevent duplicate entries
+    // Prevent duplicate entries (exclude local test files so developers can test repeatedly)
+    const isTestFile =
+      normalizedStagedUrl.includes('test-form.html') ||
+      normalizedStagedUrl.includes('test-app') ||
+      normalizedStagedUrl.includes('darwinbox-test');
+
     const isAlreadyTracked = currentApps.some((a) => {
+      if (isTestFile) return false;
       const normAppUrl = a.url.split('?')[0].replace(/\/$/, '').toLowerCase();
-      if (normAppUrl === normalizedStagedUrl && !normalizedStagedUrl.includes('test-form.html')) {
+      if (normAppUrl === normalizedStagedUrl) {
         return true;
       }
       if (

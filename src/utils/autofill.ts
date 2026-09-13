@@ -44,27 +44,64 @@ export function setNativeInputValue(
       element.value = value;
     }
 
-    // 5. Trigger complete cycle of browser events
+    // 5. Trigger complete cycle of browser events with composed: true
     try {
       element.dispatchEvent(
-        new InputEvent('input', { bubbles: true, cancelable: true, data: value, inputType: 'insertText' })
+        new InputEvent('input', {
+          bubbles: true,
+          composed: true,
+          cancelable: true,
+          data: value,
+          inputType: 'insertText',
+        })
       );
     } catch {
-      element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      element.dispatchEvent(new Event('input', { bubbles: true, composed: true, cancelable: true }));
     }
 
-    element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-    element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+    element.dispatchEvent(new Event('input', { bubbles: true, composed: true, cancelable: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true, composed: true, cancelable: true }));
     if (shouldBlur) {
-      element.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
+      element.dispatchEvent(new Event('blur', { bubbles: true, composed: true, cancelable: true }));
     }
+
+    // 6. Web Component / Shadow DOM host synchronization (e.g. Darwinbox Stencil dbx-ds-text-input)
+    try {
+      const rootNode = element.getRootNode();
+      if (rootNode && 'host' in rootNode) {
+        const host = (rootNode as ShadowRoot).host as any;
+        if (host) {
+          if ('value' in host || host.value !== undefined) {
+            host.value = value;
+          }
+          host.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+          host.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+          try {
+            host.dispatchEvent(
+              new CustomEvent('dbxInput', { bubbles: true, composed: true, detail: { value } })
+            );
+            host.dispatchEvent(
+              new CustomEvent('dbxChange', { bubbles: true, composed: true, detail: { value } })
+            );
+          } catch {
+            // Ignore custom event error
+          }
+          if (shouldBlur) {
+            host.dispatchEvent(new Event('blur', { bubbles: true, composed: true }));
+          }
+        }
+      }
+    } catch {
+      // Ignore host sync error
+    }
+
     return true;
   } catch (err) {
     console.error('[QuickFiller] Error setting input value:', err);
     try {
       element.value = value;
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true }));
+      element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     } catch {
       // Ignore fallback error
     }
@@ -103,8 +140,14 @@ export function insertTextAtCursor(
   }
 
   // If no target provided or element is detached from document, check document.activeElement
-  if (!el || !document.contains(el)) {
-    const active = document.activeElement as HTMLElement | null;
+  const isElConnected = el && (el.isConnected ?? document.contains(el));
+  if (!el || !isElConnected) {
+    let active = document.activeElement as HTMLElement | null;
+    // Drill into activeElement inside open shadow roots
+    while (active && active.shadowRoot && active.shadowRoot.activeElement) {
+      active = active.shadowRoot.activeElement as HTMLElement;
+    }
+
     if (
       active &&
       active.tagName !== 'BODY' &&
@@ -115,7 +158,8 @@ export function insertTextAtCursor(
     }
   }
 
-  if (!el || !document.contains(el)) {
+  const finalConnected = el && (el.isConnected ?? document.contains(el));
+  if (!el || !finalConnected) {
     return false;
   }
 

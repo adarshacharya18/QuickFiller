@@ -1,4 +1,4 @@
-import { JobMetadata, extractJobMetadata, isElementVisible } from './scanner';
+import { JobMetadata, extractJobMetadata, isElementVisible, querySelectorAllDeep } from './scanner';
 import { JobApplication } from '../types/applications';
 import { getStorageData, updateStorageData } from './storage';
 
@@ -82,19 +82,40 @@ export function isSubmitTriggerElement(elem: HTMLElement | null): boolean {
     return true;
   }
 
-  // 2. ATS specific attributes (Workday, Greenhouse, Ashby, Lever)
+  // 2. ATS / Web Component specific attributes (Workday, Greenhouse, Ashby, Lever, Darwinbox)
+  const tagName = elem.tagName.toLowerCase();
+  const automationId = (elem.getAttribute('data-automation-id') || '').toLowerCase();
+  const dataQa = (elem.getAttribute('data-qa') || '').toLowerCase();
+  const id = (elem.id || '').toLowerCase();
+  const className = (typeof elem.className === 'string' ? elem.className : '').toLowerCase();
+  const role = (elem.getAttribute('role') || '').toLowerCase();
+  const type = (elem.getAttribute('type') || '').toLowerCase();
+
   if (
-    elem.getAttribute('data-automation-id') === 'submit-button' ||
-    elem.getAttribute('data-automation-id') === 'bottom-submit-button' ||
-    elem.getAttribute('data-qa') === 'submit-application' ||
-    elem.id.toLowerCase().includes('submit') ||
-    elem.className.toLowerCase().includes('submit-btn') ||
-    elem.className.toLowerCase().includes('submit-application')
+    type === 'submit' ||
+    automationId.includes('submit') ||
+    dataQa.includes('submit') ||
+    id.includes('submit') ||
+    className.includes('submit-btn') ||
+    className.includes('submit-application') ||
+    className.includes('dbx-btn-submit')
   ) {
     return true;
   }
 
-  // 3. Button / link text content inspection
+  // 3. Web Component buttons like <dbx-ds-button>
+  if (tagName.includes('button') || tagName.startsWith('dbx-ds-') || role === 'button') {
+    const hostLabel = elem.getAttribute('label') || elem.getAttribute('text') || elem.getAttribute('value') || '';
+    if (
+      /^(submit(\s*(application|form))?|apply(\s*now)?|complete\s*application|send\s*application)$/i.test(
+        hostLabel.trim()
+      )
+    ) {
+      return true;
+    }
+  }
+
+  // 4. Button / link text content inspection
   const text = (elem.textContent || '').trim();
   if (
     /^(submit(\s*(application|form))?|apply(\s*now)?|complete\s*application|send\s*application)$/i.test(
@@ -104,10 +125,23 @@ export function isSubmitTriggerElement(elem: HTMLElement | null): boolean {
     return true;
   }
 
-  // Check parent button if user clicked an inner span/icon
-  const parentBtn = elem.closest('button, [role="button"], a');
+  // 5. Check parent button if user clicked an inner span/icon
+  const parentBtn = elem.closest('button, [role="button"], a, dbx-ds-button, [class*="submit"]');
   if (parentBtn && parentBtn !== elem) {
     return isSubmitTriggerElement(parentBtn as HTMLElement);
+  }
+
+  // 6. Check shadow root host if inside shadow DOM
+  try {
+    const root = elem.getRootNode();
+    if (root && 'host' in root) {
+      const host = (root as ShadowRoot).host as HTMLElement;
+      if (host && host !== elem) {
+        return isSubmitTriggerElement(host);
+      }
+    }
+  } catch {
+    // Ignore
   }
 
   return false;
@@ -125,12 +159,13 @@ export function isConfirmationUrl(url: string = window.location.href): boolean {
  * Strictly ignores hidden elements (e.g. display: none or hidden parent modals).
  */
 export function hasVisibleSuccessMessage(): boolean {
-  const prominentElements = document.querySelectorAll(
-    'h1, h2, h3, h4, h5, [role="alert"], [data-automation-id*="success"], [data-automation-id*="confirmation"], [id*="submitted"], [id*="success"], [class*="submitted"], [class*="success"], .confirmation, .success'
+  const prominentElements = querySelectorAllDeep<HTMLElement>(
+    'h1, h2, h3, h4, h5, [role="alert"], [data-automation-id*="success"], [data-automation-id*="confirmation"], [id*="submitted"], [id*="success"], [class*="submitted"], [class*="success"], .confirmation, .success',
+    document
   );
 
-  for (const el of Array.from(prominentElements)) {
-    if (!isElementVisible(el as HTMLElement)) {
+  for (const el of prominentElements) {
+    if (!isElementVisible(el)) {
       continue;
     }
     const content = (el.textContent || '').trim();
@@ -250,9 +285,12 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
   // 2. Click listener for submit buttons
   const handleClick = (e: MouseEvent) => {
     if (!isListening) return;
-    const target = e.target as HTMLElement | null;
-    if (isSubmitTriggerElement(target)) {
-      handleUserSubmitIntent();
+    const path = (e.composedPath && e.composedPath()) || [e.target];
+    for (const node of path) {
+      if (node instanceof HTMLElement && isSubmitTriggerElement(node)) {
+        handleUserSubmitIntent();
+        break;
+      }
     }
   };
 

@@ -48,19 +48,37 @@ export function isElementVisible(elem: HTMLElement): boolean {
     return false;
   }
 
+  // Inside Shadow DOM or detached subtrees, offsetParent may be null even when rendered.
+  // Check layout dimensions and client rects first.
+  if (elem.offsetWidth > 0 || elem.offsetHeight > 0 || elem.getClientRects().length > 0) {
+    return true;
+  }
+
   if (elem.offsetParent === null) {
     return false;
   }
 
-  return elem.offsetWidth > 0 || elem.offsetHeight > 0 || elem.getClientRects().length > 0;
+  return true;
 }
 
 export function findFieldLabel(element: HTMLElement): string {
-  // 1. Explicit <label for="...">
+  const rootNode = element.getRootNode() as Document | ShadowRoot;
+
+  // 1. Explicit <label for="..."> (searches current root and main document)
   if (element.id) {
-    const labelElem = document.querySelector(`label[for="${element.id}"]`);
-    if (labelElem && labelElem.textContent?.trim()) {
-      return labelElem.textContent.trim();
+    try {
+      if (rootNode && 'querySelector' in rootNode) {
+        const localLabel = rootNode.querySelector(`label[for="${CSS.escape(element.id)}"]`);
+        if (localLabel && localLabel.textContent?.trim()) {
+          return localLabel.textContent.trim();
+        }
+      }
+      const docLabel = document.querySelector(`label[for="${CSS.escape(element.id)}"]`);
+      if (docLabel && docLabel.textContent?.trim()) {
+        return docLabel.textContent.trim();
+      }
+    } catch {
+      // Ignore CSS escape or querySelector errors
     }
   }
 
@@ -84,7 +102,17 @@ export function findFieldLabel(element: HTMLElement): string {
   if (ariaLabelledBy) {
     const ids = ariaLabelledBy.split(/\s+/).filter(Boolean);
     const texts = ids
-      .map((id) => document.getElementById(id)?.textContent?.trim())
+      .map((id) => {
+        try {
+          if (rootNode && 'getElementById' in rootNode) {
+            const el = (rootNode as Document).getElementById(id);
+            if (el?.textContent?.trim()) return el.textContent.trim();
+          }
+          return document.getElementById(id)?.textContent?.trim();
+        } catch {
+          return null;
+        }
+      })
       .filter(Boolean);
     if (texts.length > 0) {
       return texts.join(' ');
@@ -116,7 +144,52 @@ export function findFieldLabel(element: HTMLElement): string {
     }
   }
 
-  // 6. Name / placeholder fallback
+  // 6. Web Component / Shadow DOM Host inspection (e.g. Darwinbox dbx-ds-text-input, dbx-ds-form-field)
+  try {
+    if (rootNode && 'host' in rootNode) {
+      const host = (rootNode as ShadowRoot).host as HTMLElement;
+      if (host) {
+        // Direct label / placeholder on custom element: <dbx-ds-text-input label="First Name">
+        const hostLabel =
+          host.getAttribute('label') ||
+          host.getAttribute('data-label') ||
+          host.getAttribute('aria-label');
+        if (hostLabel && hostLabel.trim()) {
+          return hostLabel.trim();
+        }
+
+        // Host parent container (e.g. <dbx-ds-form-field label="First Name">)
+        const hostParent = host.closest(
+          'dbx-ds-form-field, .form-group, .field, [class*="form-item"], [class*="field-"]'
+        );
+        if (hostParent) {
+          const parentLabel =
+            hostParent.getAttribute('label') ||
+            hostParent.querySelector('label, [class*="label"], span.title, div.title')?.textContent?.trim();
+          if (parentLabel && parentLabel.trim()) {
+            return parentLabel.trim();
+          }
+        }
+
+        // Check surrounding light DOM around host
+        const hostSibling = host.previousElementSibling;
+        if (hostSibling && (hostSibling.tagName === 'LABEL' || hostSibling.querySelector('label'))) {
+          const lblText = hostSibling.textContent?.trim();
+          if (lblText) return lblText;
+        }
+
+        // Check if host has an internal label inside shadow root
+        const shadowLabel = (rootNode as ShadowRoot).querySelector('label, .dbx-label, [class*="label"]');
+        if (shadowLabel && shadowLabel.textContent?.trim()) {
+          return shadowLabel.textContent.trim();
+        }
+      }
+    }
+  } catch {
+    // Ignore shadow root access issues
+  }
+
+  // 7. Name / placeholder fallback
   return element.getAttribute('name') || element.getAttribute('placeholder') || '';
 }
 
@@ -124,13 +197,57 @@ export function classifyField(
   element: HTMLInputElement | HTMLTextAreaElement,
   label: string
 ): StandardFieldType | 'custom_question' | 'cover_letter' {
-  const name = (element.getAttribute('name') || '').toLowerCase();
+  const name = (
+    element.getAttribute('name') ||
+    element.getAttribute('formcontrolname') ||
+    element.getAttribute('ng-reflect-name') ||
+    ''
+  ).toLowerCase();
   const id = (element.id || '').toLowerCase();
   const placeholder = (element.getAttribute('placeholder') || '').toLowerCase();
   const autocomplete = (element.getAttribute('autocomplete') || '').toLowerCase();
-  const automationId = (element.getAttribute('data-automation-id') || '').toLowerCase();
+  const automationId = (
+    element.getAttribute('data-automation-id') ||
+    element.getAttribute('data-qa') ||
+    ''
+  ).toLowerCase();
   const ariaLabel = (element.getAttribute('aria-label') || '').toLowerCase();
-  const text = `${label} ${name} ${id} ${placeholder} ${autocomplete} ${automationId} ${ariaLabel}`.toLowerCase();
+
+  // Also inspect host custom element if inside Shadow DOM (e.g. Darwinbox dbx-ds-text-input)
+  let hostName = '';
+  let hostLabel = '';
+  let hostAutomationId = '';
+  let hostPlaceholder = '';
+  try {
+    const rootNode = element.getRootNode();
+    if (rootNode && 'host' in rootNode) {
+      const host = (rootNode as ShadowRoot).host as HTMLElement;
+      if (host) {
+        hostName = (
+          host.getAttribute('name') ||
+          host.getAttribute('formcontrolname') ||
+          host.getAttribute('ng-reflect-name') ||
+          ''
+        ).toLowerCase();
+        hostLabel = (
+          host.getAttribute('label') ||
+          host.getAttribute('data-label') ||
+          host.getAttribute('aria-label') ||
+          ''
+        ).toLowerCase();
+        hostAutomationId = (
+          host.getAttribute('data-automation-id') ||
+          host.getAttribute('data-qa') ||
+          ''
+        ).toLowerCase();
+        hostPlaceholder = (host.getAttribute('placeholder') || '').toLowerCase();
+      }
+    }
+  } catch {
+    // Ignore
+  }
+
+  const text = `${label} ${hostLabel} ${name} ${hostName} ${id} ${placeholder} ${hostPlaceholder} ${autocomplete} ${automationId} ${hostAutomationId} ${ariaLabel}`.toLowerCase();
 
   // Explicit cover letter detection
   if (/cover[-_\s]?letter|statement of interest|motivation[-_\s]?letter|letter of motivation/i.test(text)) {
@@ -186,33 +303,96 @@ export function classifyField(
   return 'custom_question';
 }
 
+/**
+ * Recursively queries elements across light DOM, open Shadow Roots, and same-origin iframes.
+ */
+export function querySelectorAllDeep<T extends Element = Element>(
+  selector: string,
+  root: Document | Element | ShadowRoot = document
+): T[] {
+  const results: T[] = [];
+  const visitedRoots = new Set<Node>();
+
+  function traverse(node: Document | Element | ShadowRoot) {
+    if (!node || visitedRoots.has(node)) return;
+    visitedRoots.add(node);
+
+    try {
+      const matches = node.querySelectorAll<T>(selector);
+      for (let i = 0; i < matches.length; i++) {
+        results.push(matches[i]);
+      }
+    } catch {
+      // Ignore selector errors
+    }
+
+    try {
+      const allElements = node.querySelectorAll('*');
+      for (let i = 0; i < allElements.length; i++) {
+        const el = allElements[i];
+
+        // 1. Traverse open Shadow Roots (e.g. Darwinbox dbx-ds-text-input, Stencil, Lit)
+        if (el.shadowRoot) {
+          traverse(el.shadowRoot);
+        }
+
+        // 2. Traverse accessible same-origin iframes
+        if (el.tagName === 'IFRAME') {
+          try {
+            const iframeDoc = (el as HTMLIFrameElement).contentDocument;
+            if (iframeDoc) {
+              traverse(iframeDoc);
+            }
+          } catch {
+            // Cross-origin iframe security block - ignore
+          }
+        }
+      }
+    } catch {
+      // Ignore traversal errors
+    }
+  }
+
+  traverse(root);
+  return results;
+}
+
 export function scanFormFields(): {
   standardFields: DetectedField[];
   customQuestions: DetectedField[];
 } {
-  const inputs = Array.from(
-    document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-      'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea'
-    )
+  const inputs = querySelectorAllDeep<HTMLInputElement | HTMLTextAreaElement>(
+    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea',
+    document
   );
 
   const standardFields: DetectedField[] = [];
   const customQuestions: DetectedField[] = [];
 
   inputs.forEach((elem, index) => {
-    // Check visibility without dropping fixed-position modals
+    // Check visibility without dropping fixed-position modals or shadow elements
     if (!isElementVisible(elem) && elem.tagName !== 'TEXTAREA') return;
 
     const label = findFieldLabel(elem);
     const classification = classifyField(elem, label);
     const id = elem.id || elem.getAttribute('name') || `qf_field_${index}`;
 
+    let hostPlaceholder = '';
+    try {
+      const rootNode = elem.getRootNode();
+      if (rootNode && 'host' in rootNode) {
+        hostPlaceholder = ((rootNode as ShadowRoot).host as HTMLElement)?.getAttribute('placeholder') || '';
+      }
+    } catch {}
+
+    const placeholder = elem.placeholder || elem.getAttribute('placeholder') || hostPlaceholder || '';
+
     const field: DetectedField = {
       id,
       element: elem,
       type: classification,
       label: label || `Field #${index + 1}`,
-      placeholder: elem.placeholder || '',
+      placeholder,
       value: elem.value || '',
       isTextarea: elem.tagName === 'TEXTAREA',
     };
@@ -229,8 +409,8 @@ export function scanFormFields(): {
 
 export function extractJobMetadata(): JobMetadata {
   const title =
-    document.querySelector('h1')?.textContent?.trim() ||
-    document.title.split(/[-|–]/)[0]?.trim() ||
+    document.querySelector('h1, .job-title, [class*="job-title"], [class*="position-title"], [class*="jobTitle"]')?.textContent?.trim() ||
+    document.title.split(/[-|–|—|\|]/)[0]?.trim() ||
     'Job Application';
 
   // Company detection heuristics
@@ -245,6 +425,26 @@ export function extractJobMetadata(): JobMetadata {
   } else if (hostname.includes('ashbyhq.com')) {
     const parts = window.location.pathname.split('/').filter(Boolean);
     company = parts[0] || 'Company';
+  } else if (hostname.includes('darwinbox.in') || hostname.includes('darwinbox.com')) {
+    // Darwinbox: Subdomain is <company>hrms (e.g. leadsquaredhrms.darwinbox.in -> LeadSquared)
+    const domCompany = document
+      .querySelector(
+        '.company, [class*="company-name"], [data-automation-id*="company"], [data-qa*="company"], .org-name, .header-company-name'
+      )
+      ?.textContent?.split(/[•|\-|—|\|]/)[0]
+      ?.trim();
+
+    const metaCompany = document.querySelector('meta[property="og:site_name"]')?.getAttribute('content');
+
+    if (domCompany) {
+      company = domCompany;
+    } else if (metaCompany) {
+      company = metaCompany;
+    } else {
+      const sub = hostname.split('.')[0] || '';
+      const cleanSub = sub.replace(/hrms$/i, '').replace(/[-_]/g, ' ');
+      company = cleanSub ? cleanSub.charAt(0).toUpperCase() + cleanSub.slice(1) : 'Company';
+    }
   } else {
     // 1. Try explicit DOM element (.company, [class*="company"], [data-automation-id*="company"])
     const domCompany = document
@@ -256,7 +456,7 @@ export function extractJobMetadata(): JobMetadata {
 
     // 2. Try document title (e.g. "Job Title Application - Acme Corp" -> "Acme Corp")
     let titleCompany = '';
-    const titleParts = document.title.split(/[-|–|—]/);
+    const titleParts = document.title.split(/[-|–|—|\|]/);
     if (titleParts.length > 1) {
       titleCompany = titleParts[titleParts.length - 1].trim();
     }

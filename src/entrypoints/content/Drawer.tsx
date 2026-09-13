@@ -419,7 +419,8 @@ export const Drawer: React.FC = () => {
     if (!text) return;
 
     let target: HTMLInputElement | HTMLTextAreaElement | null = null;
-    if (field.element && document.body.contains(field.element)) {
+    const isConnected = field.element && (field.element.isConnected ?? document.body.contains(field.element));
+    if (isConnected) {
       target = field.element;
     } else {
       try {
@@ -681,7 +682,8 @@ export const Drawer: React.FC = () => {
       if (!val) return;
 
       let target: HTMLInputElement | HTMLTextAreaElement | null = null;
-      if (field.element && document.body.contains(field.element)) {
+      const isConnected = field.element && (field.element.isConnected ?? document.body.contains(field.element));
+      if (isConnected) {
         target = field.element;
       } else {
         try {

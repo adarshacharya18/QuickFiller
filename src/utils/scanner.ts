@@ -240,9 +240,34 @@ export function extractJobMetadata(): JobMetadata {
     const parts = window.location.pathname.split('/').filter(Boolean);
     company = parts[0] || 'Company';
   } else {
-    // Try meta tag or document title
-    const metaCompany = document.querySelector('meta[property="og:site_name"]')?.getAttribute('content');
-    company = metaCompany || hostname.replace('www.', '').split('.')[0];
+    // 1. Try explicit DOM element (.company, [class*="company"], [data-automation-id*="company"])
+    const domCompany = document
+      .querySelector(
+        '.company, [class*="company-name"], [data-automation-id*="company"], [data-qa*="company"]'
+      )
+      ?.textContent?.split(/[•|\-|—]/)[0]
+      ?.trim();
+
+    // 2. Try document title (e.g. "Job Title Application - Acme Corp" -> "Acme Corp")
+    let titleCompany = '';
+    const titleParts = document.title.split(/[-|–|—]/);
+    if (titleParts.length > 1) {
+      titleCompany = titleParts[titleParts.length - 1].trim();
+    }
+
+    // 3. Try meta tag or hostname
+    const metaCompany = document
+      .querySelector('meta[property="og:site_name"]')
+      ?.getAttribute('content');
+
+    const hostNamePart = hostname ? hostname.replace('www.', '').split('.')[0] : '';
+
+    company =
+      domCompany ||
+      metaCompany ||
+      titleCompany ||
+      hostNamePart ||
+      'Company';
   }
 
   // Description snippet extraction

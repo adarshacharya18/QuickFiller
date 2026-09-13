@@ -1,4 +1,4 @@
-import { JobMetadata } from './scanner';
+import { JobMetadata, extractJobMetadata } from './scanner';
 import { JobApplication } from '../types/applications';
 import { getStorageData, updateStorageData } from './storage';
 
@@ -16,17 +16,19 @@ export const CONFIRMATION_URL_REGEX =
   /(\/confirmation|\/thank-you|\/thanks|\/applied|\/submitted|application_submitted|\/success|applied=true|status=success|submitted=1)/i;
 
 export const SUCCESS_TEXT_REGEX =
-  /(application (has been )?(successfully )?submitted|thank you for (your application|applying)|your application (has been|was) received|application (received|complete)|we('ve| have) received your application|we appreciate your interest in)/i;
+  /((application|form|submission) (has been )?(successfully )?submitted|(application|form|submission) submitted successfully|thank you for (your application|applying)|your (application|form) (has been|was) received|(application|form) (received|complete)|we('ve| have) received your application|we appreciate your interest in|submission successful|successfully submitted)/i;
 
 /**
  * Saves or updates the currently viewed job candidate into session storage.
  */
 export function stageCurrentJobMetadata(metadata: JobMetadata | null): void {
-  if (!metadata || !metadata.company || !metadata.title) return;
+  if (!metadata) return;
+  const title = (metadata.title || '').trim() || 'Job Application';
+  const company = (metadata.company || '').trim() || 'Company';
   try {
     const staged: StagedJob = {
-      company: metadata.company.trim(),
-      title: metadata.title.trim(),
+      company,
+      title,
       url: window.location.href,
       timestamp: Date.now(),
     };
@@ -119,9 +121,9 @@ export function isSubmissionSuccessState(): boolean {
     return true;
   }
 
-  // 2. DOM text check on prominent headers and alerts
+  // 2. DOM text check on prominent headers, alerts, and success containers
   const prominentElements = document.querySelectorAll(
-    'h1, h2, h3, [role="alert"], [data-automation-id*="success"], [data-automation-id*="confirmation"], .confirmation, .success'
+    'h1, h2, h3, h4, h5, [role="alert"], [data-automation-id*="success"], [data-automation-id*="confirmation"], [id*="submitted"], [id*="success"], [class*="submitted"], [class*="success"], .confirmation, .success'
   );
 
   for (const el of Array.from(prominentElements)) {
@@ -148,8 +150,18 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
 
   // Helper to commit application
   const commitApplicationIfPending = async () => {
-    const staged = getStagedJobMetadata();
-    if (!staged) return;
+    let staged = getStagedJobMetadata();
+
+    // Fallback: If no staged metadata exists, extract fresh from page
+    if (!staged) {
+      const fresh = extractJobMetadata();
+      staged = {
+        company: fresh.company || 'Company',
+        title: fresh.title || 'Job Application',
+        url: window.location.href,
+        timestamp: Date.now(),
+      };
+    }
 
     const storage = await getStorageData();
     if (storage.jobTrackerEnabled === false || storage.autoTrackOnSubmit === false) {
@@ -162,12 +174,17 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     // Prevent duplicate entries
     const isAlreadyTracked = currentApps.some((a) => {
       const normAppUrl = a.url.split('?')[0].replace(/\/$/, '').toLowerCase();
-      if (normAppUrl === normalizedStagedUrl) return true;
-      if (
-        a.company.toLowerCase() === staged.company.toLowerCase() &&
-        a.title.toLowerCase() === staged.title.toLowerCase()
-      ) {
+      // Only match URL if not a generic local file or test form
+      if (normAppUrl === normalizedStagedUrl && !normalizedStagedUrl.includes('test-form.html')) {
         return true;
+      }
+      if (
+        a.company.toLowerCase() === staged!.company.toLowerCase() &&
+        a.title.toLowerCase() === staged!.title.toLowerCase()
+      ) {
+        // Debounce: allow re-tracking if older than 2 minutes
+        const diffMs = Date.now() - new Date(a.appliedDate || 0).getTime();
+        return diffMs < 2 * 60 * 1000;
       }
       return false;
     });
@@ -206,21 +223,19 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     const target = e.target as HTMLElement | null;
     if (isSubmitTriggerElement(target)) {
       submitAttemptTimestamp = Date.now();
-      // If we're on a form, ensure metadata is staged
-      const currentStaged = getStagedJobMetadata();
-      if (!currentStaged) {
-        const title =
-          document.querySelector('h1')?.textContent?.trim() ||
-          document.title.split(/[-|–]/)[0]?.trim() ||
-          'Job Application';
-        const hostname = window.location.hostname;
-        const company = hostname.replace('www.', '').split('.')[0];
-        stageCurrentJobMetadata({
-          title,
-          company: company.charAt(0).toUpperCase() + company.slice(1),
-          descriptionSnippet: '',
-        });
-      }
+      const meta = extractJobMetadata();
+      stageCurrentJobMetadata(meta);
+
+      setTimeout(() => {
+        if (isSubmissionSuccessState()) {
+          commitApplicationIfPending();
+        }
+      }, 100);
+      setTimeout(() => {
+        if (isSubmissionSuccessState()) {
+          commitApplicationIfPending();
+        }
+      }, 400);
     }
   };
 
@@ -228,13 +243,27 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
   const handleSubmit = (e: SubmitEvent) => {
     if (!isListening) return;
     submitAttemptTimestamp = Date.now();
+
+    const meta = extractJobMetadata();
+    stageCurrentJobMetadata(meta);
+
+    setTimeout(() => {
+      if (isSubmissionSuccessState()) {
+        commitApplicationIfPending();
+      }
+    }, 100);
+    setTimeout(() => {
+      if (isSubmissionSuccessState()) {
+        commitApplicationIfPending();
+      }
+    }, 400);
   };
 
   // 4. DOM MutationObserver to catch in-page SPA success states
   const observer = new MutationObserver(() => {
     if (!isListening) return;
 
-    // Check if success text appeared, especially if a submit attempt occurred recently
+    // Check if success text appeared
     if (isSubmissionSuccessState()) {
       commitApplicationIfPending();
     }

@@ -224,10 +224,23 @@ export function sanitizeProfile(profile: CandidateProfile): CandidateProfile {
   return profile;
 }
 
-export async function getStorageData(): Promise<StorageData> {
-  if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
+/**
+ * Checks whether the Chrome extension execution context is still valid.
+ * Returns false when the extension has been updated, reloaded, or disabled,
+ * preventing "Extension context invalidated" uncaught errors.
+ */
+export function isExtensionValid(): boolean {
+  try {
+    return typeof chrome !== 'undefined' && Boolean(chrome.runtime && chrome.runtime.id);
+  } catch {
+    return false;
+  }
+}
+
+export function getStorageData(): Promise<StorageData> {
+  if (!isExtensionValid() || !chrome.storage?.local) {
     try {
-      // Prevent PII leakage to third-party web pages via window.localStorage
+      // Prevent PII leakage to third-party web pages via window.localStorage (QF-VULN-03)
       if (
         typeof window !== 'undefined' &&
         window.location?.protocol &&
@@ -235,35 +248,47 @@ export async function getStorageData(): Promise<StorageData> {
         !window.location.hostname.includes('localhost') &&
         !window.location.hostname.includes('127.0.0.1')
       ) {
-        return defaultStorageData;
+        return Promise.resolve(defaultStorageData);
       }
       const local = typeof localStorage !== 'undefined' ? localStorage.getItem('quickfiller_storage') : null;
-      if (!local) return defaultStorageData;
+      if (!local) return Promise.resolve(defaultStorageData);
       const parsed = { ...defaultStorageData, ...JSON.parse(local) };
       parsed.profile = sanitizeProfile(parsed.profile);
-      return parsed;
+      return Promise.resolve(parsed);
     } catch {
-      return defaultStorageData;
+      return Promise.resolve(defaultStorageData);
     }
   }
 
   return new Promise((resolve) => {
-    chrome.storage.local.get(null, (result) => {
-      const rawProfile = result.profile || defaultStorageData.profile;
-      const profile = sanitizeProfile(rawProfile);
+    try {
+      chrome.storage.local.get(null, (result) => {
+        try {
+          if (chrome.runtime?.lastError) {
+            resolve(defaultStorageData);
+            return;
+          }
+          const rawProfile = result?.profile || defaultStorageData.profile;
+          const profile = sanitizeProfile(rawProfile);
 
-      resolve({
-        profile,
-        wizardAnswers: result.wizardAnswers || defaultStorageData.wizardAnswers,
-        questionBank: result.questionBank || defaultStorageData.questionBank,
-        customPasteBank: result.customPasteBank || defaultStorageData.customPasteBank,
-        llmSettings: result.llmSettings || defaultStorageData.llmSettings,
-        applications: result.applications || defaultStorageData.applications,
-        jobTrackerEnabled: result.jobTrackerEnabled ?? defaultStorageData.jobTrackerEnabled,
-        autoTrackOnSubmit: result.autoTrackOnSubmit ?? defaultStorageData.autoTrackOnSubmit,
-        extensionEnabled: result.extensionEnabled ?? defaultStorageData.extensionEnabled,
+          resolve({
+            profile,
+            wizardAnswers: result?.wizardAnswers || defaultStorageData.wizardAnswers,
+            questionBank: result?.questionBank || defaultStorageData.questionBank,
+            customPasteBank: result?.customPasteBank || defaultStorageData.customPasteBank,
+            llmSettings: result?.llmSettings || defaultStorageData.llmSettings,
+            applications: result?.applications || defaultStorageData.applications,
+            jobTrackerEnabled: result?.jobTrackerEnabled ?? defaultStorageData.jobTrackerEnabled,
+            autoTrackOnSubmit: result?.autoTrackOnSubmit ?? defaultStorageData.autoTrackOnSubmit,
+            extensionEnabled: result?.extensionEnabled ?? defaultStorageData.extensionEnabled,
+          });
+        } catch {
+          resolve(defaultStorageData);
+        }
       });
-    });
+    } catch {
+      resolve(defaultStorageData);
+    }
   });
 }
 
@@ -272,7 +297,7 @@ export async function updateStorageData(partial: Partial<StorageData>): Promise<
     partial.profile = sanitizeProfile(partial.profile);
   }
 
-  if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
+  if (!isExtensionValid() || !chrome.storage?.local) {
     try {
       // Prevent writing PII to third-party web page localStorage
       if (
@@ -296,8 +321,16 @@ export async function updateStorageData(partial: Partial<StorageData>): Promise<
   }
 
   return new Promise((resolve) => {
-    chrome.storage.local.set(partial, () => {
+    try {
+      chrome.storage.local.set(partial, () => {
+        if (chrome.runtime?.lastError) {
+          resolve();
+          return;
+        }
+        resolve();
+      });
+    } catch {
       resolve();
-    });
+    }
   });
 }

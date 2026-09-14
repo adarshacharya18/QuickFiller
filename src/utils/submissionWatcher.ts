@@ -1,6 +1,6 @@
 import { JobMetadata, extractJobMetadata, isElementVisible, querySelectorAllDeep } from './scanner';
 import { JobApplication } from '../types/applications';
-import { getStorageData, updateStorageData } from './storage';
+import { getStorageData, updateStorageData, isExtensionValid } from './storage';
 import { isSafeWebUrl } from './security';
 
 const SESSION_STORAGE_KEY = 'quickfiller_pending_submission';
@@ -386,8 +386,27 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
   let isListening = true;
   let submitAttemptTimestamp = 0;
 
+  const teardown = () => {
+    if (!isListening) return;
+    isListening = false;
+    try {
+      document.removeEventListener('click', handleClick, true);
+      document.removeEventListener('submit', handleSubmit, true);
+      window.removeEventListener('popstate', handlePopState);
+      clearInterval(urlCheckInterval);
+      observer.disconnect();
+    } catch {
+      // Ignore cleanup errors
+    }
+  };
+
   // Helper to commit application to local storage
   const commitApplicationIfPending = async (forceCommit = false) => {
+    if (!isListening || !isExtensionValid()) {
+      teardown();
+      return;
+    }
+
     // Safety check 1: must either be a redirect confirmation URL OR a recent submit attempt
     const recentSubmit =
       submitAttemptTimestamp > 0 && Date.now() - submitAttemptTimestamp < SUBMIT_WINDOW_MS;
@@ -409,7 +428,13 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
       submitted: true,
     };
 
-    const storage = await getStorageData();
+    let storage;
+    try {
+      storage = await getStorageData();
+    } catch {
+      return;
+    }
+
     if (storage.jobTrackerEnabled === false || storage.autoTrackOnSubmit === false) {
       return;
     }
@@ -458,11 +483,13 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
           return a;
         });
         if (hasChanges) {
-          await updateStorageData({ applications: updatedApps });
-          const updatedApp = updatedApps.find((a) => a.portalUrl === portalUrl);
-          if (updatedApp) {
-            options.onAutoTracked(updatedApp);
-          }
+          try {
+            await updateStorageData({ applications: updatedApps });
+            const updatedApp = updatedApps.find((a) => a.portalUrl === portalUrl);
+            if (updatedApp) {
+              options.onAutoTracked(updatedApp);
+            }
+          } catch {}
         }
       }
       clearStagedJobMetadata();
@@ -483,7 +510,11 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     };
 
     const updatedApps = [newApp, ...currentApps];
-    await updateStorageData({ applications: updatedApps });
+    try {
+      await updateStorageData({ applications: updatedApps });
+    } catch {
+      return;
+    }
     clearStagedJobMetadata();
     submitAttemptTimestamp = 0;
 
@@ -492,11 +523,20 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
 
   // Helper to enrich existing tracked applications if portal link renders asynchronously on success page
   const enrichTrackedApplicationsWithPortal = async () => {
+    if (!isListening || !isExtensionValid()) {
+      teardown();
+      return;
+    }
     const portalUrl = extractApplicationPortalUrl(document);
     if (!portalUrl) return;
 
-    const storage = await getStorageData();
-    const currentApps = storage.applications || [];
+    let storage;
+    try {
+      storage = await getStorageData();
+    } catch {
+      return;
+    }
+    const currentApps = storage?.applications || [];
     if (currentApps.length === 0) return;
 
     let hasChanges = false;
@@ -517,11 +557,13 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     });
 
     if (hasChanges) {
-      await updateStorageData({ applications: updatedApps });
-      const updatedApp = updatedApps.find((a) => a.portalUrl === portalUrl);
-      if (updatedApp) {
-        options.onAutoTracked(updatedApp);
-      }
+      try {
+        await updateStorageData({ applications: updatedApps });
+        const updatedApp = updatedApps.find((a) => a.portalUrl === portalUrl);
+        if (updatedApp) {
+          options.onAutoTracked(updatedApp);
+        }
+      } catch {}
     }
   };
 
@@ -536,6 +578,10 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
   }
 
   const handleUserSubmitIntent = () => {
+    if (!isListening || !isExtensionValid()) {
+      teardown();
+      return;
+    }
     submitAttemptTimestamp = Date.now();
     const meta = extractJobMetadata();
     stageCurrentJobMetadata(meta, true);
@@ -543,7 +589,10 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     // Staggered check intervals to capture SPA DOM updates
     [100, 300, 700, 1500].forEach((delay) => {
       setTimeout(() => {
-        if (!isListening) return;
+        if (!isListening || !isExtensionValid()) {
+          teardown();
+          return;
+        }
         if (hasVisibleSuccessMessage() || (isConfirmationUrl() && !hasActiveFormFields())) {
           commitApplicationIfPending();
         }
@@ -554,6 +603,10 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
   // 2. Click listener for submit buttons
   const handleClick = (e: MouseEvent) => {
     if (!isListening) return;
+    if (!isExtensionValid()) {
+      teardown();
+      return;
+    }
     const path = (e.composedPath && e.composedPath()) || [e.target];
     for (const node of path) {
       if (node instanceof HTMLElement && isSubmitTriggerElement(node)) {
@@ -566,12 +619,20 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
   // 3. Form submit event listener
   const handleSubmit = (e: SubmitEvent) => {
     if (!isListening) return;
+    if (!isExtensionValid()) {
+      teardown();
+      return;
+    }
     handleUserSubmitIntent();
   };
 
   // 4. DOM MutationObserver to catch in-page SPA success states
   const observer = new MutationObserver(() => {
     if (!isListening) return;
+    if (!isExtensionValid()) {
+      teardown();
+      return;
+    }
     const recentSubmit =
       submitAttemptTimestamp > 0 && Date.now() - submitAttemptTimestamp < SUBMIT_WINDOW_MS;
 
@@ -586,6 +647,10 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
   let lastUrl = window.location.href;
   const urlCheckInterval = setInterval(() => {
     if (!isListening) return;
+    if (!isExtensionValid()) {
+      teardown();
+      return;
+    }
     if (window.location.href !== lastUrl) {
       lastUrl = window.location.href;
       if (isConfirmationUrl()) {
@@ -599,16 +664,22 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     }
   }, 1000);
 
-  document.addEventListener('click', handleClick, true);
-  document.addEventListener('submit', handleSubmit, true);
-  window.addEventListener('popstate', () => {
+  const handlePopState = () => {
+    if (!isListening || !isExtensionValid()) {
+      teardown();
+      return;
+    }
     if (isConfirmationUrl()) {
       const staged = getStagedJobMetadata(true);
       if (staged && (!hasActiveFormFields() || hasVisibleSuccessMessage())) {
         commitApplicationIfPending(true);
       }
     }
-  });
+  };
+
+  document.addEventListener('click', handleClick, true);
+  document.addEventListener('submit', handleSubmit, true);
+  window.addEventListener('popstate', handlePopState);
 
   observer.observe(document.body, {
     childList: true,
@@ -617,11 +688,5 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
   });
 
   // Teardown
-  return () => {
-    isListening = false;
-    document.removeEventListener('click', handleClick, true);
-    document.removeEventListener('submit', handleSubmit, true);
-    clearInterval(urlCheckInterval);
-    observer.disconnect();
-  };
+  return teardown;
 }

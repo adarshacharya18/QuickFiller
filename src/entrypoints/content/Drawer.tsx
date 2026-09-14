@@ -26,8 +26,8 @@ import {
 import { scanFormFields, extractJobMetadata, getCleanFormatHint, DetectedField, JobMetadata } from '../../utils/scanner';
 import { setNativeInputValue, insertTextAtCursor, CursorTargetInfo } from '../../utils/autofill';
 import { deriveJobPostingUrl, extractInlineJD } from '../../utils/jdResolver';
-import { getStorageData, updateStorageData } from '../../utils/storage';
-import { StorageData, CustomPasteItem } from '../../types/storage';
+import { getStorageData, updateStorageData, isExtensionValid } from '../../utils/storage';
+import { StorageData, CustomPasteItem, defaultStorageData } from '../../types/storage';
 import { CandidateProfile } from '../../types/profile';
 import { JobApplication, ApplicationStatus } from '../../types/applications';
 import { cleanCoverLetterOutput } from '../../utils/llm/coverLetterPrompt';
@@ -251,23 +251,26 @@ export const Drawer: React.FC = () => {
 
   const handleOpenOptionsPage = (tab: string = 'profile') => {
     try {
-      chrome.runtime.sendMessage(
-        { type: 'OPEN_OPTIONS_TAB', tab },
-        (res) => {
-          if (chrome.runtime?.lastError || !res?.success) {
-            const targetUrl = chrome.runtime?.getURL
-              ? chrome.runtime.getURL(`options.html?tab=${encodeURIComponent(tab)}#${encodeURIComponent(tab)}`)
-              : 'options.html';
-            window.open(targetUrl, '_blank');
+      if (isExtensionValid() && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage(
+          { type: 'OPEN_OPTIONS_TAB', tab },
+          (res) => {
+            if (chrome.runtime?.lastError || !res?.success) {
+              const targetUrl = chrome.runtime?.getURL
+                ? chrome.runtime.getURL(`options.html?tab=${encodeURIComponent(tab)}#${encodeURIComponent(tab)}`)
+                : 'options.html';
+              window.open(targetUrl, '_blank');
+            }
           }
-        }
-      );
-    } catch {
-      const targetUrl = chrome.runtime?.getURL
-        ? chrome.runtime.getURL(`options.html?tab=${encodeURIComponent(tab)}#${encodeURIComponent(tab)}`)
-        : 'options.html';
-      window.open(targetUrl, '_blank');
-    }
+        );
+        return;
+      }
+    } catch {}
+
+    const targetUrl = typeof chrome !== 'undefined' && chrome.runtime?.getURL
+      ? chrome.runtime.getURL(`options.html?tab=${encodeURIComponent(tab)}#${encodeURIComponent(tab)}`)
+      : 'options.html';
+    window.open(targetUrl, '_blank');
   };
 
   const handleOpenJobTracker = () => {
@@ -276,6 +279,7 @@ export const Drawer: React.FC = () => {
 
   // Scan page and load storage
   const scanPage = () => {
+    if (!isExtensionValid()) return;
     const { standardFields: std, customQuestions: cq } = scanFormFields();
     setStandardFields(std);
     setCustomQuestions(cq);
@@ -284,6 +288,7 @@ export const Drawer: React.FC = () => {
   };
 
   const refreshStorage = async () => {
+    if (!isExtensionValid()) return defaultStorageData;
     const data = await getStorageData();
     setStorage(data);
     return data;
@@ -305,24 +310,34 @@ export const Drawer: React.FC = () => {
     scanPage();
 
     // 1. Periodically re-scan form for dynamic SPAs
-    const interval = setInterval(scanPage, 3500);
+    const interval = setInterval(() => {
+      if (!isExtensionValid()) {
+        clearInterval(interval);
+        return;
+      }
+      scanPage();
+    }, 3500);
 
     // 2. Real-time sync: Listen for storage changes from Options page
     const handleStorageChange = (
       _changes: Record<string, chrome.storage.StorageChange>,
       area: string
     ) => {
+      if (!isExtensionValid()) return;
       if (area === 'local') {
         refreshStorage();
       }
     };
 
     if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
-      chrome.storage.onChanged.addListener(handleStorageChange);
+      try {
+        chrome.storage.onChanged.addListener(handleStorageChange);
+      } catch {}
     }
 
     // 3. Refresh storage when user switches back to this tab
     const handleWindowFocus = () => {
+      if (!isExtensionValid()) return;
       refreshStorage();
       scanPage();
     };
@@ -330,9 +345,11 @@ export const Drawer: React.FC = () => {
 
     return () => {
       clearInterval(interval);
-      if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
-        chrome.storage.onChanged.removeListener(handleStorageChange);
-      }
+      try {
+        if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+          chrome.storage.onChanged.removeListener(handleStorageChange);
+        }
+      } catch {}
       window.removeEventListener('focus', handleWindowFocus);
     };
   }, []);
@@ -371,12 +388,16 @@ export const Drawer: React.FC = () => {
     };
 
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-      chrome.runtime.onMessage.addListener(handleMessage);
+      try {
+        chrome.runtime.onMessage.addListener(handleMessage);
+      } catch {}
     }
     return () => {
-      if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-        chrome.runtime.onMessage.removeListener(handleMessage);
-      }
+      try {
+        if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+          chrome.runtime.onMessage.removeListener(handleMessage);
+        }
+      } catch {}
     };
   }, []);
 
@@ -569,7 +590,7 @@ export const Drawer: React.FC = () => {
 
     // Tier 2: Check ATS URL Heuristic
     const derivedUrl = deriveJobPostingUrl(window.location.href);
-    if (derivedUrl) {
+    if (derivedUrl && isExtensionValid()) {
       try {
         const resp = await chrome.runtime.sendMessage({
           type: 'FETCH_EXTERNAL_JD',
@@ -588,18 +609,20 @@ export const Drawer: React.FC = () => {
 
     // Tier 3: Check Opener Tab URL or Document Referrer
     let candidateUrl: string | undefined = undefined;
-    try {
-      const tabSource = await chrome.runtime.sendMessage({ type: 'GET_TAB_SOURCE_URL' });
-      if (tabSource?.success && tabSource.url) {
-        candidateUrl = tabSource.url;
-      }
-    } catch {}
+    if (isExtensionValid()) {
+      try {
+        const tabSource = await chrome.runtime.sendMessage({ type: 'GET_TAB_SOURCE_URL' });
+        if (tabSource?.success && tabSource.url) {
+          candidateUrl = tabSource.url;
+        }
+      } catch {}
+    }
 
     if (!candidateUrl && document.referrer && document.referrer.startsWith('http')) {
       candidateUrl = document.referrer;
     }
 
-    if (candidateUrl) {
+    if (candidateUrl && isExtensionValid()) {
       try {
         const resp = await chrome.runtime.sendMessage({
           type: 'FETCH_EXTERNAL_JD',
@@ -624,6 +647,14 @@ export const Drawer: React.FC = () => {
   // 2. Fetch User-Pasted URL
   const handleFetchUserUrl = async () => {
     if (!userJDUrl.trim()) return;
+    if (!isExtensionValid()) {
+      setBankNotice({
+        type: 'info',
+        message: 'Extension was reloaded. Please refresh the page to reconnect.',
+      });
+      setTimeout(() => setBankNotice(null), 4000);
+      return;
+    }
     setIsFetchingUrl(true);
     try {
       const resp = await chrome.runtime.sendMessage({
@@ -667,6 +698,15 @@ export const Drawer: React.FC = () => {
         message: 'Please provide or paste a Job Description first.',
       });
       setTimeout(() => setBankNotice(null), 3500);
+      return;
+    }
+
+    if (!isExtensionValid()) {
+      setBankNotice({
+        type: 'info',
+        message: 'Extension was reloaded. Please refresh the page to reconnect.',
+      });
+      setTimeout(() => setBankNotice(null), 4000);
       return;
     }
 
@@ -791,28 +831,42 @@ export const Drawer: React.FC = () => {
   };
 
   const generateAnswerForField = (field: DetectedField, instructions?: string) => {
+    if (!isExtensionValid()) {
+      alert('QuickFiller extension was updated or reloaded. Please refresh the page to reconnect.');
+      return;
+    }
+
     setGenerating((prev) => ({ ...prev, [field.id]: true }));
 
     const cleanFormat = getCleanFormatHint(field.placeholder);
 
-    chrome.runtime.sendMessage(
-      {
-        type: 'GENERATE_ANSWER',
-        questionPrompt: field.label || field.placeholder,
-        placeholder: cleanFormat || field.placeholder || '',
-        isTextarea: field.isTextarea,
-        jobContext: jobMetadata,
-        customInstructions: instructions,
-      },
-      (res) => {
-        setGenerating((prev) => ({ ...prev, [field.id]: false }));
-        if (res?.success && res.answer) {
-          setAnswers((prev) => ({ ...prev, [field.id]: res.answer }));
-        } else {
-          alert(`Error generating answer: ${res?.error || 'Unknown error'}`);
+    try {
+      chrome.runtime.sendMessage(
+        {
+          type: 'GENERATE_ANSWER',
+          questionPrompt: field.label || field.placeholder,
+          placeholder: cleanFormat || field.placeholder || '',
+          isTextarea: field.isTextarea,
+          jobContext: jobMetadata,
+          customInstructions: instructions,
+        },
+        (res) => {
+          setGenerating((prev) => ({ ...prev, [field.id]: false }));
+          if (chrome.runtime?.lastError) {
+            alert('Extension context invalidated. Please refresh the page.');
+            return;
+          }
+          if (res?.success && res.answer) {
+            setAnswers((prev) => ({ ...prev, [field.id]: res.answer }));
+          } else {
+            alert(`Error generating answer: ${res?.error || 'Unknown error'}`);
+          }
         }
-      }
-    );
+      );
+    } catch {
+      setGenerating((prev) => ({ ...prev, [field.id]: false }));
+      alert('Extension context invalidated. Please refresh the page.');
+    }
   };
 
   const totalFields = standardFields.length + customQuestions.length;

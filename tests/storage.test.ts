@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { sanitizeProfile, getStorageData, updateStorageData } from '../src/utils/storage';
+import { sanitizeProfile, getStorageData, updateStorageData, isExtensionValid } from '../src/utils/storage';
 import { CandidateProfile } from '../src/types/profile';
 import { JobApplication } from '../src/types/applications';
 import { resetMockChromeStorage } from './setup';
@@ -112,6 +112,27 @@ describe('Storage & Profile Data Engine', () => {
         (window as any).location = originalLocation;
         (globalThis as any).chrome.storage = originalChromeStorage;
         localStorage.removeItem('quickfiller_storage');
+      }
+    });
+
+    it('gracefully handles invalidated extension context (isExtensionValid is false)', async () => {
+      expect(isExtensionValid()).toBe(true);
+
+      const originalRuntime = (globalThis as any).chrome.runtime;
+      try {
+        // Simulate invalidated extension context
+        (globalThis as any).chrome.runtime = undefined;
+        expect(isExtensionValid()).toBe(false);
+
+        // getStorageData should resolve with defaultStorageData rather than throwing
+        const data = await getStorageData();
+        expect(data).toBeDefined();
+        expect(data.jobTrackerEnabled).toBe(true);
+
+        // updateStorageData should resolve cleanly rather than throwing
+        await expect(updateStorageData({ jobTrackerEnabled: false })).resolves.not.toThrow();
+      } finally {
+        (globalThis as any).chrome.runtime = originalRuntime;
       }
     });
   });

@@ -9,7 +9,7 @@ export default defineConfig({
   manifest: {
     name: 'QuickFiller - Local-First Job Application Copilot',
     description: 'Smart job application autofill and copilot powered by local Ollama & cloud LLMs.',
-    version: '0.1.0',
+    version: '1.0.0',
     icons: {
       16: 'icon-16.png',
       32: 'icon-32.png',

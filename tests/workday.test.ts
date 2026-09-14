@@ -14,11 +14,11 @@ import {
 
 describe('Workday ATS Tech Stack Support', () => {
   beforeEach(() => {
-    document.body.innerHTML = '';
+    document.body.replaceChildren();
   });
 
   afterEach(() => {
-    document.body.innerHTML = '';
+    document.body.replaceChildren();
     vi.restoreAllMocks();
   });
 

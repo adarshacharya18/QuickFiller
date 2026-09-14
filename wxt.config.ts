@@ -3,10 +3,35 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   srcDir: 'src',
+  suppressWarnings: {
+    firefoxDataCollection: true,
+  },
   manifest: {
     name: 'QuickFiller - Local-First Job Application Copilot',
     description: 'Smart job application autofill and copilot powered by local Ollama & cloud LLMs.',
     version: '0.1.0',
+    icons: {
+      16: 'icon-16.png',
+      32: 'icon-32.png',
+      48: 'icon-48.png',
+      128: 'icon-128.png',
+    },
+    action: {
+      default_title: 'QuickFiller',
+      default_popup: 'popup.html',
+      default_icon: {
+        16: 'icon-16.png',
+        32: 'icon-32.png',
+        48: 'icon-48.png',
+        128: 'icon-128.png',
+      },
+    },
+    browser_specific_settings: {
+      gecko: {
+        id: 'quickfiller@adarshacharya.dev',
+        strict_min_version: '109.0',
+      },
+    },
     permissions: [
       'storage',
       'activeTab',

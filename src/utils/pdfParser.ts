@@ -413,9 +413,10 @@ export async function parseResumePdf(fileBuffer: ArrayBuffer): Promise<ParsedRes
 
   // 3. Scan raw text for explicit URLs
   const urlRegex = /(https?:\/\/[^\s,;"'<>()]+)/gi;
-  let match: RegExpExecArray | null;
-  while ((match = urlRegex.exec(fullText)) !== null) {
-    discoveredUrls.add(match[1].trim());
+  for (const m of fullText.matchAll(urlRegex)) {
+    if (m[1]) {
+      discoveredUrls.add(m[1].trim());
+    }
   }
 
   // 4. Classify extracted links accurately

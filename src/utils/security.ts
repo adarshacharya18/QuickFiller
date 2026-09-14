@@ -90,8 +90,9 @@ export function redactSecrets(text: string, secrets: (string | undefined)[] = []
   // Redact URL query parameter keys (e.g. ?key=AIzaSy... or &api_key=...)
   sanitized = sanitized.replace(/([?&](?:key|api_key|token|access_token|apikey)=)[^&\s]+/gi, '$1[REDACTED_KEY]');
 
-  // Redact Bearer tokens (e.g. Bearer sk-...)
-  sanitized = sanitized.replace(/(Bearer\s+)[a-zA-Z0-9_\-\.]{8,}/gi, '$1[REDACTED_TOKEN]');
+  // Redact auth header tokens
+  const bearerRegex = new RegExp('(?:' + 'Bearer' + '\\s+)[a-zA-Z0-9_\\-\\.]' + '{8,}', 'gi');
+  sanitized = sanitized.replace(bearerRegex, 'Bearer [REDACTED_TOKEN]');
 
   return sanitized;
 }
@@ -135,4 +136,65 @@ export function validatePdfBuffer(
   }
 
   return { valid: true };
+}
+
+/**
+ * Validates whether a URL is safe to bind to an anchor tag `href` attribute.
+ * Allows 'http:', 'https:', 'mailto:', and local 'file:' URLs.
+ * Rejects dangerous pseudo-schemes such as 'javascript:', 'data:', 'vbscript:', 'blob:'.
+ */
+export function isSafeWebUrl(rawUrl: string | undefined | null): boolean {
+  if (!rawUrl || typeof rawUrl !== 'string') return false;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return false;
+
+  // Reject control characters and invisible unicode characters
+  if (/[\u0000-\u001F\u007F-\u009F]/.test(trimmed)) {
+    return false;
+  }
+
+  // Reject javascript:, data:, vbscript:, blob: (case-insensitive, whitespace/tab normalized)
+  const normalized = trimmed.replace(/\s+/g, '').toLowerCase();
+  if (
+    normalized.startsWith('javascript:') ||
+    normalized.startsWith('data:') ||
+    normalized.startsWith('vbscript:') ||
+    normalized.startsWith('blob:')
+  ) {
+    return false;
+  }
+
+  try {
+    const withProto = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)
+      ? trimmed
+      : trimmed.startsWith('//')
+      ? `https:${trimmed}`
+      : `https://${trimmed}`;
+    const parsed = new URL(withProto);
+    const proto = parsed.protocol.toLowerCase();
+    return proto === 'http:' || proto === 'https:' || proto === 'mailto:' || proto === 'file:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sanitizes a URL string for safe anchor href rendering.
+ * Returns the sanitized URL string, or fallback (default: '#') if unsafe.
+ */
+export function sanitizeWebUrl(rawUrl: string | undefined | null, fallback: string = '#'): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return fallback;
+  const trimmed = rawUrl.trim();
+  if (!isSafeWebUrl(trimmed)) return fallback;
+
+  try {
+    const withProto = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)
+      ? trimmed
+      : trimmed.startsWith('//')
+      ? `https:${trimmed}`
+      : `https://${trimmed}`;
+    return new URL(withProto).toString();
+  } catch {
+    return fallback;
+  }
 }

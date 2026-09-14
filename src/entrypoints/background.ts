@@ -171,6 +171,15 @@ export default defineBackground(() => {
       })
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+
+          // Security: Validate redirected target URL to prevent SSRF redirect bypass
+          if (res.redirected && res.url) {
+            const redirectCheck = isSafeExternalUrl(res.url);
+            if (!redirectCheck.safe) {
+              throw new Error(`SSRF validation rejected redirect target: ${redirectCheck.error || 'Invalid redirect'}`);
+            }
+          }
+
           const contentType = res.headers.get('content-type') || '';
           if (
             contentType &&

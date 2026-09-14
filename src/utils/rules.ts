@@ -13,8 +13,16 @@ export async function setupOllamaDNRRules(customHost?: string): Promise<void> {
     const rules: chrome.declarativeNetRequest.Rule[] = [];
     let dynamicRuleId = 1001;
 
+    const initiatorDomains =
+      typeof chrome !== 'undefined' && chrome.runtime?.id ? [chrome.runtime.id] : undefined;
+
     // Helper to build a modifyHeaders rule for a given target origin
-    const buildRule = (id: number, targetOrigin: string, hostname: string, port: string): chrome.declarativeNetRequest.Rule => ({
+    const buildRule = (
+      id: number,
+      targetOrigin: string,
+      hostname: string,
+      port: string
+    ): chrome.declarativeNetRequest.Rule => ({
       id,
       priority: 1,
       action: {
@@ -26,23 +34,6 @@ export async function setupOllamaDNRRules(customHost?: string): Promise<void> {
             value: targetOrigin,
           },
         ],
-        responseHeaders: [
-          {
-            header: 'access-control-allow-origin',
-            operation: 'set' as chrome.declarativeNetRequest.HeaderOperation,
-            value: '*',
-          },
-          {
-            header: 'access-control-allow-methods',
-            operation: 'set' as chrome.declarativeNetRequest.HeaderOperation,
-            value: 'GET, POST, OPTIONS',
-          },
-          {
-            header: 'access-control-allow-headers',
-            operation: 'set' as chrome.declarativeNetRequest.HeaderOperation,
-            value: '*',
-          },
-        ],
       },
       condition: {
         urlFilter: `*://${hostname}:${port}/*`,
@@ -50,6 +41,7 @@ export async function setupOllamaDNRRules(customHost?: string): Promise<void> {
           'xmlhttprequest' as chrome.declarativeNetRequest.ResourceType,
           'other' as chrome.declarativeNetRequest.ResourceType,
         ],
+        ...(initiatorDomains ? { initiatorDomains } : {}),
       },
     });
 
@@ -64,7 +56,8 @@ export async function setupOllamaDNRRules(customHost?: string): Promise<void> {
       try {
         const u = new URL(customHost.startsWith('http') ? customHost : `http://${customHost}`);
         const p = u.port || (u.protocol === 'https:' ? '443' : '80');
-        if (u.hostname !== 'localhost' && u.hostname !== '127.0.0.1') {
+        const isDefault = (u.hostname === 'localhost' || u.hostname === '127.0.0.1') && p === '11434';
+        if (!isDefault) {
           rules.push(buildRule(dynamicRuleId++, u.origin, u.hostname, p));
         }
       } catch (e) {

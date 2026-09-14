@@ -21,9 +21,6 @@ export default defineConfig({
       'https://api.anthropic.com/*',
       '<all_urls>',
     ],
-    optional_host_permissions: [
-      '<all_urls>',
-    ],
     commands: {
       toggle_drawer: {
         suggested_key: {
@@ -41,6 +38,9 @@ export default defineConfig({
           path: 'rules.json',
         },
       ],
+    },
+    content_security_policy: {
+      extension_pages: "script-src 'self'; object-src 'self'; frame-ancestors 'none';",
     },
     options_ui: {
       open_in_tab: true,

@@ -227,6 +227,16 @@ export function sanitizeProfile(profile: CandidateProfile): CandidateProfile {
 export async function getStorageData(): Promise<StorageData> {
   if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
     try {
+      // Prevent PII leakage to third-party web pages via window.localStorage
+      if (
+        typeof window !== 'undefined' &&
+        window.location?.protocol &&
+        (window.location.protocol === 'http:' || window.location.protocol === 'https:') &&
+        !window.location.hostname.includes('localhost') &&
+        !window.location.hostname.includes('127.0.0.1')
+      ) {
+        return defaultStorageData;
+      }
       const local = typeof localStorage !== 'undefined' ? localStorage.getItem('quickfiller_storage') : null;
       if (!local) return defaultStorageData;
       const parsed = { ...defaultStorageData, ...JSON.parse(local) };
@@ -264,6 +274,16 @@ export async function updateStorageData(partial: Partial<StorageData>): Promise<
 
   if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
     try {
+      // Prevent writing PII to third-party web page localStorage
+      if (
+        typeof window !== 'undefined' &&
+        window.location?.protocol &&
+        (window.location.protocol === 'http:' || window.location.protocol === 'https:') &&
+        !window.location.hostname.includes('localhost') &&
+        !window.location.hostname.includes('127.0.0.1')
+      ) {
+        return;
+      }
       const current = await getStorageData();
       const updated = { ...current, ...partial };
       if (typeof localStorage !== 'undefined') {

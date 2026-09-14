@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { CandidateProfile, ProjectItem, ExperienceItem, EducationItem } from '../../types/profile';
 import { parseResumePdf } from '../../utils/pdfParser';
+import { isSafeWebUrl, sanitizeWebUrl } from '../../utils/security';
 
 interface ProfileTabProps {
   profile: CandidateProfile;
@@ -228,21 +229,23 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
               Extracted Hyperlinks:
             </h4>
             <div className="flex flex-wrap gap-1.5">
-              {formData.extractedLinks.map((link, idx) => (
-                <a
-                  key={idx}
-                  href={link.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-lg transition border border-slate-200 max-w-full"
-                >
-                  <span className="font-semibold text-slate-900 capitalize text-[10px]">
-                    {link.category}:
-                  </span>
-                  <span className="truncate max-w-[140px] sm:max-w-[220px]">{link.url}</span>
-                  <ExternalLink className="w-2.5 h-2.5 text-slate-400 flex-shrink-0" />
-                </a>
-              ))}
+              {formData.extractedLinks
+                .filter((link) => link.url && isSafeWebUrl(link.url))
+                .map((link, idx) => (
+                  <a
+                    key={idx}
+                    href={sanitizeWebUrl(link.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-lg transition border border-slate-200 max-w-full"
+                  >
+                    <span className="font-semibold text-slate-900 capitalize text-[10px]">
+                      {link.category}:
+                    </span>
+                    <span className="truncate max-w-[140px] sm:max-w-[220px]">{link.url}</span>
+                    <ExternalLink className="w-2.5 h-2.5 text-slate-400 flex-shrink-0" />
+                  </a>
+                ))}
             </div>
           </div>
         )}

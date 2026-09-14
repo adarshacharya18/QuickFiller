@@ -4,7 +4,30 @@ export function resetMockChromeStorage(initial: Record<string, any> = {}) {
   mockChromeStorage = { ...initial };
 }
 
+export let mockDynamicRules: any[] = [];
+export let mockRemovedRuleIds: number[] = [];
+
+export function resetMockDynamicRules() {
+  mockDynamicRules = [];
+  mockRemovedRuleIds = [];
+}
+
 (globalThis as any).chrome = {
+  runtime: {
+    id: 'mock-quickfiller-id',
+  },
+  declarativeNetRequest: {
+    updateDynamicRules: async (options: { removeRuleIds?: number[]; addRules?: any[] }) => {
+      if (options.removeRuleIds) {
+        mockRemovedRuleIds.push(...options.removeRuleIds);
+        mockDynamicRules = mockDynamicRules.filter((r) => !options.removeRuleIds?.includes(r.id));
+      }
+      if (options.addRules) {
+        mockDynamicRules.push(...options.addRules);
+      }
+    },
+    getDynamicRules: async () => mockDynamicRules,
+  },
   storage: {
     local: {
       get: (keys: any, cb: (res: any) => void) => {

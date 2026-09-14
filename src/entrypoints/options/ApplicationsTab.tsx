@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { JobApplication, ApplicationStatus, APPLICATION_STATUS_COLORS } from '../../types/applications';
 import { downloadApplicationsCsv } from '../../utils/csvExport';
+import { isSafeWebUrl, sanitizeWebUrl } from '../../utils/security';
 
 interface ApplicationsTabProps {
   applications: JobApplication[];
@@ -351,11 +352,11 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
                         <div className="flex flex-col">
                           <div className="flex items-center gap-1.5">
                             <span className="font-bold text-slate-900">{app.company}</span>
-                            {app.url && (
+                            {app.url && isSafeWebUrl(app.url) && (
                               <a
-                                href={app.url}
+                                href={sanitizeWebUrl(app.url)}
                                 target="_blank"
-                                rel="noreferrer"
+                                rel="noopener noreferrer"
                                 title="Open original job posting"
                                 className="text-slate-400 hover:text-sky-600 transition"
                               >

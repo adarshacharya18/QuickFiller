@@ -83,5 +83,36 @@ describe('Storage & Profile Data Engine', () => {
       expect(updated.applications.length).toBe(1);
       expect(updated.applications[0].company).toBe('LeadSquared');
     });
+
+    it('isolates fallback storage from remote web document origins (QF-VULN-03)', async () => {
+      // Temporarily remove chrome.storage to simulate fallback condition
+      const originalChromeStorage = (globalThis as any).chrome.storage;
+      delete (globalThis as any).chrome.storage;
+
+      // Mock window.location as an untrusted third-party web origin
+      const originalLocation = window.location;
+      delete (window as any).location;
+      (window as any).location = new URL('https://evil-job-site.com/apply');
+
+      try {
+        localStorage.setItem('quickfiller_storage', JSON.stringify({
+          profile: { personal: { firstName: 'Leaked', lastName: 'Candidate' } },
+        }));
+
+        // getStorageData must NOT read from untrusted web page localStorage
+        const data = await getStorageData();
+        expect(data.profile.personal.firstName).not.toBe('Leaked');
+
+        // updateStorageData must NOT write to untrusted web page localStorage
+        localStorage.removeItem('quickfiller_storage');
+        await updateStorageData({ profile: { personal: { firstName: 'Secret' } } as any });
+        expect(localStorage.getItem('quickfiller_storage')).toBeNull();
+      } finally {
+        // Restore environment
+        (window as any).location = originalLocation;
+        (globalThis as any).chrome.storage = originalChromeStorage;
+        localStorage.removeItem('quickfiller_storage');
+      }
+    });
   });
 });

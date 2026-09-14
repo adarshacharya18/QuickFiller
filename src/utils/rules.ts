@@ -13,6 +13,16 @@ export async function setupOllamaDNRRules(customHost?: string): Promise<void> {
     const rules: chrome.declarativeNetRequest.Rule[] = [];
     let dynamicRuleId = 1001;
 
+    // Securely derive extension-only origin (e.g. "chrome-extension://<id>" or "moz-extension://<id>")
+    // This allows the extension to read Ollama responses while strictly preventing any web page
+    // from bypassing CORS or reading local model outputs.
+    const extensionOrigin =
+      typeof chrome !== 'undefined' && chrome.runtime?.getURL
+        ? chrome.runtime.getURL('').replace(/\/+$/, '')
+        : typeof chrome !== 'undefined' && chrome.runtime?.id
+        ? `chrome-extension://${chrome.runtime.id}`
+        : '';
+
     const initiatorDomains =
       typeof chrome !== 'undefined' && chrome.runtime?.id ? [chrome.runtime.id] : undefined;
 
@@ -32,6 +42,27 @@ export async function setupOllamaDNRRules(customHost?: string): Promise<void> {
             header: 'origin',
             operation: 'set' as chrome.declarativeNetRequest.HeaderOperation,
             value: targetOrigin,
+          },
+        ],
+        responseHeaders: [
+          ...(extensionOrigin
+            ? [
+                {
+                  header: 'access-control-allow-origin',
+                  operation: 'set' as chrome.declarativeNetRequest.HeaderOperation,
+                  value: extensionOrigin,
+                },
+              ]
+            : []),
+          {
+            header: 'access-control-allow-methods',
+            operation: 'set' as chrome.declarativeNetRequest.HeaderOperation,
+            value: 'GET, POST, OPTIONS',
+          },
+          {
+            header: 'access-control-allow-headers',
+            operation: 'set' as chrome.declarativeNetRequest.HeaderOperation,
+            value: 'Content-Type, Authorization, x-goog-api-key, *',
           },
         ],
       },
@@ -65,7 +96,8 @@ export async function setupOllamaDNRRules(customHost?: string): Promise<void> {
       }
     }
 
-    const removeRuleIds = [1001, 1002, 1003, 1004, 1005];
+    const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+    const removeRuleIds = existingRules.map((r) => r.id);
     await chrome.declarativeNetRequest.updateDynamicRules({
       removeRuleIds,
       addRules: rules,

@@ -15,6 +15,7 @@ export function resetMockDynamicRules() {
 (globalThis as any).chrome = {
   runtime: {
     id: 'mock-quickfiller-id',
+    getURL: (path: string = '') => `chrome-extension://mock-quickfiller-id/${path.replace(/^\//, '')}`,
   },
   declarativeNetRequest: {
     updateDynamicRules: async (options: { removeRuleIds?: number[]; addRules?: any[] }) => {

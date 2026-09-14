@@ -178,7 +178,7 @@ describe('Security & XSS Defense Utilities', () => {
       resetMockDynamicRules();
     });
 
-    it('generates dynamic rules scoped strictly to extension initiator domain', async () => {
+    it('generates dynamic rules scoped strictly to extension initiator domain and origin-scoped CORS', async () => {
       await setupOllamaDNRRules();
 
       expect(mockDynamicRules.length).toBeGreaterThanOrEqual(2);
@@ -186,8 +186,15 @@ describe('Security & XSS Defense Utilities', () => {
         expect(rule.condition.initiatorDomains).toEqual(['mock-quickfiller-id']);
         expect(rule.action.type).toBe('modifyHeaders');
         expect(rule.action.requestHeaders).toBeDefined();
-        // Crucial security check: must NOT inject access-control-allow-origin response headers
-        expect(rule.action.responseHeaders).toBeUndefined();
+        
+        // Crucial security check: CORS response headers must be strictly scoped to extension origin, NEVER wildcard '*'
+        expect(rule.action.responseHeaders).toBeDefined();
+        const originHeader = rule.action.responseHeaders.find(
+          (h: any) => h.header.toLowerCase() === 'access-control-allow-origin'
+        );
+        expect(originHeader).toBeDefined();
+        expect(originHeader.value).toBe('chrome-extension://mock-quickfiller-id');
+        expect(originHeader.value).not.toBe('*');
       }
     });
 
@@ -218,7 +225,13 @@ describe('Security & XSS Defense Utilities', () => {
       expect(customRule).toBeDefined();
       expect(customRule.condition.urlFilter).toBe('*://localhost:11435/*');
       expect(customRule.condition.initiatorDomains).toEqual(['mock-quickfiller-id']);
-      expect(customRule.action.responseHeaders).toBeUndefined();
+      
+      const originHeader = customRule.action.responseHeaders?.find(
+        (h: any) => h.header.toLowerCase() === 'access-control-allow-origin'
+      );
+      expect(originHeader).toBeDefined();
+      expect(originHeader.value).toBe('chrome-extension://mock-quickfiller-id');
+      expect(originHeader.value).not.toBe('*');
     });
   });
 

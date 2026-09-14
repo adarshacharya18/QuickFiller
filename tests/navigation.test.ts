@@ -8,10 +8,10 @@ describe('Options Page Tab Navigation', () => {
     (window as any).location = originalLocation;
   });
 
-  it('defaults to profile tab when no tab param or hash is specified', () => {
+  it('defaults to applications (Job Tracker) tab when no tab param or hash is specified', () => {
     delete (window as any).location;
     (window as any).location = new URL('chrome-extension://xyz/options.html');
-    expect(parseTabFromUrl()).toBe('profile');
+    expect(parseTabFromUrl()).toBe('applications');
   });
 
   it('activates applications tab when ?tab=applications is in query params', () => {
@@ -30,6 +30,15 @@ describe('Options Page Tab Navigation', () => {
     delete (window as any).location;
     (window as any).location = new URL('chrome-extension://xyz/options.html#applications');
     expect(parseTabFromUrl()).toBe('applications');
+  });
+
+  it('activates profile tab when ?tab=profile or #profile is used', () => {
+    delete (window as any).location;
+    (window as any).location = new URL('chrome-extension://xyz/options.html?tab=profile');
+    expect(parseTabFromUrl()).toBe('profile');
+
+    (window as any).location = new URL('chrome-extension://xyz/options.html#profile');
+    expect(parseTabFromUrl()).toBe('profile');
   });
 
   it('activates questions and settings tabs appropriately', () => {

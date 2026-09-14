@@ -346,7 +346,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               type="button"
               disabled={testingConnection}
               onClick={testConnection}
-              className="text-xs bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-800 font-medium px-4 py-2 rounded-lg transition flex items-center justify-center gap-2"
+              className="text-xs bg-slate-100 hover:bg-slate-200 active:scale-95 disabled:opacity-50 text-slate-800 font-medium px-4 py-2 rounded-lg transition flex items-center justify-center gap-2"
             >
               {testingConnection && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
               {testingConnection ? 'Testing Connection...' : 'Test Connection'}
@@ -354,7 +354,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
 
             {testResult && (
               <div
-                className={`flex items-center gap-1.5 text-xs ${
+                className={`flex items-center gap-1.5 text-xs animate-slide-down ${
                   testResult.success ? 'text-emerald-700' : 'text-rose-700'
                 }`}
               >
@@ -369,7 +369,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
 
           {testResult && !testResult.success && testResult.message.includes('403') && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1.5">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1.5 animate-slide-down">
               <p className="font-semibold flex items-center gap-1.5 text-amber-800">
                 <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
                 Ollama 403 Forbidden Origin Fix
@@ -392,7 +392,7 @@ OLLAMA_ORIGINS="*" ollama serve
           </span>
           <button
             onClick={() => onSaveSettings(formData)}
-            className="bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs px-5 py-2 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+            className="bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-medium text-xs px-5 py-2 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer"
           >
             <CheckCircle className="w-4 h-4" />
             Save Settings

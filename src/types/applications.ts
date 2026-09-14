@@ -10,6 +10,7 @@ export interface JobApplication {
   company: string;
   title: string;
   url: string;
+  portalUrl?: string; // Company candidate tracking portal URL (e.g. Workday Candidate Home, SmartRecruiters)
   appliedDate: string; // ISO 8601 string, e.g. "2026-09-13T16:50:00.000Z"
   status: ApplicationStatus;
   location?: string;

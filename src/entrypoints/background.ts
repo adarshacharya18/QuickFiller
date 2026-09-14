@@ -90,10 +90,11 @@ export default defineBackground(() => {
       return false;
     }
 
-    if (message?.type === 'INJECT_AND_TOGGLE_DRAWER') {
+    if (message?.type === 'INJECT_AND_OPEN_DRAWER' || message?.type === 'INJECT_AND_TOGGLE_DRAWER') {
       const tabId = message.tabId;
+      const targetAction = message.type === 'INJECT_AND_TOGGLE_DRAWER' ? 'TOGGLE_DRAWER' : 'OPEN_DRAWER';
       if (tabId) {
-        chrome.tabs.sendMessage(tabId, { type: 'TOGGLE_DRAWER' })
+        chrome.tabs.sendMessage(tabId, { type: targetAction })
           .then(() => sendResponse({ success: true }))
           .catch(async () => {
             try {
@@ -123,9 +124,21 @@ export default defineBackground(() => {
       return false;
     }
 
-    if (message?.type === 'OPEN_JOB_TRACKER' || message?.type === 'OPEN_OPTIONS_TAB') {
-      const tabName = message.tab || (message.type === 'OPEN_JOB_TRACKER' ? 'applications' : 'profile');
-      const targetUrl = chrome.runtime.getURL(`options.html?tab=${encodeURIComponent(tabName)}#${encodeURIComponent(tabName)}`);
+    if (
+      message?.type === 'OPEN_JOB_TRACKER' ||
+      message?.type === 'OPEN_OPTIONS_TAB' ||
+      message?.type === 'OPEN_OPTIONS_PAGE'
+    ) {
+      const tabName =
+        message.tab ||
+        (message.type === 'OPEN_JOB_TRACKER'
+          ? 'applications'
+          : message.type === 'OPEN_OPTIONS_PAGE'
+          ? 'profile'
+          : undefined);
+      const targetUrl = tabName
+        ? chrome.runtime.getURL(`options.html?tab=${encodeURIComponent(tabName)}#${encodeURIComponent(tabName)}`)
+        : chrome.runtime.getURL('options.html');
 
       if (typeof chrome !== 'undefined' && chrome.tabs?.query) {
         chrome.tabs.query({ url: chrome.runtime.getURL('options.html*') })

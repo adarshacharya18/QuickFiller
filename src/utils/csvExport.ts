@@ -28,6 +28,7 @@ export function generateApplicationsCsv(applications: JobApplication[]): string 
     'Location',
     'Salary',
     'Job URL',
+    'Portal URL',
     'Notes',
   ];
 
@@ -42,6 +43,7 @@ export function generateApplicationsCsv(applications: JobApplication[]): string 
       escapeCsvField(app.location || ''),
       escapeCsvField(app.salary || ''),
       escapeCsvField(app.url || ''),
+      escapeCsvField(app.portalUrl || ''),
       escapeCsvField(app.notes || ''),
     ].join(',');
   });

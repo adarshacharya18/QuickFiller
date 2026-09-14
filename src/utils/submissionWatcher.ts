@@ -1,6 +1,7 @@
 import { JobMetadata, extractJobMetadata, isElementVisible, querySelectorAllDeep } from './scanner';
 import { JobApplication } from '../types/applications';
 import { getStorageData, updateStorageData } from './storage';
+import { isSafeWebUrl } from './security';
 
 const SESSION_STORAGE_KEY = 'quickfiller_pending_submission';
 const STAGE_EXPIRATION_MS = 15 * 60 * 1000; // 15 minutes
@@ -19,6 +20,149 @@ export const CONFIRMATION_URL_REGEX =
 
 export const SUCCESS_TEXT_REGEX =
   /((application|form|submission) (has been )?(successfully )?submitted|(application|form|submission) submitted successfully|thank you for (your application|applying)|your (application|form) (has been|was) received|(application|form) (received|complete)|we('ve| have) received your application|we appreciate your interest in|submission successful|successfully submitted)/i;
+
+/**
+ * Selectors identifying candidate portal navigation elements across ATS platforms (Workday, SmartRecruiters, Darwinbox, etc.).
+ */
+export const PORTAL_AUTOMATION_SELECTORS = [
+  '[data-automation-id="candidateHomeLink"]',
+  '[data-automation-id="viewApplicationButton"]',
+  '[data-automation-id="candidateHome"]',
+  '[data-automation-id*="candidateHome"]',
+  '[data-automation-id*="candidate-home"]',
+  '[data-automation-id*="userHome"]',
+  '[data-automation-id*="user-home"]',
+  '[data-automation-id*="viewApplication"]',
+  '[data-automation-id*="myApplications"]',
+  '[data-automation-id*="my-applications"]',
+  '[data-automation-id*="applicationStatus"]',
+  '[data-qa*="candidate-portal"]',
+  '[data-qa*="my-applications"]',
+  '[data-testid*="candidate-home"]',
+  '[data-testid*="application-status"]',
+  'a.candidate-home-link',
+  'a.portal-link',
+  'a.my-applications-link',
+];
+
+export const PORTAL_TEXT_REGEX =
+  /(candidate\s*(home|portal)|applicant\s*(home|portal)|view\s*(your\s*|my\s*)?application\s*status|check\s*(your\s*|my\s*)?(application\s*)?status|track\s*(your\s*|my\s*)?application|my\s*applications|my\s*submissions|view\s*submitted\s*application|manage\s*(your\s*|my\s*)?applications|application\s*status)/i;
+
+export const PORTAL_HREF_REGEX =
+  /(\/candidatehome|\/userhome|\/candidate-home|\/user-home|\/candidate-portal|\/applicant-portal|\/my-applications|\/myapplications|my\.smartrecruiters\.com|\/application[-_]?status|\/candidatev2\/main\/applications|\/my_submissions)/i;
+
+export const EXCLUDED_PORTAL_TEXT_REGEX =
+  /^(careers?(\s*home)?|home|back|back\s*to.*|search\s*jobs|browse\s*jobs|view\s*(all\s*|other\s*)?jobs|explore\s*(all\s*|other\s*)?jobs|privacy(\s*policy)?|terms(\s*of\s*service)?|help|contact(\s*us)?|faq|sign\s*out|log\s*out|sign\s*in|log\s*in)$/i;
+
+export const EXCLUDED_PORTAL_HREF_REGEX =
+  /(privacy|terms|legal|help|contact|faq|signout|logout|search|browse|\/jobs\/?$|\/careers\/?$|linkedin\.com|twitter\.com|x\.com|facebook\.com|instagram\.com|youtube\.com|github\.com)/i;
+
+function extractSafeHref(elem: HTMLElement): string | null {
+  let raw =
+    elem.getAttribute('href') ||
+    elem.getAttribute('data-href') ||
+    elem.getAttribute('data-url');
+
+  if (!raw) {
+    const childAnchor = elem.querySelector('a[href]');
+    if (childAnchor) {
+      raw = childAnchor.getAttribute('href');
+    }
+  }
+
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === '#' || trimmed.startsWith('javascript:')) {
+    return null;
+  }
+
+  try {
+    const base =
+      typeof window !== 'undefined' && window.location ? window.location.href : 'http://localhost';
+    const resolved = new URL(trimmed, base).href;
+    if (isSafeWebUrl(resolved) && (resolved.startsWith('http://') || resolved.startsWith('https://'))) {
+      return resolved;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Scans the current DOM (or provided root element) for candidate portal / application tracker links.
+ * Used when an application confirmation is detected or when the user tracks a job.
+ */
+export function extractApplicationPortalUrl(root: Document | Element = document): string | null {
+  // If the current window location itself is already a candidate portal URL, return it
+  if (typeof window !== 'undefined' && window.location && window.location.href) {
+    if (PORTAL_HREF_REGEX.test(window.location.href)) {
+      return window.location.href;
+    }
+  }
+
+  // 1. High-priority ATS specific selectors
+  const priorityElements = querySelectorAllDeep<HTMLElement>(
+    PORTAL_AUTOMATION_SELECTORS.join(','),
+    root
+  );
+
+  for (const el of priorityElements) {
+    if (!isElementVisible(el)) continue;
+    const href = extractSafeHref(el);
+    if (href && !EXCLUDED_PORTAL_HREF_REGEX.test(href)) {
+      return href;
+    }
+  }
+
+  // 2. Scan within dedicated confirmation / success containers
+  const successContainers = querySelectorAllDeep<HTMLElement>(
+    '[data-automation-id*="applicationSubmitted"], [data-automation-id*="applicationConfirmation"], [data-automation-id*="statusBanner"], [data-automation-id*="alert-success"], .confirmation, .success, [role="alert"]',
+    root
+  );
+
+  for (const container of successContainers) {
+    if (!isElementVisible(container)) continue;
+    const links = querySelectorAllDeep<HTMLElement>('a[href], button[data-href], button[data-url]', container);
+    for (const el of links) {
+      if (!isElementVisible(el)) continue;
+      const text = (el.textContent || '').trim();
+      const href = extractSafeHref(el);
+      if (!href) continue;
+
+      if (EXCLUDED_PORTAL_TEXT_REGEX.test(text) || EXCLUDED_PORTAL_HREF_REGEX.test(href)) {
+        continue;
+      }
+
+      if (PORTAL_TEXT_REGEX.test(text) || PORTAL_HREF_REGEX.test(href)) {
+        return href;
+      }
+    }
+  }
+
+  // 3. Scan all anchor tags across the DOM
+  const allAnchors = querySelectorAllDeep<HTMLElement>('a[href]', root);
+  for (const anchor of allAnchors) {
+    if (!isElementVisible(anchor)) continue;
+    const text = (anchor.textContent || '').trim();
+    const href = extractSafeHref(anchor);
+    if (!href) continue;
+
+    if (EXCLUDED_PORTAL_TEXT_REGEX.test(text) || EXCLUDED_PORTAL_HREF_REGEX.test(href)) {
+      continue;
+    }
+
+    if (PORTAL_HREF_REGEX.test(href)) {
+      return href;
+    }
+
+    if (PORTAL_TEXT_REGEX.test(text)) {
+      return href;
+    }
+  }
+
+  return null;
+}
 
 /**
  * Saves or updates the currently viewed job candidate into session storage.
@@ -295,7 +439,32 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
       return false;
     });
 
+    // Scan for candidate portal link on the confirmation / success DOM
+    const portalUrl = extractApplicationPortalUrl(document) || undefined;
+
     if (isAlreadyTracked) {
+      if (portalUrl) {
+        let hasChanges = false;
+        const updatedApps = currentApps.map((a) => {
+          const normAppUrl = a.url.split('?')[0].replace(/\/$/, '').toLowerCase();
+          const matches =
+            normAppUrl === normalizedStagedUrl ||
+            (a.company.toLowerCase() === staged!.company.toLowerCase() &&
+              a.title.toLowerCase() === staged!.title.toLowerCase());
+          if (matches && (!a.portalUrl || a.portalUrl !== portalUrl)) {
+            hasChanges = true;
+            return { ...a, portalUrl, updatedAt: new Date().toISOString() };
+          }
+          return a;
+        });
+        if (hasChanges) {
+          await updateStorageData({ applications: updatedApps });
+          const updatedApp = updatedApps.find((a) => a.portalUrl === portalUrl);
+          if (updatedApp) {
+            options.onAutoTracked(updatedApp);
+          }
+        }
+      }
       clearStagedJobMetadata();
       submitAttemptTimestamp = 0;
       return;
@@ -306,6 +475,7 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
       company: staged.company,
       title: staged.title,
       url: staged.url,
+      portalUrl,
       appliedDate: new Date().toISOString(),
       status: 'Applied',
       notes: 'Auto-tracked on application submission',
@@ -320,11 +490,48 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     options.onAutoTracked(newApp);
   };
 
+  // Helper to enrich existing tracked applications if portal link renders asynchronously on success page
+  const enrichTrackedApplicationsWithPortal = async () => {
+    const portalUrl = extractApplicationPortalUrl(document);
+    if (!portalUrl) return;
+
+    const storage = await getStorageData();
+    const currentApps = storage.applications || [];
+    if (currentApps.length === 0) return;
+
+    let hasChanges = false;
+    const updatedApps = currentApps.map((a) => {
+      const isRecent = Date.now() - new Date(a.appliedDate || 0).getTime() < 15 * 60 * 1000;
+      let isDomainMatch = false;
+      try {
+        isDomainMatch = new URL(a.url).hostname === window.location.hostname;
+      } catch {
+        isDomainMatch = false;
+      }
+
+      if ((isRecent || isDomainMatch) && (!a.portalUrl || a.portalUrl !== portalUrl)) {
+        hasChanges = true;
+        return { ...a, portalUrl, updatedAt: new Date().toISOString() };
+      }
+      return a;
+    });
+
+    if (hasChanges) {
+      await updateStorageData({ applications: updatedApps });
+      const updatedApp = updatedApps.find((a) => a.portalUrl === portalUrl);
+      if (updatedApp) {
+        options.onAutoTracked(updatedApp);
+      }
+    }
+  };
+
   // 1. Check if user landed on a confirmation page via redirect (must have an explicitly submitted staged job)
   if (isConfirmationUrl()) {
     const staged = getStagedJobMetadata(true);
     if (staged && (!hasActiveFormFields() || hasVisibleSuccessMessage())) {
       commitApplicationIfPending(true);
+    } else if (hasVisibleSuccessMessage()) {
+      enrichTrackedApplicationsWithPortal();
     }
   }
 
@@ -370,6 +577,8 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
 
     if (recentSubmit && (hasVisibleSuccessMessage() || (isConfirmationUrl() && !hasActiveFormFields()))) {
       commitApplicationIfPending();
+    } else if (hasVisibleSuccessMessage() || isConfirmationUrl()) {
+      enrichTrackedApplicationsWithPortal();
     }
   });
 

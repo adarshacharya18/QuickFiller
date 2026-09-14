@@ -54,6 +54,7 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
   const [newCompany, setNewCompany] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newUrl, setNewUrl] = useState('');
+  const [newPortalUrl, setNewPortalUrl] = useState('');
   const [newLocation, setNewLocation] = useState('');
   const [newSalary, setNewSalary] = useState('');
   const [newStatus, setNewStatus] = useState<ApplicationStatus>('Applied');
@@ -84,7 +85,8 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
           app.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
           app.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (app.location && app.location.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (app.notes && app.notes.toLowerCase().includes(searchQuery.toLowerCase()));
+          (app.notes && app.notes.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (app.portalUrl && app.portalUrl.toLowerCase().includes(searchQuery.toLowerCase()));
 
         const matchesStatus = statusFilter === 'All' || app.status === statusFilter;
         return matchesSearch && matchesStatus;
@@ -127,6 +129,7 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
       company: newCompany.trim(),
       title: newTitle.trim(),
       url: newUrl.trim() || window.location.href,
+      portalUrl: newPortalUrl.trim() || undefined,
       appliedDate: new Date().toISOString(),
       status: newStatus,
       location: newLocation.trim() || undefined,
@@ -141,6 +144,7 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
     setNewCompany('');
     setNewTitle('');
     setNewUrl('');
+    setNewPortalUrl('');
     setNewLocation('');
     setNewSalary('');
     setNewStatus('Applied');
@@ -256,7 +260,7 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-1.5 bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow-xs transition"
+            className="flex items-center gap-1.5 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow-xs transition"
           >
             <Plus className="w-3.5 h-3.5" />
             Add Application
@@ -264,7 +268,7 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
           <button
             onClick={() => downloadApplicationsCsv(applications)}
             disabled={applications.length === 0}
-            className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold px-3 py-2 rounded-lg shadow-xs transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 bg-white hover:bg-slate-50 active:scale-95 text-slate-700 border border-slate-200 text-xs font-semibold px-3 py-2 rounded-lg shadow-xs transition disabled:opacity-50 disabled:cursor-not-allowed"
             title="Download applications as CSV for Excel, Google Sheets, or Notion"
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
@@ -350,7 +354,7 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
                       {/* Company & Role */}
                       <td className="py-3 px-3.5 sm:px-4">
                         <div className="flex flex-col">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-bold text-slate-900">{app.company}</span>
                             {app.url && isSafeWebUrl(app.url) && (
                               <a
@@ -361,6 +365,18 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
                                 className="text-slate-400 hover:text-sky-600 transition"
                               >
                                 <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                            {app.portalUrl && isSafeWebUrl(app.portalUrl) && (
+                              <a
+                                href={sanitizeWebUrl(app.portalUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={`Open Candidate Application Portal (${app.company})`}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition shadow-2xs"
+                              >
+                                <ExternalLink className="w-2.5 h-2.5 text-emerald-600" />
+                                <span>Portal</span>
                               </a>
                             )}
                           </div>
@@ -485,7 +501,7 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
       {/* Manual Add Application Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
             <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Briefcase className="w-4 h-4 text-sky-400" />
@@ -529,17 +545,31 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                  Job Posting URL
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={newUrl}
-                  onChange={(e) => setNewUrl(e.target.value)}
-                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Job Posting URL
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={newUrl}
+                    onChange={(e) => setNewUrl(e.target.value)}
+                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Company Portal Tracker URL
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://.../candidateHome"
+                    value={newPortalUrl}
+                    onChange={(e) => setNewPortalUrl(e.target.value)}
+                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
@@ -548,7 +578,7 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
                   <select
                     value={newStatus}
                     onChange={(e) => setNewStatus(e.target.value as ApplicationStatus)}
-                    className="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-hidden bg-white"
+                    className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-hidden bg-white"
                   >
                     {ALL_STATUSES.map((st) => (
                       <option key={st} value={st}>
@@ -568,10 +598,10 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Salary</label>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Salary Range</label>
                   <input
                     type="text"
-                    placeholder="e.g. $140k"
+                    placeholder="e.g. $140k - $160k"
                     value={newSalary}
                     onChange={(e) => setNewSalary(e.target.value)}
                     className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
@@ -580,13 +610,15 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1">Notes</label>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Notes &amp; Follow-ups
+                </label>
                 <textarea
-                  rows={2}
-                  placeholder="Recruiter contact, referral, follow-up date..."
+                  rows={3}
+                  placeholder="e.g. Met recruiter Sarah on LinkedIn, referral from Dave..."
                   value={newNotes}
                   onChange={(e) => setNewNotes(e.target.value)}
-                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
+                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-hidden resize-none"
                 />
               </div>
 
@@ -600,7 +632,7 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="text-xs bg-sky-600 hover:bg-sky-700 text-white font-semibold px-4 py-2 rounded-lg shadow-xs transition"
+                  className="text-xs bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-semibold px-4 py-2 rounded-lg shadow-xs transition"
                 >
                   Save Application
                 </button>
@@ -613,7 +645,7 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xl max-w-sm w-full p-5 space-y-3">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xl max-w-sm w-full p-5 space-y-3 animate-scale-in">
             <div className="flex items-center gap-2 text-red-600">
               <AlertCircle className="w-5 h-5" />
               <h4 className="font-bold text-sm">Delete Application?</h4>
@@ -630,7 +662,7 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
               </button>
               <button
                 onClick={() => handleDelete(deleteConfirmId)}
-                className="text-xs bg-red-600 hover:bg-red-700 text-white font-semibold px-3 py-1.5 rounded-lg shadow-xs transition"
+                className="text-xs bg-red-600 hover:bg-red-700 active:scale-95 text-white font-semibold px-3 py-1.5 rounded-lg shadow-xs transition"
               >
                 Delete
               </button>
@@ -642,7 +674,7 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
       {/* Clear All Confirmation Modal */}
       {clearAllConfirm && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xl max-w-sm w-full p-5 space-y-3">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xl max-w-sm w-full p-5 space-y-3 animate-scale-in">
             <div className="flex items-center gap-2 text-red-600">
               <AlertCircle className="w-5 h-5" />
               <h4 className="font-bold text-sm">Clear All Tracked Applications?</h4>
@@ -659,7 +691,7 @@ export const ApplicationsTab: React.FC<ApplicationsTabProps> = ({
               </button>
               <button
                 onClick={handleClearAll}
-                className="text-xs bg-red-600 hover:bg-red-700 text-white font-semibold px-3 py-1.5 rounded-lg shadow-xs transition"
+                className="text-xs bg-red-600 hover:bg-red-700 active:scale-95 text-white font-semibold px-3 py-1.5 rounded-lg shadow-xs transition"
               >
                 Clear All
               </button>

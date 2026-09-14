@@ -31,22 +31,54 @@ import { StorageData, CustomPasteItem } from '../../types/storage';
 import { CandidateProfile } from '../../types/profile';
 import { JobApplication, ApplicationStatus } from '../../types/applications';
 import { cleanCoverLetterOutput } from '../../utils/llm/coverLetterPrompt';
-import { initSubmissionWatcher } from '../../utils/submissionWatcher';
+import { initSubmissionWatcher, extractApplicationPortalUrl } from '../../utils/submissionWatcher';
+import { isSafeWebUrl, sanitizeWebUrl } from '../../utils/security';
 
 export const Drawer: React.FC = () => {
   const [isOpen, setIsOpen] = useState<boolean>(() => {
-    if (typeof window !== 'undefined' && (window as any).__QUICKFILLER_AUTO_OPEN__) {
-      (window as any).__QUICKFILLER_AUTO_OPEN__ = false;
+    if (typeof window !== 'undefined') {
+      if ((window as any).__QUICKFILLER_AUTO_OPEN__) {
+        (window as any).__QUICKFILLER_AUTO_OPEN__ = false;
+        try {
+          sessionStorage.setItem('quickfiller_drawer_open', 'true');
+        } catch {}
+        return true;
+      }
+      try {
+        const stored = sessionStorage.getItem('quickfiller_drawer_open');
+        if (stored === 'false') return false;
+        if (stored === 'true') return true;
+      } catch {}
+
+      // On first visit / pin click access grant, open the drawer by default
+      try {
+        sessionStorage.setItem('quickfiller_drawer_open', 'true');
+      } catch {}
       return true;
     }
     return false;
   });
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem('quickfiller_drawer_expanded');
+        if (stored === 'false') return false;
+        if (stored === 'true') return true;
+      } catch {}
+
+      // On first visit / pin click, default to expanded wide view
+      try {
+        sessionStorage.setItem('quickfiller_drawer_expanded', 'true');
+      } catch {}
+      return true;
+    }
+    return true;
+  });
   const [storage, setStorage] = useState<StorageData | null>(null);
   const [standardFields, setStandardFields] = useState<DetectedField[]>([]);
   const [customQuestions, setCustomQuestions] = useState<DetectedField[]>([]);
   const [jobMetadata, setJobMetadata] = useState<JobMetadata | null>(null);
-  const [activeTab, setActiveTab] = useState<'questions' | 'coverLetter' | 'autofill' | 'bank'>('questions');
+  const [activeTab, setActiveTab] = useState<'autofill' | 'questions' | 'coverLetter' | 'bank'>('autofill');
 
   // Cover Letter Generator State
   const [targetCompany, setTargetCompany] = useState('');
@@ -168,6 +200,7 @@ export const Drawer: React.FC = () => {
   }, [storage?.applications, jobMetadata]);
 
   const handleTrackCurrentJob = async () => {
+    const portalUrl = extractApplicationPortalUrl(document) || undefined;
     const newApp: JobApplication = {
       id: `app_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       company:
@@ -179,6 +212,7 @@ export const Drawer: React.FC = () => {
         document.title.split(/[-|–]/)[0]?.trim() ||
         'Job Application',
       url: window.location.href,
+      portalUrl,
       appliedDate: new Date().toISOString(),
       status: 'Applied',
       notes: '',
@@ -215,13 +249,29 @@ export const Drawer: React.FC = () => {
     setShowTrackerMenu(false);
   };
 
-  const handleOpenJobTracker = () => {
+  const handleOpenOptionsPage = (tab: string = 'profile') => {
     try {
-      chrome.runtime.sendMessage({ type: 'OPEN_JOB_TRACKER' });
+      chrome.runtime.sendMessage(
+        { type: 'OPEN_OPTIONS_TAB', tab },
+        (res) => {
+          if (chrome.runtime?.lastError || !res?.success) {
+            const targetUrl = chrome.runtime?.getURL
+              ? chrome.runtime.getURL(`options.html?tab=${encodeURIComponent(tab)}#${encodeURIComponent(tab)}`)
+              : 'options.html';
+            window.open(targetUrl, '_blank');
+          }
+        }
+      );
     } catch {
-      const url = chrome.runtime?.getURL ? chrome.runtime.getURL('options.html?tab=applications#applications') : 'options.html?tab=applications#applications';
-      window.open(url, '_blank');
+      const targetUrl = chrome.runtime?.getURL
+        ? chrome.runtime.getURL(`options.html?tab=${encodeURIComponent(tab)}#${encodeURIComponent(tab)}`)
+        : 'options.html';
+      window.open(targetUrl, '_blank');
     }
+  };
+
+  const handleOpenJobTracker = () => {
+    handleOpenOptionsPage('applications');
   };
 
   // Scan page and load storage
@@ -295,13 +345,27 @@ export const Drawer: React.FC = () => {
       sendResponse: (response?: any) => void
     ) => {
       if (message?.type === 'TOGGLE_DRAWER') {
-        setIsOpen((prev) => !prev);
+        setIsOpen((prev) => {
+          const next = !prev;
+          try {
+            sessionStorage.setItem('quickfiller_drawer_open', next ? 'true' : 'false');
+          } catch {}
+          if (next) setTimeout(scanPage, 50);
+          return next;
+        });
         sendResponse?.({ success: true });
       } else if (message?.type === 'OPEN_DRAWER') {
         setIsOpen(true);
+        try {
+          sessionStorage.setItem('quickfiller_drawer_open', 'true');
+        } catch {}
+        setTimeout(scanPage, 50);
         sendResponse?.({ success: true });
       } else if (message?.type === 'CLOSE_DRAWER') {
         setIsOpen(false);
+        try {
+          sessionStorage.setItem('quickfiller_drawer_open', 'false');
+        } catch {}
         sendResponse?.({ success: true });
       }
     };
@@ -757,7 +821,7 @@ export const Drawer: React.FC = () => {
     <div className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[2147483647] font-sans text-slate-800 text-sm">
       {/* Auto-Tracked Toast when collapsed */}
       {!isOpen && autoTrackedToast && (
-        <div className="mb-2 bg-slate-900 border border-emerald-500/40 text-white p-3 rounded-2xl shadow-2xl flex items-center justify-between gap-3 text-xs animate-in fade-in slide-in-from-bottom-2 duration-200 max-w-xs">
+        <div className="mb-2 bg-slate-900 border border-emerald-500/40 text-white p-3 rounded-2xl shadow-2xl flex items-center justify-between gap-3 text-xs animate-slide-up max-w-xs">
           <div className="flex items-center gap-2 min-w-0">
             <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
             <div className="truncate">
@@ -795,9 +859,12 @@ export const Drawer: React.FC = () => {
         <button
           onClick={() => {
             setIsOpen(true);
+            try {
+              sessionStorage.setItem('quickfiller_drawer_open', 'true');
+            } catch {}
             scanPage();
           }}
-          className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full shadow-2xl border border-slate-700 transition-all hover:scale-105 active:scale-95"
+          className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full shadow-2xl border border-slate-700 transition-all hover:scale-105 active:scale-95 animate-scale-in"
         >
           <Zap className="w-4 h-4 text-sky-400 animate-pulse" />
           <span className="font-semibold text-xs tracking-wide">QuickFiller</span>
@@ -812,7 +879,7 @@ export const Drawer: React.FC = () => {
       {/* Expanded Copilot Drawer */}
       {isOpen && (
         <div
-          className={`flex flex-col transition-all duration-200 ease-in-out bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden ${
+          className={`flex flex-col transition-all duration-200 ease-in-out bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-scale-in origin-bottom-right ${
             isExpanded
               ? 'w-[580px] sm:w-[680px] max-w-[calc(100vw-24px)] h-[640px] sm:h-[680px] max-h-[92vh]'
               : 'w-[380px] sm:w-[440px] max-w-[calc(100vw-24px)] h-[580px] sm:h-[620px] max-h-[90vh]'
@@ -852,7 +919,15 @@ export const Drawer: React.FC = () => {
 
             <div className="flex items-center gap-1 flex-shrink-0">
               <button
-                onClick={() => setIsExpanded(!isExpanded)}
+                onClick={() => {
+                  setIsExpanded((prev) => {
+                    const next = !prev;
+                    try {
+                      sessionStorage.setItem('quickfiller_drawer_expanded', next ? 'true' : 'false');
+                    } catch {}
+                    return next;
+                  });
+                }}
                 title={isExpanded ? 'Collapse width' : 'Expand to wide view'}
                 className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition cursor-pointer"
               >
@@ -866,7 +941,12 @@ export const Drawer: React.FC = () => {
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  setIsOpen(false);
+                  try {
+                    sessionStorage.setItem('quickfiller_drawer_open', 'false');
+                  } catch {}
+                }}
                 title="Minimize"
                 className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition cursor-pointer"
               >
@@ -875,9 +955,9 @@ export const Drawer: React.FC = () => {
             </div>
           </div>
 
-          {/* Auto-Tracked Toast inside open drawer */}
+          {/* Auto-Tracked Toast when open */}
           {autoTrackedToast && (
-            <div className="bg-emerald-950/95 border-b border-emerald-800/80 text-white px-3.5 py-2 flex items-center justify-between text-xs animate-in fade-in duration-150">
+            <div className="bg-emerald-950/95 border-b border-emerald-800/80 text-white px-3.5 py-2 flex items-center justify-between text-xs animate-slide-down">
               <div className="flex items-center gap-2 min-w-0">
                 <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                 <div className="truncate">
@@ -917,9 +997,9 @@ export const Drawer: React.FC = () => {
           {/* Tab Navigation */}
           <div className="flex border-b border-slate-200 bg-slate-50/80 px-2 pt-1.5 gap-1">
             {[
+              { id: 'autofill', label: 'Autofill', count: standardFields.length },
               { id: 'questions', label: 'Answers', count: customQuestions.length },
               { id: 'coverLetter', label: 'Cover Letter', count: null },
-              { id: 'autofill', label: 'Autofill', count: standardFields.length },
               { id: 'bank', label: 'Paste Bank', count: (storage?.customPasteBank?.length || 0) > 0 ? storage!.customPasteBank.length : null },
             ].map((tab) => {
               const isActive = activeTab === tab.id;
@@ -927,7 +1007,7 @@ export const Drawer: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-1 text-xs font-medium border-b-2 transition-all rounded-t-md ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-1 text-xs font-medium border-b-2 transition-all rounded-t-md active:scale-95 ${
                     isActive
                       ? 'border-sky-600 text-sky-600 font-semibold bg-white shadow-xs'
                       : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/60'
@@ -954,7 +1034,7 @@ export const Drawer: React.FC = () => {
           <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-3.5 space-y-3 bg-slate-50/50">
             {/* TAB 1: Screening Questions */}
             {activeTab === 'questions' && (
-              <div className="space-y-3">
+              <div className="space-y-3 animate-fade-in">
                 {customQuestions.length === 0 ? (
                   <div className="text-center py-12 text-slate-400 space-y-2">
                     <Sparkles className="w-7 h-7 mx-auto text-slate-300" />
@@ -984,7 +1064,7 @@ export const Drawer: React.FC = () => {
                             <button
                               disabled={isGen}
                               onClick={() => generateAnswerForField(field)}
-                              className="flex items-center gap-1 text-[11px] bg-sky-50 text-sky-700 hover:bg-sky-100 font-medium px-2 py-1 rounded-md transition disabled:opacity-50 flex-shrink-0"
+                              className="flex items-center gap-1 text-[11px] bg-sky-50 text-sky-700 hover:bg-sky-100 active:scale-95 font-medium px-2 py-1 rounded-md transition disabled:opacity-50 flex-shrink-0"
                             >
                               <Sparkles className={`w-3 h-3 ${isGen ? 'animate-spin' : ''}`} />
                               {answer ? 'Regenerate' : 'Draft Answer'}
@@ -1009,7 +1089,7 @@ export const Drawer: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => setActiveTab('coverLetter')}
-                                className="text-[11px] font-semibold text-sky-700 hover:text-sky-900 whitespace-nowrap underline"
+                                className="text-[11px] font-semibold text-sky-700 hover:text-sky-900 active:scale-95 whitespace-nowrap underline"
                               >
                                 Tailor with JD &rarr;
                               </button>
@@ -1048,7 +1128,7 @@ export const Drawer: React.FC = () => {
                                 onClick={() =>
                                   generateAnswerForField(field, 'Make the answer more concise and punchy.')
                                 }
-                                className="text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition font-medium"
+                                className="text-[10px] text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition font-medium"
                               >
                                 Shorter
                               </button>
@@ -1059,7 +1139,7 @@ export const Drawer: React.FC = () => {
                                     'Highlight specific portfolio project achievements and include the project link.'
                                   )
                                 }
-                                className="text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition font-medium"
+                                className="text-[10px] text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition font-medium"
                               >
                                 Add Project
                               </button>
@@ -1069,11 +1149,11 @@ export const Drawer: React.FC = () => {
                               <button
                                 onClick={() => handleSaveAnswerToPasteBank(field.label, answer, field.id)}
                                 title="Save answer to Paste Bank for 1-click re-use"
-                                className="flex items-center gap-1 text-[11px] text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 px-2 py-1 rounded-md transition font-medium"
+                                className="flex items-center gap-1 text-[11px] text-sky-700 hover:text-sky-900 active:scale-95 bg-sky-50 hover:bg-sky-100 px-2 py-1 rounded-md transition font-medium"
                               >
                                 {savedBankId === field.id ? (
                                   <>
-                                    <Check className="w-3 h-3 text-sky-600" />
+                                    <Check className="w-3 h-3 text-sky-600 animate-pop" />
                                     <span className="text-sky-600">Saved</span>
                                   </>
                                 ) : (
@@ -1086,11 +1166,11 @@ export const Drawer: React.FC = () => {
 
                               <button
                                 onClick={() => handleCopy(answer, field.id)}
-                                className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition font-medium"
+                                className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition font-medium"
                               >
                                 {copiedId === field.id ? (
                                   <>
-                                    <Check className="w-3 h-3 text-emerald-600" />
+                                    <Check className="w-3 h-3 text-emerald-600 animate-pop" />
                                     <span className="text-emerald-600">Copied</span>
                                   </>
                                 ) : (
@@ -1103,11 +1183,11 @@ export const Drawer: React.FC = () => {
 
                               <button
                                 onClick={() => handleInsert(field, answer)}
-                                className="flex items-center gap-1 text-[11px] bg-slate-900 hover:bg-slate-800 text-white px-3 py-1 rounded-md font-medium transition"
+                                className="flex items-center gap-1 text-[11px] bg-slate-900 hover:bg-slate-800 active:scale-95 text-white px-3 py-1 rounded-md font-medium transition"
                               >
                                 {insertedId === field.id ? (
                                   <>
-                                    <Check className="w-3 h-3 text-sky-400" />
+                                    <Check className="w-3 h-3 text-sky-400 animate-pop" />
                                     <span>Inserted</span>
                                   </>
                                 ) : (
@@ -1129,7 +1209,7 @@ export const Drawer: React.FC = () => {
 
             {/* TAB: Cover Letter Generator */}
             {activeTab === 'coverLetter' && (
-              <div className="space-y-3">
+              <div className="space-y-3 animate-fade-in">
                 <div className="bg-white rounded-xl p-3 sm:p-3.5 border border-slate-200/80 shadow-xs space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -1146,7 +1226,7 @@ export const Drawer: React.FC = () => {
                       onClick={resolveJobDescription}
                       disabled={isResolvingJD}
                       title="Re-scan previous page or current page for Job Description"
-                      className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition"
+                      className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition"
                     >
                       <RefreshCw className={`w-3 h-3 ${isResolvingJD ? 'animate-spin text-sky-600' : 'text-slate-500'}`} />
                       <span>{isResolvingJD ? 'Scanning...' : 'Scan JD'}</span>
@@ -1183,7 +1263,7 @@ export const Drawer: React.FC = () => {
 
                   {/* Job Description Status / Prompt */}
                   {isResolvingJD ? (
-                    <div className="p-3 bg-sky-50/70 border border-sky-200/80 rounded-xl flex items-center gap-2.5 text-xs text-sky-900 animate-in fade-in duration-150">
+                    <div className="p-3 bg-sky-50/70 border border-sky-200/80 rounded-xl flex items-center gap-2.5 text-xs text-sky-900 animate-fade-in">
                       <Loader2 className="w-4 h-4 animate-spin text-sky-600 flex-shrink-0" />
                       <div className="min-w-0">
                         <span className="font-semibold block">Resolving Job Description...</span>
@@ -1191,7 +1271,7 @@ export const Drawer: React.FC = () => {
                       </div>
                     </div>
                   ) : coverLetterJD && !showJDInput ? (
-                    <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-1.5 animate-in fade-in duration-150">
+                    <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-1.5 animate-slide-down">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-900">
                           <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -1210,7 +1290,7 @@ export const Drawer: React.FC = () => {
                       </p>
                     </div>
                   ) : (
-                    <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2.5 animate-in fade-in duration-150">
+                    <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2.5 animate-slide-down">
                       <div className="flex items-start gap-2">
                         <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                         <div className="text-xs">
@@ -1234,7 +1314,7 @@ export const Drawer: React.FC = () => {
                           type="button"
                           onClick={handleFetchUserUrl}
                           disabled={isFetchingUrl || !userJDUrl.trim()}
-                          className="text-[11px] bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white px-2.5 py-1.5 rounded-lg font-medium transition flex-shrink-0 flex items-center gap-1"
+                          className="text-[11px] bg-amber-600 hover:bg-amber-700 active:scale-95 disabled:opacity-50 text-white px-2.5 py-1.5 rounded-lg font-medium transition flex-shrink-0 flex items-center gap-1"
                         >
                           {isFetchingUrl ? (
                             <>
@@ -1265,7 +1345,7 @@ export const Drawer: React.FC = () => {
                                 setCoverLetterJDSource('Pasted by user');
                                 setShowJDInput(false);
                               }}
-                              className="text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-md font-medium transition"
+                              className="text-[11px] bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-3 py-1 rounded-md font-medium transition"
                             >
                               Confirm JD
                             </button>
@@ -1323,7 +1403,7 @@ export const Drawer: React.FC = () => {
                     type="button"
                     disabled={isGeneratingCoverLetter || isResolvingJD}
                     onClick={handleGenerateCoverLetter}
-                    className="w-full py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-medium text-xs shadow-xs transition flex items-center justify-center gap-2 active:scale-98"
+                    className="w-full py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-medium text-xs shadow-xs transition flex items-center justify-center gap-2 active:scale-95"
                   >
                     <Sparkles className={`w-4 h-4 ${isGeneratingCoverLetter ? 'animate-spin' : ''}`} />
                     <span>
@@ -1338,7 +1418,7 @@ export const Drawer: React.FC = () => {
 
                 {/* Generated Output Card */}
                 {generatedCoverLetter && (
-                  <div className="bg-white rounded-xl p-3 sm:p-3.5 border border-slate-200/80 shadow-xs space-y-3 animate-in fade-in duration-200">
+                  <div className="bg-white rounded-xl p-3 sm:p-3.5 border border-slate-200/80 shadow-xs space-y-3 animate-fade-in">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
                         <FileText className="w-3.5 h-3.5 text-sky-600" />
@@ -1360,11 +1440,11 @@ export const Drawer: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleSaveCoverLetterToBank(generatedCoverLetter)}
-                        className="text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition flex items-center gap-1"
+                        className="text-[11px] font-medium text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition flex items-center gap-1"
                       >
                         {savedBankId === 'cover_letter_save' ? (
                           <>
-                            <Check className="w-3 h-3 text-emerald-600" />
+                            <Check className="w-3 h-3 text-emerald-600 animate-pop" />
                             <span className="text-emerald-600">Saved to Bank</span>
                           </>
                         ) : (
@@ -1379,11 +1459,11 @@ export const Drawer: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleCopy(generatedCoverLetter, 'cover_letter_copy')}
-                          className="text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition flex items-center gap-1"
+                          className="text-[11px] font-medium text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition flex items-center gap-1"
                         >
                           {copiedId === 'cover_letter_copy' ? (
                             <>
-                              <Check className="w-3 h-3 text-emerald-600" />
+                              <Check className="w-3 h-3 text-emerald-600 animate-pop" />
                               <span className="text-emerald-600">Copied</span>
                             </>
                           ) : (
@@ -1398,11 +1478,11 @@ export const Drawer: React.FC = () => {
                           type="button"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => handleInsertCoverLetter(generatedCoverLetter)}
-                          className="text-[11px] font-medium text-white bg-slate-900 hover:bg-slate-800 px-3 py-1 rounded-md transition flex items-center gap-1"
+                          className="text-[11px] font-medium text-white bg-slate-900 hover:bg-slate-800 active:scale-95 px-3 py-1 rounded-md transition flex items-center gap-1"
                         >
                           {insertedId === 'cover_letter_btn' ? (
                             <>
-                              <Check className="w-3 h-3 text-sky-400" />
+                              <Check className="w-3 h-3 text-sky-400 animate-pop" />
                               <span>Inserted</span>
                             </>
                           ) : (
@@ -1421,7 +1501,7 @@ export const Drawer: React.FC = () => {
 
             {/* TAB 2: Standard Autofill */}
             {activeTab === 'autofill' && (
-              <div className="space-y-3">
+              <div className="space-y-3 animate-fade-in">
                 <div className="flex items-center justify-between p-3 bg-sky-50/70 border border-sky-100 rounded-xl">
                   <div>
                     <h4 className="font-semibold text-xs text-sky-950">1-Click Autofill</h4>
@@ -1440,7 +1520,7 @@ export const Drawer: React.FC = () => {
 
                 {autofillBanner && (
                   <div
-                    className={`p-2.5 rounded-xl text-xs flex items-center gap-2 border animate-in fade-in duration-150 ${
+                    className={`p-2.5 rounded-xl text-xs flex items-center gap-2 border animate-slide-down ${
                       autofillBanner.type === 'success'
                         ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                         : autofillBanner.type === 'warning'
@@ -1485,10 +1565,10 @@ export const Drawer: React.FC = () => {
                             <button
                               disabled={!resolvedVal}
                               onClick={() => handleInsert(field, resolvedVal)}
-                              className="text-[11px] font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed px-2.5 py-1 rounded-md transition flex items-center gap-1 flex-shrink-0"
+                              className="text-[11px] font-medium text-slate-700 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed px-2.5 py-1 rounded-md transition flex items-center gap-1 flex-shrink-0"
                             >
                               {insertedId === field.id ? (
-                                <span className="text-emerald-600 flex items-center gap-1">
+                                <span className="text-emerald-600 flex items-center gap-1 animate-pop">
                                   <Check className="w-3 h-3" /> Inserted
                                 </span>
                               ) : (
@@ -1508,9 +1588,13 @@ export const Drawer: React.FC = () => {
                                 {resolvedVal}
                               </span>
                             ) : (
-                              <span className="text-[10px] text-amber-600 italic break-words min-w-0">
-                                Not in profile — add in Options
-                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenOptionsPage('profile')}
+                                className="text-[10px] text-amber-600 hover:text-amber-800 hover:underline italic break-words min-w-0 text-left cursor-pointer"
+                              >
+                                Not in profile — add in Options &rarr;
+                              </button>
                             )}
                           </div>
                         </div>
@@ -1569,7 +1653,7 @@ export const Drawer: React.FC = () => {
                 customSnippets.length + standardItems.length + questionBankItems.length + projectItems.length;
 
               return (
-                <div className="space-y-3 text-xs">
+                <div className="space-y-3 text-xs animate-fade-in">
                   {/* Top Bar with Add Snippet Button */}
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[11px] text-slate-500">
@@ -1577,7 +1661,7 @@ export const Drawer: React.FC = () => {
                     </p>
                     <button
                       onClick={() => setIsAddingSnippet(!isAddingSnippet)}
-                      className="flex items-center gap-1 text-[11px] bg-sky-50 text-sky-700 hover:bg-sky-100 font-medium px-2.5 py-1 rounded-md transition flex-shrink-0"
+                      className="flex items-center gap-1 text-[11px] bg-sky-50 text-sky-700 hover:bg-sky-100 active:scale-95 font-medium px-2.5 py-1 rounded-md transition flex-shrink-0"
                     >
                       <Plus className="w-3 h-3" />
                       {isAddingSnippet ? 'Cancel' : 'Add Snippet'}
@@ -1586,7 +1670,7 @@ export const Drawer: React.FC = () => {
 
                   {/* Inline Add Snippet Drawer Form */}
                   {isAddingSnippet && (
-                    <div className="p-3 bg-white border border-sky-200 rounded-xl shadow-xs space-y-2 animate-in fade-in duration-150">
+                    <div className="p-3 bg-white border border-sky-200 rounded-xl shadow-xs space-y-2 animate-slide-down">
                       <h5 className="font-semibold text-xs text-sky-950">New Custom Snippet</h5>
                       <input
                         type="text"
@@ -1605,14 +1689,14 @@ export const Drawer: React.FC = () => {
                       <div className="flex justify-end gap-1.5 pt-0.5">
                         <button
                           onClick={() => setIsAddingSnippet(false)}
-                          className="text-[11px] text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded-md transition font-medium"
+                          className="text-[11px] text-slate-600 hover:text-slate-900 active:scale-95 px-2.5 py-1 rounded-md transition font-medium"
                         >
                           Cancel
                         </button>
                         <button
                           onClick={handleAddSnippet}
                           disabled={!newSnippetLabel.trim() || !newSnippetValue.trim()}
-                          className="text-[11px] bg-sky-600 hover:bg-sky-700 text-white px-3 py-1 rounded-md transition font-medium disabled:opacity-50"
+                          className="text-[11px] bg-sky-600 hover:bg-sky-700 active:scale-95 text-white px-3 py-1 rounded-md transition font-medium disabled:opacity-50"
                         >
                           Save Snippet
                         </button>
@@ -1634,7 +1718,7 @@ export const Drawer: React.FC = () => {
 
                   {bankNotice && (
                     <div
-                      className={`p-2 rounded-lg text-xs flex items-center gap-2 border animate-in fade-in duration-150 ${
+                      className={`p-2 rounded-lg text-xs flex items-center gap-2 border animate-slide-down ${
                         bankNotice.type === 'success'
                           ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                           : 'bg-sky-50 text-sky-800 border-sky-200'
@@ -1683,11 +1767,11 @@ export const Drawer: React.FC = () => {
                               onMouseDown={(e) => e.preventDefault()}
                               onClick={() => handleInsertAtCursor(item.value, item.id)}
                               title="Insert at cursor into active form input"
-                              className="flex items-center gap-1 text-[11px] font-medium text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 px-2 py-1 rounded-md transition"
+                              className="flex items-center gap-1 text-[11px] font-medium text-sky-700 hover:text-sky-900 active:scale-95 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 px-2 py-1 rounded-md transition"
                             >
                               {insertedId === item.id ? (
                                 <>
-                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <Check className="w-3 h-3 text-emerald-600 animate-pop" />
                                   <span className="text-emerald-600 font-semibold">Inserted</span>
                                 </>
                               ) : (
@@ -1701,11 +1785,11 @@ export const Drawer: React.FC = () => {
                               type="button"
                               onClick={() => handleCopy(item.value, item.id)}
                               title="Copy to clipboard"
-                              className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition"
+                              className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition"
                             >
                               {copiedId === item.id ? (
                                 <>
-                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <Check className="w-3 h-3 text-emerald-600 animate-pop" />
                                   <span className="text-emerald-600">Copied</span>
                                 </>
                               ) : (
@@ -1719,7 +1803,7 @@ export const Drawer: React.FC = () => {
                               type="button"
                               onClick={() => handleDeleteSnippet(item.id)}
                               title="Delete snippet"
-                              className="text-slate-300 hover:text-rose-600 p-1 rounded transition"
+                              className="text-slate-300 hover:text-rose-600 active:scale-90 p-1 rounded transition"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1754,11 +1838,11 @@ export const Drawer: React.FC = () => {
                               onMouseDown={(e) => e.preventDefault()}
                               onClick={() => handleInsertAtCursor(item.value, `std_${idx}`)}
                               title="Insert at cursor into active form input"
-                              className="flex items-center gap-1 text-[11px] font-medium text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 px-2 py-1 rounded-md transition"
+                              className="flex items-center gap-1 text-[11px] font-medium text-sky-700 hover:text-sky-900 active:scale-95 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 px-2 py-1 rounded-md transition"
                             >
                               {insertedId === `std_${idx}` ? (
                                 <>
-                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <Check className="w-3 h-3 text-emerald-600 animate-pop" />
                                   <span className="text-emerald-600 font-semibold">Inserted</span>
                                 </>
                               ) : (
@@ -1772,11 +1856,11 @@ export const Drawer: React.FC = () => {
                               type="button"
                               onClick={() => handleCopy(item.value, `std_${idx}`)}
                               title="Copy to clipboard"
-                              className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition"
+                              className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition"
                             >
                               {copiedId === `std_${idx}` ? (
                                 <>
-                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <Check className="w-3 h-3 text-emerald-600 animate-pop" />
                                   <span className="text-emerald-600">Copied</span>
                                 </>
                               ) : (
@@ -1813,11 +1897,11 @@ export const Drawer: React.FC = () => {
                                 onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => handleInsertAtCursor(q.answer, q.id)}
                                 title="Insert at cursor into active form input"
-                                className="flex items-center gap-1 text-[10px] text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 px-2 py-0.5 rounded-md transition font-medium"
+                                className="flex items-center gap-1 text-[10px] text-sky-700 hover:text-sky-900 active:scale-95 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 px-2 py-0.5 rounded-md transition font-medium"
                               >
                                 {insertedId === q.id ? (
                                   <>
-                                    <Check className="w-3 h-3 text-emerald-600" />
+                                    <Check className="w-3 h-3 text-emerald-600 animate-pop" />
                                     <span className="text-emerald-600 font-semibold">Inserted</span>
                                   </>
                                 ) : (
@@ -1831,11 +1915,11 @@ export const Drawer: React.FC = () => {
                                 type="button"
                                 onClick={() => handleCopy(q.answer, q.id)}
                                 title="Copy to clipboard"
-                                className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-md transition font-medium"
+                                className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-md transition font-medium"
                               >
                                 {copiedId === q.id ? (
                                   <>
-                                    <Check className="w-3 h-3 text-emerald-600" />
+                                    <Check className="w-3 h-3 text-emerald-600 animate-pop" />
                                     <span className="text-emerald-600">Copied</span>
                                   </>
                                 ) : (
@@ -1881,11 +1965,11 @@ export const Drawer: React.FC = () => {
                                   onMouseDown={(e) => e.preventDefault()}
                                   onClick={() => handleInsertAtCursor(projectSnippet, proj.id)}
                                   title="Insert at cursor into active form input"
-                                  className="flex items-center gap-1 text-[10px] text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 px-2 py-0.5 rounded-md transition font-medium"
+                                  className="flex items-center gap-1 text-[10px] text-sky-700 hover:text-sky-900 active:scale-95 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 px-2 py-0.5 rounded-md transition font-medium"
                                 >
                                   {insertedId === proj.id ? (
                                     <>
-                                      <Check className="w-3 h-3 text-emerald-600" />
+                                      <Check className="w-3 h-3 text-emerald-600 animate-pop" />
                                       <span className="text-emerald-600 font-semibold">Inserted</span>
                                     </>
                                   ) : (
@@ -1899,11 +1983,11 @@ export const Drawer: React.FC = () => {
                                   type="button"
                                   onClick={() => handleCopy(projectSnippet, proj.id)}
                                   title="Copy to clipboard"
-                                  className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-md transition font-medium"
+                                  className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-md transition font-medium"
                                 >
                                   {copiedId === proj.id ? (
                                     <>
-                                      <Check className="w-3 h-3 text-emerald-600" />
+                                      <Check className="w-3 h-3 text-emerald-600 animate-pop" />
                                       <span className="text-emerald-600">Copied</span>
                                     </>
                                   ) : (
@@ -1980,7 +2064,7 @@ export const Drawer: React.FC = () => {
                             className="fixed inset-0 z-40"
                             onClick={() => setShowTrackerMenu(false)}
                           />
-                          <div className="absolute left-0 bottom-full mb-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100 text-xs">
+                          <div className="absolute left-0 bottom-full mb-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl py-1 z-50 animate-scale-in origin-bottom-left text-xs">
                             <button
                               onClick={() => {
                                 setShowTrackerMenu(false);
@@ -1994,6 +2078,23 @@ export const Drawer: React.FC = () => {
                               </span>
                               <ExternalLink className="w-3 h-3" />
                             </button>
+
+                            {currentTrackedApp.portalUrl && isSafeWebUrl(currentTrackedApp.portalUrl) && (
+                              <a
+                                href={sanitizeWebUrl(currentTrackedApp.portalUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => setShowTrackerMenu(false)}
+                                className="w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between text-emerald-400 hover:bg-slate-700/70 transition cursor-pointer font-medium border-b border-slate-700/80"
+                                title="Open company candidate tracking portal"
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <ExternalLink className="w-3 h-3 text-emerald-400" />
+                                  Candidate Portal
+                                </span>
+                                <span className="text-[9px] bg-emerald-900/60 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-700/50">Visit</span>
+                              </a>
+                            )}
 
                             <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                               Update Status
@@ -2028,7 +2129,7 @@ export const Drawer: React.FC = () => {
             </div>
 
             <button
-              onClick={() => chrome.runtime.openOptionsPage()}
+              onClick={() => handleOpenOptionsPage('profile')}
               className="flex items-center gap-1 text-slate-500 hover:text-slate-800 font-medium text-[11px] cursor-pointer"
             >
               <span>Options</span> <ExternalLink className="w-3 h-3" />

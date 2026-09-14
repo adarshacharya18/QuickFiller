@@ -8,6 +8,7 @@ import {
   getStagedJobMetadata,
   clearStagedJobMetadata,
   initSubmissionWatcher,
+  extractApplicationPortalUrl,
 } from '../src/utils/submissionWatcher';
 import { resetMockChromeStorage } from './setup';
 
@@ -209,6 +210,251 @@ describe('Submission Watcher & Job Tracker', () => {
       expect(isConfirmationUrl('https://jobs.lever.co/acme/123/apply')).toBe(false);
       expect(isConfirmationUrl('https://leadsquaredhrms.darwinbox.in/ms/candidatev2/main/applications/123')).toBe(false);
       expect(isConfirmationUrl('file:///home/user/darwinbox-test-app.html')).toBe(false);
+    });
+  });
+
+  describe('Candidate Portal Link Extraction (extractApplicationPortalUrl)', () => {
+    it('detects Workday Candidate Home link via data-automation-id="candidateHomeLink"', () => {
+      document.body.innerHTML = `
+        <div data-automation-id="applicationSubmitted">
+          <h1>Application Submitted</h1>
+          <p>Thank you for applying to Acme Corp.</p>
+          <a data-automation-id="candidateHomeLink" href="https://acme.wd5.myworkdayjobs.com/en-US/careers/candidateHome">
+            Candidate Home
+          </a>
+        </div>
+      `;
+
+      const portalUrl = extractApplicationPortalUrl(document);
+      expect(portalUrl).toBe('https://acme.wd5.myworkdayjobs.com/en-US/careers/candidateHome');
+    });
+
+    it('detects Workday View Application button via data-automation-id="viewApplicationButton"', () => {
+      document.body.innerHTML = `
+        <div class="confirmation-panel">
+          <h2>Submission Received</h2>
+          <a data-automation-id="viewApplicationButton" href="https://acme.wd5.myworkdayjobs.com/en-US/careers/userHome">
+            View Application
+          </a>
+        </div>
+      `;
+
+      const portalUrl = extractApplicationPortalUrl(document);
+      expect(portalUrl).toBe('https://acme.wd5.myworkdayjobs.com/en-US/careers/userHome');
+    });
+
+    it('resolves relative candidate portal URLs to absolute web URLs', () => {
+      document.body.innerHTML = `
+        <div data-automation-id="statusBanner">
+          <a data-automation-id="candidateHomeLink" href="/en-US/nvidia/candidateHome">
+            Go to Candidate Home
+          </a>
+        </div>
+      `;
+
+      const portalUrl = extractApplicationPortalUrl(document);
+      expect(portalUrl).toBeTruthy();
+      expect(portalUrl).toContain('/en-US/nvidia/candidateHome');
+      expect(portalUrl?.startsWith('http')).toBe(true);
+    });
+
+    it('detects SmartRecruiters candidate portal link by URL pattern', () => {
+      document.body.innerHTML = `
+        <div class="success">
+          <h3>Your application is on its way!</h3>
+          <a href="https://my.smartrecruiters.com/candidate/applications" class="sr-btn">
+            Track your application on SmartRecruiters
+          </a>
+        </div>
+      `;
+
+      const portalUrl = extractApplicationPortalUrl(document);
+      expect(portalUrl).toBe('https://my.smartrecruiters.com/candidate/applications');
+    });
+
+    it('detects Darwinbox applicant portal link', () => {
+      document.body.innerHTML = `
+        <div class="confirmation">
+          <h1>Submission Complete</h1>
+          <a href="https://leadsquared.darwinbox.in/ms/candidatev2/main/applications">
+            View Applications
+          </a>
+        </div>
+      `;
+
+      const portalUrl = extractApplicationPortalUrl(document);
+      expect(portalUrl).toBe('https://leadsquared.darwinbox.in/ms/candidatev2/main/applications');
+    });
+
+    it('detects generic portal link matching "View Application Status" text', () => {
+      document.body.innerHTML = `
+        <div class="confirmation">
+          <h2>Thank you for your interest</h2>
+          <a href="https://company.com/portal/status?id=45678">
+            View Application Status
+          </a>
+        </div>
+      `;
+
+      const portalUrl = extractApplicationPortalUrl(document);
+      expect(portalUrl).toBe('https://company.com/portal/status?id=45678');
+    });
+
+    it('detects generic portal link matching "Check Application Status" text', () => {
+      document.body.innerHTML = `
+        <div class="confirmation">
+          <h2>Application Received</h2>
+          <a href="https://careers.example.com/applicant/status">
+            Check Application Status
+          </a>
+        </div>
+      `;
+
+      const portalUrl = extractApplicationPortalUrl(document);
+      expect(portalUrl).toBe('https://careers.example.com/applicant/status');
+    });
+
+    it('ignores navigation links like Search Jobs, Careers Home, Back, Privacy Policy', () => {
+      document.body.innerHTML = `
+        <div class="confirmation">
+          <h1>Application Submitted</h1>
+          <a href="https://careers.example.com/jobs">Search Jobs</a>
+          <a href="https://example.com/careers">Careers Home</a>
+          <a href="https://example.com/privacy">Privacy Policy</a>
+          <a href="https://example.com/terms">Terms of Service</a>
+          <a href="https://example.com/logout">Sign Out</a>
+        </div>
+      `;
+
+      const portalUrl = extractApplicationPortalUrl(document);
+      expect(portalUrl).toBeNull();
+    });
+
+    it('ignores hidden portal links with style display: none', () => {
+      document.body.innerHTML = `
+        <div class="confirmation">
+          <a
+            data-automation-id="candidateHomeLink"
+            href="https://acme.wd5.myworkdayjobs.com/candidateHome"
+            style="display: none;"
+          >
+            Candidate Home
+          </a>
+        </div>
+      `;
+
+      const portalUrl = extractApplicationPortalUrl(document);
+      expect(portalUrl).toBeNull();
+    });
+
+    it('rejects javascript: pseudo-protocol links', () => {
+      document.body.innerHTML = `
+        <div class="confirmation">
+          <a href="javascript:void(0)" data-automation-id="candidateHomeLink">
+            Candidate Home
+          </a>
+        </div>
+      `;
+
+      const portalUrl = extractApplicationPortalUrl(document);
+      expect(portalUrl).toBeNull();
+    });
+  });
+
+  describe('End-to-End Tracking with Portal URL Integration', () => {
+    it('automatically extracts portalUrl and attaches to tracked application on submission', async () => {
+      document.body.innerHTML = `
+        <div id="company-header" class="company">Datadog</div>
+        <h1>Staff Software Engineer</h1>
+        <form id="job-form">
+          <input name="firstName" value="Adarsh" />
+          <button id="submit-btn" type="submit">Submit Application</button>
+        </form>
+        <div id="success-box" class="confirmation" style="display: none;">
+          <h2>Your application has been submitted successfully!</h2>
+          <a data-automation-id="candidateHomeLink" href="https://datadog.wd5.myworkdayjobs.com/en-US/careers/candidateHome">
+            Go to Candidate Home
+          </a>
+        </div>
+      `;
+
+      const trackedApps: any[] = [];
+      const unwatch = initSubmissionWatcher({
+        onAutoTracked: (app) => trackedApps.push(app),
+      });
+
+      const submitBtn = document.getElementById('submit-btn')!;
+      submitBtn.click();
+
+      // Simulate ATS showing confirmation and portal link
+      document.getElementById('job-form')!.style.display = 'none';
+      document.getElementById('success-box')!.style.display = 'block';
+
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(trackedApps.length).toBe(1);
+      expect(trackedApps[0].company).toBe('Datadog');
+      expect(trackedApps[0].title).toBe('Staff Software Engineer');
+      expect(trackedApps[0].status).toBe('Applied');
+      expect(trackedApps[0].portalUrl).toBe(
+        'https://datadog.wd5.myworkdayjobs.com/en-US/careers/candidateHome'
+      );
+
+      unwatch();
+    });
+
+    it('enriches an existing tracked application when candidate portal URL appears on success page', async () => {
+      // Simulate existing tracked application created earlier without portalUrl
+      const existingApp = {
+        id: 'app_existing_123',
+        company: 'Stripe',
+        title: 'Infrastructure Engineer',
+        url: window.location.href,
+        appliedDate: new Date().toISOString(),
+        status: 'Applied' as const,
+        updatedAt: new Date().toISOString(),
+      };
+
+      resetMockChromeStorage({
+        jobTrackerEnabled: true,
+        autoTrackOnSubmit: true,
+        applications: [existingApp],
+      });
+
+      document.body.innerHTML = `
+        <div id="company-header" class="company">Stripe</div>
+        <h1>Infrastructure Engineer</h1>
+        <form id="job-form">
+          <button id="submit-btn" type="submit">Submit Application</button>
+        </form>
+        <div id="success-box" class="confirmation" style="display: none;">
+          <h2>Thank you for your application!</h2>
+          <a href="https://my.smartrecruiters.com/candidate/applications">
+            Track your application on SmartRecruiters
+          </a>
+        </div>
+      `;
+
+      const trackedApps: any[] = [];
+      const unwatch = initSubmissionWatcher({
+        onAutoTracked: (app) => trackedApps.push(app),
+      });
+
+      const submitBtn = document.getElementById('submit-btn')!;
+      submitBtn.click();
+
+      // Show confirmation
+      document.getElementById('job-form')!.style.display = 'none';
+      document.getElementById('success-box')!.style.display = 'block';
+
+      await new Promise((r) => setTimeout(r, 400));
+
+      // Should have triggered onAutoTracked with updated portalUrl
+      expect(trackedApps.length).toBe(1);
+      expect(trackedApps[0].id).toBe('app_existing_123');
+      expect(trackedApps[0].portalUrl).toBe('https://my.smartrecruiters.com/candidate/applications');
+
+      unwatch();
     });
   });
 });

@@ -11,30 +11,30 @@ import { QuestionsTab } from './QuestionsTab';
 import { SettingsTab } from './SettingsTab';
 import { ApplicationsTab } from './ApplicationsTab';
 
-export const parseTabFromUrl = (): 'profile' | 'questions' | 'applications' | 'settings' => {
+export const parseTabFromUrl = (): 'applications' | 'profile' | 'questions' | 'settings' => {
   try {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab')?.toLowerCase();
     if (tabParam === 'applications' || tabParam === 'tracker' || tabParam === 'jobs') return 'applications';
+    if (tabParam === 'profile') return 'profile';
     if (tabParam === 'questions' || tabParam === 'qa') return 'questions';
     if (tabParam === 'settings' || tabParam === 'models') return 'settings';
-    if (tabParam === 'profile') return 'profile';
 
     const hash = window.location.hash.toLowerCase();
     if (hash === '#applications' || hash === '#tracker' || hash === '#jobs') return 'applications';
+    if (hash === '#profile') return 'profile';
     if (hash === '#questions' || hash === '#qa') return 'questions';
     if (hash === '#settings' || hash === '#models') return 'settings';
-    if (hash === '#profile') return 'profile';
   } catch {
     // Ignore
   }
-  return 'profile';
+  return 'applications';
 };
 
 export const App: React.FC = () => {
   const [data, setData] = useState<StorageData>(defaultStorageData);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'profile' | 'questions' | 'applications' | 'settings'>(parseTabFromUrl);
+  const [activeTab, setActiveTab] = useState<'applications' | 'profile' | 'questions' | 'settings'>(parseTabFromUrl);
   const [savedBanner, setSavedBanner] = useState(false);
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const handleTabChange = (tab: 'profile' | 'questions' | 'applications' | 'settings') => {
+  const handleTabChange = (tab: 'applications' | 'profile' | 'questions' | 'settings') => {
     setActiveTab(tab);
     try {
       window.history.replaceState(null, '', `?tab=${tab}#${tab}`);
@@ -145,14 +145,14 @@ export const App: React.FC = () => {
 
           <div className="flex items-center gap-2">
             {savedBanner && (
-              <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2 py-0.5 rounded-md animate-in fade-in duration-200">
-                <Check className="w-3 h-3" /> Saved
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2 py-0.5 rounded-md animate-pop">
+                <Check className="w-3 h-3 text-emerald-400" /> Saved
               </span>
             )}
             <button
               onClick={openInFullTab}
               title="Open settings in a new browser tab"
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition active:scale-95 cursor-pointer"
             >
               <Maximize2 className="w-4 h-4" />
             </button>
@@ -165,9 +165,9 @@ export const App: React.FC = () => {
         {/* Navigation Tabs */}
         <div className="flex border-b border-slate-200 mb-4 sm:mb-6">
           {[
+            { id: 'applications', short: 'Tracker', label: 'Job Tracker', icon: Briefcase },
             { id: 'profile', short: 'Profile', label: 'Candidate Profile', icon: User },
             { id: 'questions', short: 'Q&A Bank', label: 'Screening Q&A', icon: HelpCircle },
-            { id: 'applications', short: 'Tracker', label: 'Job Tracker', icon: Briefcase },
             { id: 'settings', short: 'AI Models', label: 'AI Settings', icon: Cpu },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -176,13 +176,13 @@ export const App: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id as any)}
-                className={`flex-1 flex items-center justify-center gap-1.5 pb-2.5 sm:pb-3 px-1 sm:px-4 text-xs font-semibold border-b-2 transition ${
+                className={`flex-1 flex items-center justify-center gap-1.5 pb-2.5 sm:pb-3 px-1 sm:px-4 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
                   isActive
                     ? 'border-sky-600 text-sky-600'
                     : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-sky-600' : 'text-slate-400'}`} />
+                <Icon className={`w-3.5 h-3.5 transition-transform ${isActive ? 'text-sky-600 scale-105' : 'text-slate-400'}`} />
                 <span className="sm:hidden">{tab.short}</span>
                 <span className="hidden sm:inline">{tab.label}</span>
               </button>
@@ -191,39 +191,47 @@ export const App: React.FC = () => {
         </div>
 
         {/* Tab Contents */}
+        {activeTab === 'applications' && (
+          <div className="animate-fade-in">
+            <ApplicationsTab
+              applications={data.applications || []}
+              jobTrackerEnabled={data.jobTrackerEnabled ?? true}
+              autoTrackOnSubmit={data.autoTrackOnSubmit ?? true}
+              onSaveApplications={handleSaveApplications}
+              onToggleJobTracker={handleToggleJobTracker}
+              onToggleAutoTrackOnSubmit={handleToggleAutoTrackOnSubmit}
+            />
+          </div>
+        )}
+
         {activeTab === 'profile' && (
-          <ProfileTab profile={data.profile} onSaveProfile={handleSaveProfile} />
+          <div className="animate-fade-in">
+            <ProfileTab profile={data.profile} onSaveProfile={handleSaveProfile} />
+          </div>
         )}
 
         {activeTab === 'questions' && (
-          <QuestionsTab
-            wizardAnswers={data.wizardAnswers}
-            questionBank={data.questionBank}
-            customPasteBank={data.customPasteBank}
-            onSaveQuestions={handleSaveQuestions}
-          />
-        )}
-
-        {activeTab === 'applications' && (
-          <ApplicationsTab
-            applications={data.applications || []}
-            jobTrackerEnabled={data.jobTrackerEnabled ?? true}
-            autoTrackOnSubmit={data.autoTrackOnSubmit ?? true}
-            onSaveApplications={handleSaveApplications}
-            onToggleJobTracker={handleToggleJobTracker}
-            onToggleAutoTrackOnSubmit={handleToggleAutoTrackOnSubmit}
-          />
+          <div className="animate-fade-in">
+            <QuestionsTab
+              wizardAnswers={data.wizardAnswers}
+              questionBank={data.questionBank}
+              customPasteBank={data.customPasteBank}
+              onSaveQuestions={handleSaveQuestions}
+            />
+          </div>
         )}
 
         {activeTab === 'settings' && (
-          <SettingsTab
-            settings={data.llmSettings}
-            onSaveSettings={handleSaveSettings}
-            jobTrackerEnabled={data.jobTrackerEnabled ?? true}
-            autoTrackOnSubmit={data.autoTrackOnSubmit ?? true}
-            onToggleJobTracker={handleToggleJobTracker}
-            onToggleAutoTrackOnSubmit={handleToggleAutoTrackOnSubmit}
-          />
+          <div className="animate-fade-in">
+            <SettingsTab
+              settings={data.llmSettings}
+              onSaveSettings={handleSaveSettings}
+              jobTrackerEnabled={data.jobTrackerEnabled ?? true}
+              autoTrackOnSubmit={data.autoTrackOnSubmit ?? true}
+              onToggleJobTracker={handleToggleJobTracker}
+              onToggleAutoTrackOnSubmit={handleToggleAutoTrackOnSubmit}
+            />
+          </div>
         )}
       </main>
     </div>

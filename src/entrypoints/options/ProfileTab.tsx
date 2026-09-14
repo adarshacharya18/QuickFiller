@@ -215,7 +215,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
         </div>
 
         {parseNotice && (
-          <div className="flex items-center gap-2 p-2.5 sm:p-3 bg-emerald-50 text-emerald-800 text-xs rounded-xl border border-emerald-200">
+          <div className="flex items-center gap-2 p-2.5 sm:p-3 bg-emerald-50 text-emerald-800 text-xs rounded-xl border border-emerald-200 animate-slide-down">
             <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
             <span className="text-[11px] sm:text-xs">{parseNotice}</span>
           </div>
@@ -700,7 +700,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
         </span>
         <button
           onClick={() => onSaveProfile(formData)}
-          className="bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs px-5 py-2 rounded-lg shadow-sm transition flex items-center gap-1.5"
+          className="bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-medium text-xs px-5 py-2 rounded-lg shadow-sm transition flex items-center gap-1.5"
         >
           <CheckCircle className="w-4 h-4" />
           Save Profile

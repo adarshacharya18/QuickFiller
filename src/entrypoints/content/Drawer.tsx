@@ -872,7 +872,10 @@ export const Drawer: React.FC = () => {
   const totalFields = standardFields.length + customQuestions.length;
 
   return (
-    <div className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[2147483647] font-sans text-slate-800 text-sm">
+    <div
+      data-quickfiller-ui="true"
+      className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[2147483647] font-sans text-slate-800 text-sm"
+    >
       {/* Auto-Tracked Toast when collapsed */}
       {!isOpen && autoTrackedToast && (
         <div className="mb-2 bg-slate-900 border border-emerald-500/40 text-white p-3 rounded-2xl shadow-2xl flex items-center justify-between gap-3 text-xs animate-slide-up max-w-xs">

@@ -6,6 +6,7 @@ import {
   extractJobMetadata,
   getCleanFormatHint,
   scanFormFields,
+  isInsideQuickFillerDrawer,
 } from '../src/utils/scanner';
 
 describe('Scanner & Field Identification', () => {
@@ -187,6 +188,70 @@ describe('Scanner & Field Identification', () => {
       expect(getCleanFormatHint('e.g. John Doe')).toBe('e.g. John Doe');
       expect(getCleanFormatHint('https://linkedin.com/in/username')).toBe('https://linkedin.com/in/username');
       expect(getCleanFormatHint('MM/DD/YYYY')).toBe('MM/DD/YYYY');
+    });
+  });
+
+  describe('QuickFiller UI Isolation & Question Deduplication', () => {
+    it('accurately identifies elements inside quickfiller-drawer UI', () => {
+      const normalInput = document.createElement('input');
+      document.body.appendChild(normalInput);
+      expect(isInsideQuickFillerDrawer(normalInput)).toBe(false);
+
+      const drawerHost = document.createElement('quickfiller-drawer');
+      const drawerShadow = drawerHost.attachShadow({ mode: 'open' });
+      const drawerInput = document.createElement('textarea');
+      drawerShadow.appendChild(drawerInput);
+      document.body.appendChild(drawerHost);
+
+      expect(isInsideQuickFillerDrawer(drawerInput)).toBe(true);
+      expect(isInsideQuickFillerDrawer(drawerHost)).toBe(true);
+    });
+
+    it('completely excludes textareas and inputs inside quickfiller-drawer from scanFormFields', () => {
+      // 1 legitimate question on the web page
+      const pageDiv = document.createElement('div');
+      pageDiv.innerHTML = `
+        <label for="page-q1">Why do you want to join our engineering team?</label>
+        <textarea id="page-q1"></textarea>
+      `;
+      document.body.appendChild(pageDiv);
+
+      // Injected QuickFiller drawer UI with its own internal textareas and inputs
+      const drawerHost = document.createElement('quickfiller-drawer');
+      const drawerShadow = drawerHost.attachShadow({ mode: 'open' });
+      const drawerDiv = document.createElement('div');
+      drawerDiv.setAttribute('data-quickfiller-ui', 'true');
+      drawerDiv.innerHTML = `
+        <textarea id="drawer-q1" placeholder="Click Draft Answer"></textarea>
+        <textarea id="drawer-cover-letter" placeholder="Paste JD"></textarea>
+        <input id="drawer-search" type="text" />
+      `;
+      drawerShadow.appendChild(drawerDiv);
+      document.body.appendChild(drawerHost);
+
+      const { customQuestions } = scanFormFields();
+      expect(customQuestions.length).toBe(1);
+      expect(customQuestions[0].id).toBe('page-q1');
+    });
+
+    it('deduplicates identical question inputs on the page', () => {
+      // Page with responsive duplicate layout (e.g. desktop + mobile duplicate questions)
+      const pageDiv = document.createElement('div');
+      pageDiv.innerHTML = `
+        <div class="desktop-view">
+          <label for="q-exp">Please describe your experience leading technical projects:</label>
+          <textarea id="q-exp"></textarea>
+        </div>
+        <div class="mobile-clone">
+          <label for="q-exp-clone">Please describe your experience leading technical projects:</label>
+          <textarea id="q-exp-clone"></textarea>
+        </div>
+      `;
+      document.body.appendChild(pageDiv);
+
+      const { customQuestions } = scanFormFields();
+      expect(customQuestions.length).toBe(1);
+      expect(customQuestions[0].label).toContain('Please describe your experience');
     });
   });
 });

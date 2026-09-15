@@ -364,7 +364,43 @@ export function classifyField(
 }
 
 /**
+ * Checks if a node or element is inside the QuickFiller drawer UI (custom element or shadow root).
+ * Prevents QuickFiller's internal UI elements (textareas, inputs, search boxes) from being
+ * detected as form fields on the web page.
+ */
+export function isInsideQuickFillerDrawer(node: Node | null): boolean {
+  if (!node) return false;
+  let curr: Node | null = node;
+  while (curr) {
+    if (curr instanceof Element) {
+      const tag = curr.tagName ? curr.tagName.toLowerCase() : '';
+      if (
+        tag === 'quickfiller-drawer' ||
+        curr.getAttribute('data-quickfiller-ui') === 'true' ||
+        curr.hasAttribute('wxt-shadow-root-document-styles')
+      ) {
+        return true;
+      }
+    }
+    if (curr instanceof ShadowRoot) {
+      const hostTag = curr.host?.tagName ? curr.host.tagName.toLowerCase() : '';
+      if (
+        hostTag === 'quickfiller-drawer' ||
+        curr.host?.getAttribute('data-quickfiller-ui') === 'true'
+      ) {
+        return true;
+      }
+      curr = curr.host;
+      continue;
+    }
+    curr = curr.parentNode;
+  }
+  return false;
+}
+
+/**
  * Recursively queries elements across light DOM, open Shadow Roots, and same-origin iframes.
+ * Strictly ignores the QuickFiller Copilot Drawer UI and deduplicates discovered elements.
  */
 export function querySelectorAllDeep<T extends Element = Element>(
   selector: string,
@@ -372,15 +408,25 @@ export function querySelectorAllDeep<T extends Element = Element>(
 ): T[] {
   const results: T[] = [];
   const visitedRoots = new Set<Node>();
+  const seenElements = new Set<Element>();
 
   function traverse(node: Document | Element | ShadowRoot) {
     if (!node || visitedRoots.has(node)) return;
     visitedRoots.add(node);
 
+    // Skip traversing if this node is inside or is the QuickFiller drawer UI
+    if (isInsideQuickFillerDrawer(node)) {
+      return;
+    }
+
     try {
       const matches = node.querySelectorAll<T>(selector);
       for (let i = 0; i < matches.length; i++) {
-        results.push(matches[i]);
+        const el = matches[i];
+        if (!seenElements.has(el) && !isInsideQuickFillerDrawer(el)) {
+          seenElements.add(el);
+          results.push(el);
+        }
       }
     } catch {
       // Ignore selector errors
@@ -390,6 +436,14 @@ export function querySelectorAllDeep<T extends Element = Element>(
       const allElements = node.querySelectorAll('*');
       for (let i = 0; i < allElements.length; i++) {
         const el = allElements[i];
+
+        // Do not traverse into QuickFiller drawer or its ShadowRoot
+        if (
+          (el.tagName && el.tagName.toLowerCase() === 'quickfiller-drawer') ||
+          isInsideQuickFillerDrawer(el)
+        ) {
+          continue;
+        }
 
         // 1. Traverse open Shadow Roots (e.g. Darwinbox dbx-ds-text-input, Stencil, Lit)
         if (el.shadowRoot) {
@@ -428,10 +482,20 @@ export function scanFormFields(): {
 
   const standardFields: DetectedField[] = [];
   const customQuestions: DetectedField[] = [];
+  const seenElements = new Set<Element>();
+  const seenQuestionKeys = new Set<string>();
+  const seenStandardKeys = new Set<string>();
 
   inputs.forEach((elem, index) => {
-    // Check visibility without dropping fixed-position modals or shadow elements
-    if (!isElementVisible(elem) && elem.tagName !== 'TEXTAREA') return;
+    // 1. Never scan inside QuickFiller's own UI
+    if (isInsideQuickFillerDrawer(elem)) return;
+
+    // 2. Check visibility without dropping fixed-position modals or shadow elements
+    if (!isElementVisible(elem)) return;
+
+    // 3. Skip if this exact DOM element was already processed
+    if (seenElements.has(elem)) return;
+    seenElements.add(elem);
 
     const label = findFieldLabel(elem);
     const classification = classifyField(elem, label);
@@ -458,8 +522,44 @@ export function scanFormFields(): {
     };
 
     if (classification === 'custom_question' || classification === 'cover_letter') {
+      const normLabel = (field.label || '').trim().toLowerCase();
+      const cleanLabel = normLabel
+        .replace(/\s*[\*:]\s*$/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const normName = (elem.getAttribute('name') || '').trim().toLowerCase();
+      const elemId = (elem.id || '').trim().toLowerCase();
+
+      // Determine unique signature for deduplicating identical questions on the page
+      // Prioritize meaningful question label/prompt so responsive clone inputs with different IDs share the same question entry
+      const hasMeaningfulLabel =
+        cleanLabel &&
+        !cleanLabel.startsWith('field #') &&
+        cleanLabel.length > 8;
+
+      const dedupKey = hasMeaningfulLabel
+        ? `label:${cleanLabel}`
+        : elemId
+        ? `id:${elemId}`
+        : normName
+        ? `name:${normName}`
+        : `idx:${index}`;
+
+      if (seenQuestionKeys.has(dedupKey)) {
+        return;
+      }
+      seenQuestionKeys.add(dedupKey);
+
       customQuestions.push(field);
     } else {
+      const elemId = (elem.id || elem.getAttribute('name') || '').trim().toLowerCase();
+      const stdKey = elemId ? `${classification}:${elemId}` : null;
+      if (stdKey) {
+        if (seenStandardKeys.has(stdKey)) {
+          return;
+        }
+        seenStandardKeys.add(stdKey);
+      }
       standardFields.push(field);
     }
   });

@@ -22,7 +22,17 @@ import {
   BookmarkPlus,
   CheckCircle,
   Briefcase,
+  Send,
+  UserCheck,
+  Terminal,
 } from 'lucide-react';
+import { OutreachPersona, OutreachResult } from '../../types/outreach';
+import { generateAnswer } from '../../utils/llm';
+import {
+  buildOutreachSystemPrompt,
+  buildOutreachUserPrompt,
+  parseOutreachResponse,
+} from '../../utils/llm/outreachPrompt';
 import {
   scanFormFields,
   extractJobMetadata,
@@ -96,7 +106,20 @@ export const Drawer: React.FC = () => {
   const [customQuestions, setCustomQuestions] = useState<DetectedField[]>([]);
   const [radioGroups, setRadioGroups] = useState<DetectedRadioGroup[]>([]);
   const [jobMetadata, setJobMetadata] = useState<JobMetadata | null>(null);
-  const [activeTab, setActiveTab] = useState<'autofill' | 'questions' | 'coverLetter' | 'bank'>('autofill');
+  const [activeTab, setActiveTab] = useState<'autofill' | 'questions' | 'coverLetter' | 'outreach' | 'bank'>('autofill');
+
+  // Outreach Studio State
+  const [outreachDraft, setOutreachDraft] = useState('');
+  const [outreachPersona, setOutreachPersona] = useState<OutreachPersona>('recruiter');
+  const [outreachTargetCompany, setOutreachTargetCompany] = useState('');
+  const [outreachTargetRole, setOutreachTargetRole] = useState('');
+  const [outreachContextNotes, setOutreachContextNotes] = useState('');
+  const [isGeneratingOutreach, setIsGeneratingOutreach] = useState(false);
+  const [outreachResult, setOutreachResult] = useState<OutreachResult | null>(null);
+  const [outreachCopiedVariant, setOutreachCopiedVariant] = useState<'note' | 'pitch' | null>(null);
+  const [outreachInsertedVariant, setOutreachInsertedVariant] = useState<'note' | 'pitch' | null>(null);
+  const [outreachError, setOutreachError] = useState<string | null>(null);
+  const hasUserSelectedTab = useRef(false);
 
   // Cover Letter Generator State
   const [targetCompany, setTargetCompany] = useState('');
@@ -304,6 +327,12 @@ export const Drawer: React.FC = () => {
     setRadioGroups(rg || []);
     const meta = extractJobMetadata();
     setJobMetadata(meta);
+
+    // Auto-switch to outreach tab on non-job pages if user hasn't explicitly selected a tab
+    const total = std.length + cq.length + (rg ? rg.length : 0);
+    if (total === 0 && !hasUserSelectedTab.current) {
+      setActiveTab((prev) => (prev === 'autofill' ? 'outreach' : prev));
+    }
   };
 
   const refreshStorage = async () => {
@@ -817,6 +846,150 @@ export const Drawer: React.FC = () => {
     await handleSaveAnswerToPasteBank(`Cover Letter: ${role} at ${company}`, cleanText, 'cover_letter_save');
   };
 
+  // Outreach Studio Handlers
+  const handleExtractPageContextForOutreach = () => {
+    const meta = jobMetadata || extractJobMetadata();
+    let company = (meta.company && meta.company !== 'Company') ? meta.company : '';
+    let role = (meta.title && meta.title !== 'Job Application') ? meta.title : '';
+
+    if (!company || !role) {
+      const docTitle = document.title || '';
+      const cleanDocTitle = docTitle.replace(/\s*[-–—|]\s*(LinkedIn|Twitter|X|GitHub|Gmail)$/i, '').trim();
+      if (!role && cleanDocTitle) {
+        const atMatch = cleanDocTitle.match(/^(?:.*?\s*[-–—|]\s*)?(.*?)\s+(?:at|@)\s+([^–—|]+)/i);
+        if (atMatch) {
+          if (!role) role = atMatch[1].trim();
+          if (!company) company = atMatch[2].trim();
+        } else if (!company && cleanDocTitle.includes(' - ')) {
+          const parts = cleanDocTitle.split(' - ');
+          if (parts.length >= 2) {
+            role = parts[1].trim();
+          }
+        }
+      }
+    }
+
+    if (company) setOutreachTargetCompany(company);
+    if (role) setOutreachTargetRole(role);
+
+    setBankNotice({
+      type: 'success',
+      message: company || role 
+        ? `Context extracted: ${[company, role].filter(Boolean).join(' • ')}`
+        : 'Page inspected. You can enter company or role details below.',
+    });
+    setTimeout(() => setBankNotice(null), 3000);
+  };
+
+  const handleGenerateOutreach = async (instructionModifier?: string) => {
+    if (!outreachDraft.trim()) {
+      setBankNotice({
+        type: 'info',
+        message: 'Please write some raw thoughts or a draft to enhance.',
+      });
+      setTimeout(() => setBankNotice(null), 3000);
+      return;
+    }
+
+    if (!isExtensionValid()) {
+      setBankNotice({
+        type: 'info',
+        message: 'Extension was reloaded. Please refresh the page to reconnect.',
+      });
+      setTimeout(() => setBankNotice(null), 4000);
+      return;
+    }
+
+    setIsGeneratingOutreach(true);
+    setOutreachError(null);
+
+    const currentStorage = storage || (await refreshStorage());
+    const company = outreachTargetCompany.trim() || (jobMetadata?.company !== 'Company' ? jobMetadata?.company : '') || '';
+    const role = outreachTargetRole.trim() || (jobMetadata?.title !== 'Job Application' ? jobMetadata?.title : '') || '';
+    let contextNotes = outreachContextNotes.trim();
+    if (instructionModifier) {
+      contextNotes = contextNotes ? `${contextNotes} (Note: ${instructionModifier})` : instructionModifier;
+    }
+
+    try {
+      const resp = await chrome.runtime.sendMessage({
+        type: 'GENERATE_OUTREACH',
+        options: {
+          rawDraft: outreachDraft,
+          persona: outreachPersona,
+          company,
+          role,
+          contextNotes,
+        },
+      });
+
+      if (resp?.success && resp.result) {
+        setOutreachResult(resp.result);
+      } else if (resp?.error) {
+        setOutreachError(resp.error);
+      } else {
+        // Fallback directly to prompt parsing in mock or isolated environment
+        const systemPrompt = buildOutreachSystemPrompt(
+          currentStorage.profile,
+          outreachPersona,
+          currentStorage.customPasteBank || []
+        );
+        const userPrompt = buildOutreachUserPrompt({
+          rawDraft: outreachDraft,
+          persona: outreachPersona,
+          company,
+          role,
+          contextNotes,
+          candidateProfile: currentStorage.profile,
+          pasteBank: currentStorage.customPasteBank || [],
+        });
+        const rawAnswer = await generateAnswer(currentStorage.llmSettings, systemPrompt, userPrompt);
+        const parsed = parseOutreachResponse(rawAnswer, outreachPersona);
+        setOutreachResult(parsed);
+      }
+    } catch (err: any) {
+      console.error('[QuickFiller] Outreach generation failed:', err);
+      try {
+        const systemPrompt = buildOutreachSystemPrompt(
+          currentStorage.profile,
+          outreachPersona,
+          currentStorage.customPasteBank || []
+        );
+        const userPrompt = buildOutreachUserPrompt({
+          rawDraft: outreachDraft,
+          persona: outreachPersona,
+          company,
+          role,
+          contextNotes,
+          candidateProfile: currentStorage.profile,
+          pasteBank: currentStorage.customPasteBank || [],
+        });
+        const rawAnswer = await generateAnswer(currentStorage.llmSettings, systemPrompt, userPrompt);
+        const parsed = parseOutreachResponse(rawAnswer, outreachPersona);
+        setOutreachResult(parsed);
+      } catch (fallbackErr: any) {
+        setOutreachError(fallbackErr.message || err.message || 'Failed to refine outreach message.');
+      }
+    } finally {
+      setIsGeneratingOutreach(false);
+    }
+  };
+
+  const handleCopyOutreach = (variant: 'note' | 'pitch', text: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      setOutreachCopiedVariant(variant);
+      setTimeout(() => setOutreachCopiedVariant(null), 2000);
+    });
+  };
+
+  const handleInsertOutreach = (variant: 'note' | 'pitch', text: string) => {
+    if (!text) return;
+    handleInsertAtCursor(text, `outreach_${variant}`);
+    setOutreachInsertedVariant(variant);
+    setTimeout(() => setOutreachInsertedVariant(null), 2000);
+  };
+
   const autofillAllStandard = async () => {
     setAutofillBanner(null);
     const currentStorage = await refreshStorage();
@@ -1124,6 +1297,7 @@ export const Drawer: React.FC = () => {
               { id: 'autofill', label: 'Autofill', count: standardFields.length + radioGroups.length },
               { id: 'questions', label: 'Answers', count: customQuestions.length },
               { id: 'coverLetter', label: 'Cover Letter', count: null },
+              { id: 'outreach', label: 'Outreach', count: null },
               { id: 'bank', label: 'Paste Bank', count: (storage?.customPasteBank?.length || 0) > 0 ? storage!.customPasteBank.length : null },
             ].map((tab) => {
               const isActive = activeTab === tab.id;
@@ -1131,6 +1305,7 @@ export const Drawer: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => {
+                    hasUserSelectedTab.current = true;
                     setActiveTab(tab.id as any);
                     if (tab.id === 'autofill' || tab.id === 'questions') {
                       scanPage();
@@ -1819,6 +1994,324 @@ export const Drawer: React.FC = () => {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB: Outreach Studio */}
+            {activeTab === 'outreach' && (
+              <div className="space-y-3 animate-fade-in">
+                <div className="bg-white rounded-xl p-3 sm:p-3.5 border border-slate-200/80 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-indigo-50 border border-indigo-200/60 text-indigo-600 rounded-lg">
+                        <Send className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-xs text-slate-800">Outreach Studio</h4>
+                        <p className="text-[10px] text-slate-500">Refine raw thoughts into high-impact messages</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleExtractPageContextForOutreach}
+                      title="Extract company or person from current page"
+                      className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3 text-indigo-500" />
+                      <span>Extract Context</span>
+                    </button>
+                  </div>
+
+                  {/* Target Persona Switcher */}
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">
+                      Target Audience
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100/90 rounded-lg border border-slate-200/80">
+                      <button
+                        type="button"
+                        onClick={() => setOutreachPersona('recruiter')}
+                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-medium transition cursor-pointer ${
+                          outreachPersona === 'recruiter'
+                            ? 'bg-white text-indigo-700 shadow-xs font-semibold'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <UserCheck className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Recruiter / HR</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOutreachPersona('technical')}
+                        className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-medium transition cursor-pointer ${
+                          outreachPersona === 'technical'
+                            ? 'bg-white text-indigo-700 shadow-xs font-semibold'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Terminal className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Engineering Lead</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Raw Draft Textarea */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                        Your Raw Thoughts / Draft
+                      </label>
+                      <span className="text-[10px] text-slate-400">
+                        {outreachDraft.length} chars
+                      </span>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={outreachDraft}
+                      onChange={(e) => setOutreachDraft(e.target.value)}
+                      placeholder={
+                        outreachPersona === 'recruiter'
+                          ? "e.g., noticed your team has an opening for a frontend engineer, applied on your portal, wanted to say hi and share my portfolio..."
+                          : "e.g., hey saw your team uses Go and Kafka for real-time streaming, saw the backend opening, wanted to ask about your event-driven setup..."
+                      }
+                      className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 outline-hidden transition resize-none placeholder:text-slate-400"
+                    />
+                  </div>
+
+                  {/* Target Company & Role */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                        Company / Org
+                      </label>
+                      <input
+                        type="text"
+                        value={outreachTargetCompany}
+                        onChange={(e) => setOutreachTargetCompany(e.target.value)}
+                        placeholder="e.g. Stripe, Acme"
+                        className="w-full text-xs p-2 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 outline-hidden transition placeholder:text-slate-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                        Role / Context
+                      </label>
+                      <input
+                        type="text"
+                        value={outreachTargetRole}
+                        onChange={(e) => setOutreachTargetRole(e.target.value)}
+                        placeholder="e.g. Senior Backend"
+                        className="w-full text-xs p-2 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 outline-hidden transition placeholder:text-slate-400"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Additional Context Notes */}
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+                      Optional Hook / Context
+                    </label>
+                    <input
+                      type="text"
+                      value={outreachContextNotes}
+                      onChange={(e) => setOutreachContextNotes(e.target.value)}
+                      placeholder="e.g. Spoke at ReactConf, loved their recent tech blog"
+                      className="w-full text-xs p-2 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 outline-hidden transition placeholder:text-slate-400"
+                    />
+                  </div>
+
+                  {/* Generate Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateOutreach()}
+                    disabled={isGeneratingOutreach || !outreachDraft.trim()}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] disabled:opacity-50 text-white rounded-lg font-medium text-xs shadow-xs transition cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    {isGeneratingOutreach ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Refining Message...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-200" />
+                        <span>Refine Message</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Error Alert */}
+                  {outreachError && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-2 text-rose-700 text-xs">
+                      <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-[11px]">{outreachError}</p>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenOptionsPage('settings')}
+                          className="mt-1 text-[10px] text-rose-800 underline font-semibold cursor-pointer"
+                        >
+                          Check QuickFiller Settings & LLM API Keys
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Results: Dual Variants */}
+                  {outreachResult && (
+                    <div className="space-y-3 pt-2 border-t border-slate-200/80">
+                      {/* Variant A: Connection Note */}
+                      <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-200/80 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-xs text-slate-800">
+                              Variant A: Connection Note
+                            </span>
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium border ${
+                                outreachResult.connectionNoteCharCount <= 300
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}
+                              title={
+                                outreachResult.connectionNoteCharCount <= 300
+                                  ? 'Within LinkedIn 300 character limit'
+                                  : 'Exceeds standard 300 character limit'
+                              }
+                            >
+                              {outreachResult.connectionNoteCharCount} / 300 chars
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleCopyOutreach('note', outreachResult.connectionNote)}
+                              className="flex items-center gap-1 px-2 py-1 bg-white hover:bg-slate-100 text-slate-700 text-[11px] font-medium rounded border border-slate-200 transition active:scale-95 cursor-pointer"
+                              title="Copy to clipboard"
+                            >
+                              {outreachCopiedVariant === 'note' ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span className="text-emerald-700">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3 text-slate-500" />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleInsertOutreach('note', outreachResult.connectionNote)}
+                              className="flex items-center gap-1 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-medium rounded border border-indigo-200/60 transition active:scale-95 cursor-pointer"
+                              title="Insert into active input on the page"
+                            >
+                              {outreachInsertedVariant === 'note' ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span>Inserted!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ArrowDownToLine className="w-3 h-3 text-indigo-600" />
+                                  <span>Insert</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="p-2.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 leading-relaxed whitespace-pre-wrap select-text">
+                          {outreachResult.connectionNote}
+                        </div>
+                      </div>
+
+                      {/* Variant B: High-Impact Pitch */}
+                      <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-200/80 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-xs text-slate-800">
+                              Variant B: High-Impact Pitch
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-slate-200/70 text-slate-600 border border-slate-300/60">
+                              {outreachResult.fullPitchWordCount} words
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleCopyOutreach('pitch', outreachResult.fullPitch)}
+                              className="flex items-center gap-1 px-2 py-1 bg-white hover:bg-slate-100 text-slate-700 text-[11px] font-medium rounded border border-slate-200 transition active:scale-95 cursor-pointer"
+                              title="Copy to clipboard"
+                            >
+                              {outreachCopiedVariant === 'pitch' ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span className="text-emerald-700">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3 text-slate-500" />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleInsertOutreach('pitch', outreachResult.fullPitch)}
+                              className="flex items-center gap-1 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-medium rounded border border-indigo-200/60 transition active:scale-95 cursor-pointer"
+                              title="Insert into active input on the page"
+                            >
+                              {outreachInsertedVariant === 'pitch' ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span>Inserted!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ArrowDownToLine className="w-3 h-3 text-indigo-600" />
+                                  <span>Insert</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="p-2.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 leading-relaxed whitespace-pre-wrap select-text max-h-[220px] overflow-y-auto">
+                          {outreachResult.fullPitch}
+                        </div>
+                      </div>
+
+                      {/* Quick Tone Iteration Modifiers */}
+                      <div className="flex items-center gap-1.5 pt-1 overflow-x-auto pb-1">
+                        <span className="text-[10px] text-slate-400 font-medium shrink-0">Quick Refine:</span>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateOutreach('Make it even more concise and direct.')}
+                          disabled={isGeneratingOutreach}
+                          className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium transition active:scale-95 whitespace-nowrap cursor-pointer"
+                        >
+                          Shorter
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateOutreach('Highlight deeper technical architecture and tech stack specifics.')}
+                          disabled={isGeneratingOutreach}
+                          className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium transition active:scale-95 whitespace-nowrap cursor-pointer"
+                        >
+                          More Technical
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateOutreach('Make the tone slightly more conversational and peer-friendly.')}
+                          disabled={isGeneratingOutreach}
+                          className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium transition active:scale-95 whitespace-nowrap cursor-pointer"
+                        >
+                          More Casual
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

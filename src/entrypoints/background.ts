@@ -10,6 +10,11 @@ import {
   buildCoverLetterUserPrompt,
   cleanCoverLetterOutput,
 } from '../utils/llm/coverLetterPrompt';
+import {
+  buildOutreachSystemPrompt,
+  buildOutreachUserPrompt,
+  parseOutreachResponse,
+} from '../utils/llm/outreachPrompt';
 import { isSafeExternalUrl } from '../utils/security';
 
 export default defineBackground(() => {
@@ -246,6 +251,40 @@ export default defineBackground(() => {
         })
         .catch((err) => {
           console.error('[QuickFiller] Cover letter generation error:', err);
+          sendResponse({ success: false, error: err.message });
+        });
+      return true;
+    }
+
+    if (message?.type === 'GENERATE_OUTREACH') {
+      const { options, llmSettings } = message;
+
+      getStorageData()
+        .then(async (storage) => {
+          const activeSettings = llmSettings || storage.llmSettings;
+          if (activeSettings?.provider === 'ollama') {
+            await setupOllamaDNRRules(activeSettings.ollama?.host);
+          }
+
+          const persona = options?.persona || 'recruiter';
+          const systemPrompt = buildOutreachSystemPrompt(
+            storage.profile,
+            persona,
+            storage.customPasteBank || []
+          );
+
+          const userPrompt = buildOutreachUserPrompt({
+            ...options,
+            candidateProfile: storage.profile,
+            pasteBank: storage.customPasteBank || [],
+          });
+
+          const rawAnswer = await generateAnswer(activeSettings, systemPrompt, userPrompt);
+          const result = parseOutreachResponse(rawAnswer, persona);
+          sendResponse({ success: true, result });
+        })
+        .catch((err) => {
+          console.error('[QuickFiller] Outreach generation error:', err);
           sendResponse({ success: false, error: err.message });
         });
       return true;

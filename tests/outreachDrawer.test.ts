@@ -21,7 +21,7 @@ describe('Outreach Studio Workflow & State Engine', () => {
 
   describe('Non-Job Page Smart Tab Defaulting Logic', () => {
     it('defaults activeTab to outreach when 0 form fields exist and user has not manually switched', () => {
-      let activeTab: 'autofill' | 'questions' | 'coverLetter' | 'outreach' | 'bank' = 'autofill';
+      let activeTab: 'autofill' | 'coverLetter' | 'outreach' | 'bank' = 'autofill';
       const hasUserSelectedTab = { current: false };
 
       // Simulate scanPage on a non-job page (e.g. LinkedIn profile)
@@ -40,7 +40,7 @@ describe('Outreach Studio Workflow & State Engine', () => {
     });
 
     it('preserves user tab selection if user explicitly selected another tab', () => {
-      let activeTab: 'autofill' | 'questions' | 'coverLetter' | 'outreach' | 'bank' = 'autofill';
+      let activeTab: 'autofill' | 'coverLetter' | 'outreach' | 'bank' = 'autofill';
       const hasUserSelectedTab = { current: true }; // User explicitly clicked 'autofill'
 
       const total = 0;
@@ -54,7 +54,7 @@ describe('Outreach Studio Workflow & State Engine', () => {
     });
 
     it('defaults to autofill when fields exist on an ATS page', () => {
-      let activeTab: 'autofill' | 'questions' | 'coverLetter' | 'outreach' | 'bank' = 'autofill';
+      let activeTab: 'autofill' | 'coverLetter' | 'outreach' | 'bank' = 'autofill';
       const hasUserSelectedTab = { current: false };
 
       const total = 5; // Form fields found on ATS page

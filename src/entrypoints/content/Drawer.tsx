@@ -25,6 +25,8 @@ import {
   Send,
   UserCheck,
   Terminal,
+  GripHorizontal,
+  LocateFixed,
 } from 'lucide-react';
 import { OutreachPersona, OutreachResult } from '../../types/outreach';
 import { generateAnswer } from '../../utils/llm';
@@ -106,7 +108,33 @@ export const Drawer: React.FC = () => {
   const [customQuestions, setCustomQuestions] = useState<DetectedField[]>([]);
   const [radioGroups, setRadioGroups] = useState<DetectedRadioGroup[]>([]);
   const [jobMetadata, setJobMetadata] = useState<JobMetadata | null>(null);
-  const [activeTab, setActiveTab] = useState<'autofill' | 'questions' | 'coverLetter' | 'outreach' | 'bank'>('autofill');
+  const [activeTab, setActiveTab] = useState<'autofill' | 'coverLetter' | 'outreach' | 'bank'>('autofill');
+  const [autofillFilter, setAutofillFilter] = useState<'all' | 'questions' | 'standard' | 'radios'>('all');
+
+  // Draggable Window State
+  const [customPosition, setCustomPosition] = useState<{ x: number; y: number } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = sessionStorage.getItem('quickfiller_drawer_pos');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef<{ startX: number; startY: number; initPosX: number; initPosY: number }>({
+    startX: 0,
+    startY: 0,
+    initPosX: 0,
+    initPosY: 0,
+  });
+  const currentPosRef = useRef<{ x: number; y: number } | null>(customPosition);
+  const drawerContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Outreach Studio State
   const [outreachDraft, setOutreachDraft] = useState('');
@@ -1118,12 +1146,130 @@ export const Drawer: React.FC = () => {
     }
   };
 
+  const batchDraftAnswers = () => {
+    const ungenerated = customQuestions.filter((q) => !answers[q.id]?.trim() && !generating[q.id]);
+    if (ungenerated.length === 0) return;
+    ungenerated.forEach((q) => generateAnswerForField(q));
+  };
+
+  const clampPosition = (x: number, y: number, width: number, height: number): { x: number; y: number } => {
+    const margin = 8;
+    const maxX = Math.max(margin, window.innerWidth - width - margin);
+    const maxY = Math.max(margin, window.innerHeight - height - margin);
+    return {
+      x: Math.round(Math.max(margin, Math.min(x, maxX))),
+      y: Math.round(Math.max(margin, Math.min(y, maxY))),
+    };
+  };
+
+  useEffect(() => {
+    const handleResize = () => {
+      setCustomPosition((prev) => {
+        if (!prev || !drawerContainerRef.current) return prev;
+        const rect = drawerContainerRef.current.getBoundingClientRect();
+        const clamped = clampPosition(prev.x, prev.y, rect.width, rect.height);
+        if (clamped.x !== prev.x || clamped.y !== prev.y) {
+          currentPosRef.current = clamped;
+          try {
+            sessionStorage.setItem('quickfiller_drawer_pos', JSON.stringify(clamped));
+          } catch {}
+          return clamped;
+        }
+        return prev;
+      });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) {
+      return;
+    }
+    if (e.button !== 0) return;
+    if (!drawerContainerRef.current) return;
+
+    const rect = drawerContainerRef.current.getBoundingClientRect();
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initPosX: rect.left,
+      initPosY: rect.top,
+    };
+
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingRef.current || !drawerContainerRef.current) return;
+    const deltaX = e.clientX - dragStartRef.current.startX;
+    const deltaY = e.clientY - dragStartRef.current.startY;
+    const newX = dragStartRef.current.initPosX + deltaX;
+    const newY = dragStartRef.current.initPosY + deltaY;
+
+    const rect = drawerContainerRef.current.getBoundingClientRect();
+    const clamped = clampPosition(newX, newY, rect.width, rect.height);
+    currentPosRef.current = clamped;
+    setCustomPosition(clamped);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      setIsDragging(false);
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+      if (currentPosRef.current) {
+        try {
+          sessionStorage.setItem('quickfiller_drawer_pos', JSON.stringify(currentPosRef.current));
+        } catch {}
+      }
+    }
+  };
+
+  const handleHeaderDoubleClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) return;
+    setCustomPosition(null);
+    currentPosRef.current = null;
+    try {
+      sessionStorage.removeItem('quickfiller_drawer_pos');
+    } catch {}
+  };
+
+  const handleResetPosition = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCustomPosition(null);
+    currentPosRef.current = null;
+    try {
+      sessionStorage.removeItem('quickfiller_drawer_pos');
+    } catch {}
+  };
+
   const totalFields = standardFields.length + radioGroups.length + customQuestions.length;
 
   return (
     <div
+      ref={drawerContainerRef}
       data-quickfiller-ui="true"
-      className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[2147483647] font-sans text-slate-800 text-sm"
+      style={
+        isOpen && customPosition
+          ? {
+              position: 'fixed',
+              left: `${customPosition.x}px`,
+              top: `${customPosition.y}px`,
+              bottom: 'auto',
+              right: 'auto',
+            }
+          : undefined
+      }
+      className={`${
+        isOpen && customPosition ? '' : 'fixed bottom-3 right-3 sm:bottom-5 sm:right-5'
+      } z-[2147483647] font-sans text-slate-800 text-sm`}
     >
       {/* Auto-Tracked Toast when collapsed */}
       {!isOpen && autoTrackedToast && (
@@ -1191,13 +1337,24 @@ export const Drawer: React.FC = () => {
               : 'w-[380px] sm:w-[440px] max-w-[calc(100vw-24px)] h-[580px] sm:h-[620px] max-h-[90vh]'
           }`}
         >
-          {/* Header */}
-          <div className="bg-slate-900 text-white px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between border-b border-slate-800">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
-              <div className="p-1.5 bg-sky-500/15 border border-sky-500/30 rounded-lg flex-shrink-0">
+          {/* Header (Drag Handle) */}
+          <div
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onDoubleClick={handleHeaderDoubleClick}
+            className={`bg-slate-900 text-white px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between border-b border-slate-800 touch-none select-none transition-colors ${
+              isDragging ? 'cursor-grabbing bg-slate-950' : 'cursor-grab'
+            }`}
+            title="Drag to move Copilot window (Double-click or click dock icon to reset position)"
+          >
+            <div className="flex items-center gap-2 min-w-0 flex-1 mr-2 pointer-events-none">
+              <GripHorizontal className="w-4 h-4 text-slate-500 hover:text-slate-300 flex-shrink-0" />
+              <div className="p-1.5 bg-sky-500/15 border border-sky-500/30 rounded-lg flex-shrink-0 pointer-events-auto">
                 <Zap className="w-4 h-4 text-sky-400" />
               </div>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 pointer-events-auto">
                 <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                   <h3 className="font-semibold text-xs sm:text-sm text-slate-100 flex-shrink-0">
                     QuickFiller Copilot
@@ -1224,7 +1381,18 @@ export const Drawer: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-1 flex-shrink-0">
+              {customPosition !== null && (
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={handleResetPosition}
+                  title="Dock to bottom-right corner"
+                  className="p-1.5 text-sky-400 hover:text-white rounded-md hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <LocateFixed className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => {
                   setIsExpanded((prev) => {
                     const next = !prev;
@@ -1240,6 +1408,7 @@ export const Drawer: React.FC = () => {
                 {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
               </button>
               <button
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={scanPage}
                 title="Rescan form"
                 className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition cursor-pointer"
@@ -1247,6 +1416,7 @@ export const Drawer: React.FC = () => {
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
               <button
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => {
                   setIsOpen(false);
                   try {
@@ -1303,8 +1473,7 @@ export const Drawer: React.FC = () => {
           {/* Tab Navigation */}
           <div className="flex border-b border-slate-200 bg-slate-50/80 px-2 pt-1.5 gap-1">
             {[
-              { id: 'autofill', label: 'Autofill', count: standardFields.length + radioGroups.length },
-              { id: 'questions', label: 'Answers', count: customQuestions.length },
+              { id: 'autofill', label: 'Autofill', count: totalFields > 0 ? totalFields : null },
               { id: 'coverLetter', label: 'Cover Letter', count: null },
               { id: 'outreach', label: 'Outreach', count: null },
               { id: 'bank', label: 'Paste Bank', count: (storage?.customPasteBank?.length || 0) > 0 ? storage!.customPasteBank.length : null },
@@ -1316,11 +1485,11 @@ export const Drawer: React.FC = () => {
                   onClick={() => {
                     hasUserSelectedTab.current = true;
                     setActiveTab(tab.id as any);
-                    if (tab.id === 'autofill' || tab.id === 'questions') {
+                    if (tab.id === 'autofill') {
                       scanPage();
                     }
                   }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-1 text-xs font-medium border-b-2 transition-all rounded-t-md active:scale-95 ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-1 text-xs font-medium border-b-2 transition-all rounded-t-md active:scale-95 cursor-pointer ${
                     isActive
                       ? 'border-sky-600 text-sky-600 font-semibold bg-white shadow-xs'
                       : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/60'
@@ -1345,181 +1514,6 @@ export const Drawer: React.FC = () => {
 
           {/* Drawer Body */}
           <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-3.5 space-y-3 bg-slate-50/50">
-            {/* TAB 1: Screening Questions */}
-            {activeTab === 'questions' && (
-              <div className="space-y-3 animate-fade-in">
-                {customQuestions.length === 0 ? (
-                  <div className="text-center py-12 text-slate-400 space-y-2">
-                    <Sparkles className="w-7 h-7 mx-auto text-slate-300" />
-                    <p className="font-medium text-xs sm:text-sm text-slate-600">
-                      No custom questions detected
-                    </p>
-                    <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
-                      Navigate to an application form or use the Autofill tab.
-                    </p>
-                  </div>
-                ) : (
-                  customQuestions.map((field) => {
-                    const answer = answers[field.id] || field.value || '';
-                    const isGen = generating[field.id] || false;
-                    const formatHint = getCleanFormatHint(field.placeholder);
-
-                    return (
-                      <div
-                        key={field.id}
-                        className="bg-white rounded-xl p-3 sm:p-3.5 border border-slate-200/80 shadow-xs space-y-2.5 min-w-0 overflow-hidden"
-                      >
-                        <div className="space-y-1.5 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <label className="text-xs font-semibold text-slate-800 leading-snug break-words min-w-0 flex-1">
-                              {field.label}
-                            </label>
-                            <button
-                              disabled={isGen}
-                              onClick={() => generateAnswerForField(field)}
-                              className="flex items-center gap-1 text-[11px] bg-sky-50 text-sky-700 hover:bg-sky-100 active:scale-95 font-medium px-2 py-1 rounded-md transition disabled:opacity-50 flex-shrink-0"
-                            >
-                              <Sparkles className={`w-3 h-3 ${isGen ? 'animate-spin' : ''}`} />
-                              {answer ? 'Regenerate' : 'Draft Answer'}
-                            </button>
-                          </div>
-
-                          {formatHint && (
-                            <div className="w-full text-[10px] text-slate-600 font-mono bg-slate-100/90 border border-slate-200/70 px-2.5 py-1.5 rounded-md leading-relaxed break-words whitespace-normal select-text">
-                              <span className="font-semibold text-slate-700 mr-1.5 flex-shrink-0">Format:</span>
-                              <span className="text-slate-600 break-words">{formatHint}</span>
-                            </div>
-                          )}
-
-                          {field.type === 'cover_letter' && (
-                            <div className="p-2 bg-sky-50 border border-sky-200 rounded-lg flex items-center justify-between gap-2 text-xs">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <FileText className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />
-                                <span className="text-[11px] font-medium text-sky-900 truncate">
-                                  Cover letter field detected
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setActiveTab('coverLetter')}
-                                className="text-[11px] font-semibold text-sky-700 hover:text-sky-900 active:scale-95 whitespace-nowrap underline"
-                              >
-                                Tailor with JD &rarr;
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Answer input or textarea depending on field.isTextarea */}
-                        {field.isTextarea ? (
-                          <textarea
-                            rows={3}
-                            value={answer}
-                            onChange={(e) =>
-                              setAnswers((prev) => ({ ...prev, [field.id]: e.target.value }))
-                            }
-                            placeholder="Click 'Draft Answer' or write your response"
-                            className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-800 bg-slate-50/50 focus:bg-white resize-y leading-relaxed"
-                          />
-                        ) : (
-                          <input
-                            type="text"
-                            value={answer}
-                            onChange={(e) =>
-                              setAnswers((prev) => ({ ...prev, [field.id]: e.target.value }))
-                            }
-                            placeholder={formatHint || "Click 'Draft Answer' or write response"}
-                            className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-800 bg-slate-50/50 focus:bg-white"
-                          />
-                        )}
-
-                        {/* Actions */}
-                        {answer && (
-                          <div className="flex flex-wrap items-center justify-between gap-1.5 pt-0.5">
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() =>
-                                  generateAnswerForField(field, 'Make the answer more concise and punchy.')
-                                }
-                                className="text-[10px] text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition font-medium"
-                              >
-                                Shorter
-                              </button>
-                              <button
-                                onClick={() =>
-                                  generateAnswerForField(
-                                    field,
-                                    'Highlight specific portfolio project achievements and include the project link.'
-                                  )
-                                }
-                                className="text-[10px] text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition font-medium"
-                              >
-                                Add Project
-                              </button>
-                            </div>
-
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => handleSaveAnswerToPasteBank(field.label, answer, field.id)}
-                                title="Save answer to Paste Bank for 1-click re-use"
-                                className="flex items-center gap-1 text-[11px] text-sky-700 hover:text-sky-900 active:scale-95 bg-sky-50 hover:bg-sky-100 px-2 py-1 rounded-md transition font-medium"
-                              >
-                                {savedBankId === field.id ? (
-                                  <>
-                                    <Check className="w-3 h-3 text-sky-600 animate-pop" />
-                                    <span className="text-sky-600">Saved</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <ClipboardList className="w-3 h-3 text-sky-600" />
-                                    <span>To Bank</span>
-                                  </>
-                                )}
-                              </button>
-
-                              <button
-                                onClick={() => handleCopy(answer, field.id)}
-                                className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition font-medium"
-                              >
-                                {copiedId === field.id ? (
-                                  <>
-                                    <Check className="w-3 h-3 text-emerald-600 animate-pop" />
-                                    <span className="text-emerald-600">Copied</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="w-3 h-3" />
-                                    <span>Copy</span>
-                                  </>
-                                )}
-                              </button>
-
-                              <button
-                                onClick={() => handleInsert(field, answer)}
-                                className="flex items-center gap-1 text-[11px] bg-slate-900 hover:bg-slate-800 active:scale-95 text-white px-3 py-1 rounded-md font-medium transition"
-                              >
-                                {insertedId === field.id ? (
-                                  <>
-                                    <Check className="w-3 h-3 text-sky-400 animate-pop" />
-                                    <span>Inserted</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <ArrowDownToLine className="w-3 h-3" />
-                                    <span>Insert</span>
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-
             {/* TAB: Cover Letter Generator */}
             {activeTab === 'coverLetter' && (
               <div className="space-y-3 animate-fade-in">
@@ -1812,23 +1806,47 @@ export const Drawer: React.FC = () => {
               </div>
             )}
 
-            {/* TAB 2: Standard Autofill */}
+            {/* TAB: Unified Autofill & Answers Copilot */}
             {activeTab === 'autofill' && (
               <div className="space-y-3 animate-fade-in">
-                <div className="flex items-center justify-between p-3 bg-sky-50/70 border border-sky-100 rounded-xl">
-                  <div>
-                    <h4 className="font-semibold text-xs text-sky-950">1-Click Autofill</h4>
-                    <p className="text-[11px] text-sky-700">
-                      Fills detected standard inputs from your profile.
+                {/* 1-Click Autofill & Batch Actions Top Banner */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-3 bg-sky-50/80 border border-sky-100 rounded-xl gap-2.5">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-semibold text-xs text-sky-950">Application Copilot</h4>
+                      {totalFields > 0 && (
+                        <span className="text-[10px] font-semibold bg-sky-100 text-sky-800 px-1.5 py-0.2 rounded-full">
+                          {totalFields} items
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-sky-700 mt-0.5">
+                      1-click autofill standard fields & AI draft screening questions.
                     </p>
                   </div>
-                  <button
-                    onClick={autofillAllStandard}
-                    className="flex items-center gap-1.5 text-xs bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-xs transition active:scale-95 flex-shrink-0"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    Fill All ({standardFields.length + radioGroups.length})
-                  </button>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {customQuestions.length > 0 && (
+                      <button
+                        onClick={batchDraftAnswers}
+                        disabled={customQuestions.every((q) => Boolean(answers[q.id]?.trim()))}
+                        className="flex items-center gap-1 text-[11px] bg-white hover:bg-sky-50 text-sky-700 border border-sky-200 px-2.5 py-1.5 rounded-lg font-medium shadow-2xs transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title="Generate AI answers for all screening questions"
+                      >
+                        <Sparkles className="w-3 h-3 text-sky-500" />
+                        <span>Draft Questions ({customQuestions.filter((q) => !answers[q.id]?.trim()).length})</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={autofillAllStandard}
+                      disabled={standardFields.length + radioGroups.length === 0}
+                      className="flex items-center gap-1.5 text-xs bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-xs transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex-shrink-0"
+                    >
+                      <Zap className="w-3.5 h-3.5 fill-white" />
+                      <span>Autofill ({standardFields.length + radioGroups.length})</span>
+                    </button>
+                  </div>
                 </div>
 
                 {autofillBanner && (
@@ -1850,14 +1868,264 @@ export const Drawer: React.FC = () => {
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  {standardFields.length === 0 && radioGroups.length === 0 ? (
-                    <div className="text-center py-10 text-slate-400 space-y-2">
-                      <p className="font-medium text-slate-600">No form fields detected</p>
-                      <p className="text-xs">Navigate to a job application or form with inputs.</p>
+                {/* Segmented Filter Pills (shown when multiple categories exist) */}
+                {[customQuestions.length > 0, standardFields.length > 0, radioGroups.length > 0].filter(Boolean).length > 1 && (
+                  <div className="flex items-center gap-1 bg-slate-200/60 p-1 rounded-lg text-[11px]">
+                    <button
+                      onClick={() => setAutofillFilter('all')}
+                      className={`flex-1 py-1 px-2 rounded-md font-medium transition cursor-pointer text-center ${
+                        autofillFilter === 'all'
+                          ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      All ({totalFields})
+                    </button>
+                    {customQuestions.length > 0 && (
+                      <button
+                        onClick={() => setAutofillFilter('questions')}
+                        className={`flex-1 py-1 px-2 rounded-md font-medium transition cursor-pointer text-center ${
+                          autofillFilter === 'questions'
+                            ? 'bg-white text-sky-800 shadow-2xs font-semibold'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Questions ({customQuestions.length})
+                      </button>
+                    )}
+                    {standardFields.length > 0 && (
+                      <button
+                        onClick={() => setAutofillFilter('standard')}
+                        className={`flex-1 py-1 px-2 rounded-md font-medium transition cursor-pointer text-center ${
+                          autofillFilter === 'standard'
+                            ? 'bg-white text-emerald-800 shadow-2xs font-semibold'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Standard ({standardFields.length})
+                      </button>
+                    )}
+                    {radioGroups.length > 0 && (
+                      <button
+                        onClick={() => setAutofillFilter('radios')}
+                        className={`flex-1 py-1 px-2 rounded-md font-medium transition cursor-pointer text-center ${
+                          autofillFilter === 'radios'
+                            ? 'bg-white text-indigo-800 shadow-2xs font-semibold'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Radios ({radioGroups.length})
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Empty State when 0 fields of any kind */}
+                {totalFields === 0 && (
+                  <div className="text-center py-12 text-slate-400 space-y-2 bg-white rounded-xl border border-slate-200/80 p-6">
+                    <Sparkles className="w-8 h-8 mx-auto text-slate-300" />
+                    <p className="font-semibold text-xs sm:text-sm text-slate-700">
+                      No form fields or questions detected
+                    </p>
+                    <p className="text-[11px] text-slate-400 max-w-xs mx-auto leading-relaxed">
+                      Navigate to a job application form (Workday, Greenhouse, Lever, Google Forms, etc.) or click Rescan above.
+                    </p>
+                  </div>
+                )}
+
+                {/* Section 1: Screening Questions */}
+                {(autofillFilter === 'all' || autofillFilter === 'questions') && customQuestions.length > 0 && (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between px-1 pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-sky-600" />
+                        <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                          Screening Questions ({customQuestions.length})
+                        </span>
+                      </div>
+                      {customQuestions.some((q) => !answers[q.id]?.trim()) && (
+                        <button
+                          onClick={batchDraftAnswers}
+                          className="text-[10px] text-sky-700 hover:text-sky-900 font-semibold underline cursor-pointer"
+                        >
+                          Draft all &rarr;
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    standardFields.map((field) => {
+
+                    {customQuestions.map((field) => {
+                      const answer = answers[field.id] || field.value || '';
+                      const isGen = generating[field.id] || false;
+                      const formatHint = getCleanFormatHint(field.placeholder);
+
+                      return (
+                        <div
+                          key={field.id}
+                          className="bg-white rounded-xl p-3 sm:p-3.5 border border-slate-200/80 shadow-xs space-y-2.5 min-w-0 overflow-hidden hover:border-slate-300 transition"
+                        >
+                          <div className="space-y-1.5 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <label className="text-xs font-semibold text-slate-800 leading-snug break-words min-w-0 flex-1">
+                                {field.label}
+                              </label>
+                              <button
+                                disabled={isGen}
+                                onClick={() => generateAnswerForField(field)}
+                                className="flex items-center gap-1 text-[11px] bg-sky-50 text-sky-700 hover:bg-sky-100 active:scale-95 font-medium px-2 py-1 rounded-md transition disabled:opacity-50 flex-shrink-0 cursor-pointer"
+                              >
+                                <Sparkles className={`w-3 h-3 ${isGen ? 'animate-spin' : ''}`} />
+                                {answer ? 'Regenerate' : 'Draft Answer'}
+                              </button>
+                            </div>
+
+                            {formatHint && (
+                              <div className="w-full text-[10px] text-slate-600 font-mono bg-slate-100/90 border border-slate-200/70 px-2.5 py-1.5 rounded-md leading-relaxed break-words whitespace-normal select-text">
+                                <span className="font-semibold text-slate-700 mr-1.5 flex-shrink-0">Format:</span>
+                                <span className="text-slate-600 break-words">{formatHint}</span>
+                              </div>
+                            )}
+
+                            {field.type === 'cover_letter' && (
+                              <div className="p-2 bg-sky-50 border border-sky-200 rounded-lg flex items-center justify-between gap-2 text-xs">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <FileText className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />
+                                  <span className="text-[11px] font-medium text-sky-900 truncate">
+                                    Cover letter field detected
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveTab('coverLetter')}
+                                  className="text-[11px] font-semibold text-sky-700 hover:text-sky-900 active:scale-95 whitespace-nowrap underline cursor-pointer"
+                                >
+                                  Tailor with JD &rarr;
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Answer input or textarea */}
+                          {field.isTextarea ? (
+                            <textarea
+                              rows={3}
+                              value={answer}
+                              onChange={(e) =>
+                                setAnswers((prev) => ({ ...prev, [field.id]: e.target.value }))
+                              }
+                              placeholder="Click 'Draft Answer' or write your response"
+                              className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-800 bg-slate-50/50 focus:bg-white resize-y leading-relaxed"
+                            />
+                          ) : (
+                            <input
+                              type="text"
+                              value={answer}
+                              onChange={(e) =>
+                                setAnswers((prev) => ({ ...prev, [field.id]: e.target.value }))
+                              }
+                              placeholder={formatHint || "Click 'Draft Answer' or write response"}
+                              className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-800 bg-slate-50/50 focus:bg-white"
+                            />
+                          )}
+
+                          {/* Actions */}
+                          {answer && (
+                            <div className="flex flex-wrap items-center justify-between gap-1.5 pt-0.5">
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() =>
+                                    generateAnswerForField(field, 'Make the answer more concise and punchy.')
+                                  }
+                                  className="text-[10px] text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition font-medium cursor-pointer"
+                                >
+                                  Shorter
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    generateAnswerForField(
+                                      field,
+                                      'Highlight specific portfolio project achievements and include the project link.'
+                                    )
+                                  }
+                                  className="text-[10px] text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition font-medium cursor-pointer"
+                                >
+                                  Add Project
+                                </button>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => handleSaveAnswerToPasteBank(field.label, answer, field.id)}
+                                  title="Save answer to Paste Bank for 1-click re-use"
+                                  className="flex items-center gap-1 text-[11px] text-sky-700 hover:text-sky-900 active:scale-95 bg-sky-50 hover:bg-sky-100 px-2 py-1 rounded-md transition font-medium cursor-pointer"
+                                >
+                                  {savedBankId === field.id ? (
+                                    <>
+                                      <Check className="w-3 h-3 text-sky-600 animate-pop" />
+                                      <span className="text-sky-600">Saved</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ClipboardList className="w-3 h-3 text-sky-600" />
+                                      <span>To Bank</span>
+                                    </>
+                                  )}
+                                </button>
+
+                                <button
+                                  onClick={() => handleCopy(answer, field.id)}
+                                  className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition font-medium cursor-pointer"
+                                >
+                                  {copiedId === field.id ? (
+                                    <>
+                                      <Check className="w-3 h-3 text-emerald-600 animate-pop" />
+                                      <span className="text-emerald-600">Copied</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="w-3 h-3" />
+                                      <span>Copy</span>
+                                    </>
+                                  )}
+                                </button>
+
+                                <button
+                                  onClick={() => handleInsert(field, answer)}
+                                  className="flex items-center gap-1 text-[11px] bg-slate-900 hover:bg-slate-800 active:scale-95 text-white px-3 py-1 rounded-md font-medium transition cursor-pointer"
+                                >
+                                  {insertedId === field.id ? (
+                                    <>
+                                      <Check className="w-3 h-3 text-sky-400 animate-pop" />
+                                      <span>Inserted</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ArrowDownToLine className="w-3 h-3" />
+                                      <span>Insert</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Section 2: Standard Form Fields */}
+                {(autofillFilter === 'all' || autofillFilter === 'standard') && standardFields.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-1 pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                          Standard Fields ({standardFields.length})
+                        </span>
+                      </div>
+                    </div>
+
+                    {standardFields.map((field) => {
                       const resolvedVal = resolveFieldValue(field, storage?.profile);
 
                       return (
@@ -1878,7 +2146,7 @@ export const Drawer: React.FC = () => {
                             <button
                               disabled={!resolvedVal}
                               onClick={() => handleInsert(field, resolvedVal)}
-                              className="text-[11px] font-medium text-slate-700 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed px-2.5 py-1 rounded-md transition flex items-center gap-1 flex-shrink-0"
+                              className="text-[11px] font-medium text-slate-700 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed px-2.5 py-1 rounded-md transition flex items-center gap-1 flex-shrink-0 cursor-pointer"
                             >
                               {insertedId === field.id ? (
                                 <span className="text-emerald-600 flex items-center gap-1 animate-pop">
@@ -1912,100 +2180,104 @@ export const Drawer: React.FC = () => {
                           </div>
                         </div>
                       );
-                    })
-                  )}
+                    })}
+                  </div>
+                )}
 
-                  {/* Radio Questions Section */}
-                  {radioGroups.length > 0 && (
-                    <div className="pt-2 space-y-2">
-                      <div className="flex items-center justify-between pt-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                {/* Section 3: Radio Questions Section */}
+                {(autofillFilter === 'all' || autofillFilter === 'radios') && radioGroups.length > 0 && (
+                  <div className="pt-1 space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle className="w-3.5 h-3.5 text-indigo-600" />
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                           Radio Questions ({radioGroups.length})
                         </span>
                       </div>
-                      {radioGroups.map((group) => {
-                        const matchedOpt = resolveRadioOption(
-                          group,
-                          storage?.wizardAnswers,
-                          storage?.questionBank
-                        );
+                    </div>
 
-                        return (
-                          <div
-                            key={group.id}
-                            className="p-2.5 bg-white border border-slate-200/80 rounded-xl shadow-xs space-y-2 hover:border-slate-300 transition"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-medium text-xs text-slate-900 break-words flex-1 min-w-0">
-                                    {group.label}
-                                  </span>
-                                  <span className="text-[9px] font-medium text-purple-600 bg-purple-50 border border-purple-200/60 px-1.5 py-0.2 rounded capitalize flex-shrink-0">
-                                    {group.category.replace('_', ' ')}
-                                  </span>
-                                </div>
+                    {radioGroups.map((group) => {
+                      const matchedOpt = resolveRadioOption(
+                        group,
+                        storage?.wizardAnswers,
+                        storage?.questionBank
+                      );
+
+                      return (
+                        <div
+                          key={group.id}
+                          className="p-2.5 bg-white border border-slate-200/80 rounded-xl shadow-xs space-y-2 hover:border-slate-300 transition"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-medium text-xs text-slate-900 break-words flex-1 min-w-0">
+                                  {group.label}
+                                </span>
+                                <span className="text-[9px] font-medium text-purple-600 bg-purple-50 border border-purple-200/60 px-1.5 py-0.2 rounded capitalize flex-shrink-0">
+                                  {group.category.replace('_', ' ')}
+                                </span>
                               </div>
-                              {matchedOpt && (
+                            </div>
+                            {matchedOpt && (
+                              <button
+                                onClick={() => {
+                                  setNativeRadioChecked(matchedOpt.element);
+                                  setInsertedId(group.id);
+                                  setTimeout(() => setInsertedId(null), 2000);
+                                  setTimeout(scanPage, 150);
+                                }}
+                                className="text-[11px] font-medium text-slate-700 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition flex items-center gap-1 flex-shrink-0 cursor-pointer"
+                              >
+                                {insertedId === group.id || matchedOpt.isChecked ? (
+                                  <span className="text-emerald-600 flex items-center gap-1 animate-pop">
+                                    <Check className="w-3 h-3" /> Selected
+                                  </span>
+                                ) : (
+                                  <>
+                                    <CheckCircle className="w-3 h-3 text-slate-500" />
+                                    <span>Select</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Options Pills */}
+                          <div className="flex flex-wrap gap-1">
+                            {group.options.map((opt) => {
+                              const isTarget = matchedOpt?.id === opt.id;
+                              return (
                                 <button
+                                  key={opt.id}
+                                  type="button"
                                   onClick={() => {
-                                    setNativeRadioChecked(matchedOpt.element);
-                                    setInsertedId(group.id);
-                                    setTimeout(() => setInsertedId(null), 2000);
+                                    setNativeRadioChecked(opt.element);
                                     setTimeout(scanPage, 150);
                                   }}
-                                  className="text-[11px] font-medium text-slate-700 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition flex items-center gap-1 flex-shrink-0"
+                                  className={`text-[10px] px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center gap-1 ${
+                                    opt.isChecked
+                                      ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-medium'
+                                      : isTarget
+                                      ? 'bg-sky-50 border-sky-300 text-sky-800 font-medium'
+                                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                  }`}
                                 >
-                                  {insertedId === group.id || matchedOpt.isChecked ? (
-                                    <span className="text-emerald-600 flex items-center gap-1 animate-pop">
-                                      <Check className="w-3 h-3" /> Selected
-                                    </span>
-                                  ) : (
-                                    <>
-                                      <CheckCircle className="w-3 h-3 text-slate-500" />
-                                      <span>Select</span>
-                                    </>
-                                  )}
+                                  {opt.isChecked ? (
+                                    <Check className="w-2.5 h-2.5 text-emerald-600" />
+                                  ) : isTarget ? (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                                  ) : null}
+                                  <span className="truncate max-w-[150px]">{opt.label}</span>
                                 </button>
-                              )}
-                            </div>
-
-                            {/* Options Pills */}
-                            <div className="flex flex-wrap gap-1">
-                              {group.options.map((opt) => {
-                                const isTarget = matchedOpt?.id === opt.id;
-                                return (
-                                  <button
-                                    key={opt.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setNativeRadioChecked(opt.element);
-                                      setTimeout(scanPage, 150);
-                                    }}
-                                    className={`text-[10px] px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center gap-1 ${
-                                      opt.isChecked
-                                        ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-medium'
-                                        : isTarget
-                                        ? 'bg-sky-50 border-sky-300 text-sky-800 font-medium'
-                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                                    }`}
-                                  >
-                                    {opt.isChecked ? (
-                                      <Check className="w-2.5 h-2.5 text-emerald-600" />
-                                    ) : isTarget ? (
-                                      <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-                                    ) : null}
-                                    <span className="truncate max-w-[150px]">{opt.label}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

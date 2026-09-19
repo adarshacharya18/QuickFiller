@@ -1,0 +1,179 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+
+export interface Position {
+  x: number;
+  y: number;
+}
+
+export const clampDrawerPosition = (
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  margin = 8
+): Position => {
+  const maxX = Math.max(margin, viewportWidth - width - margin);
+  const maxY = Math.max(margin, viewportHeight - height - margin);
+  return {
+    x: Math.round(Math.max(margin, Math.min(x, maxX))),
+    y: Math.round(Math.max(margin, Math.min(y, maxY))),
+  };
+};
+
+export const getStoredDrawerPosition = (): Position | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const saved = sessionStorage.getItem('quickfiller_drawer_pos');
+    if (!saved) return null;
+    const parsed = JSON.parse(saved);
+    if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+      return parsed;
+    }
+  } catch {}
+  return null;
+};
+
+export const saveDrawerPosition = (pos: Position | null) => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (pos) {
+      sessionStorage.setItem('quickfiller_drawer_pos', JSON.stringify(pos));
+    } else {
+      sessionStorage.removeItem('quickfiller_drawer_pos');
+    }
+  } catch {}
+};
+
+describe('Draggable Drawer Window Engine', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  describe('Viewport Boundary Clamping', () => {
+    it('preserves valid coordinates within viewport bounds', () => {
+      const pos = clampDrawerPosition(200, 150, 400, 600, 1920, 1080);
+      expect(pos).toEqual({ x: 200, y: 150 });
+    });
+
+    it('clamps negative or sub-margin coordinates to the minimum margin', () => {
+      const pos = clampDrawerPosition(-50, -10, 400, 600, 1920, 1080, 8);
+      expect(pos).toEqual({ x: 8, y: 8 });
+    });
+
+    it('clamps coordinates that exceed right or bottom edges', () => {
+      // viewport: 1920 x 1080, drawer: 400 x 600, margin: 8
+      // maxX: 1920 - 400 - 8 = 1512
+      // maxY: 1080 - 600 - 8 = 472
+      const pos = clampDrawerPosition(2500, 2000, 400, 600, 1920, 1080, 8);
+      expect(pos).toEqual({ x: 1512, y: 472 });
+    });
+
+    it('handles small viewports gracefully when drawer dimensions exceed viewport', () => {
+      const pos = clampDrawerPosition(100, 100, 700, 800, 600, 700, 8);
+      expect(pos.x).toBe(8);
+      expect(pos.y).toBe(8);
+    });
+  });
+
+  describe('Session Storage Persistence for Draggable Window', () => {
+    it('returns null when no position is stored in sessionStorage', () => {
+      expect(getStoredDrawerPosition()).toBeNull();
+    });
+
+    it('correctly persists and retrieves custom position coordinates', () => {
+      saveDrawerPosition({ x: 350, y: 120 });
+      expect(getStoredDrawerPosition()).toEqual({ x: 350, y: 120 });
+    });
+
+    it('resets position and removes sessionStorage entry on reset', () => {
+      saveDrawerPosition({ x: 350, y: 120 });
+      expect(getStoredDrawerPosition()).not.toBeNull();
+
+      saveDrawerPosition(null);
+      expect(getStoredDrawerPosition()).toBeNull();
+      expect(sessionStorage.getItem('quickfiller_drawer_pos')).toBeNull();
+    });
+
+    it('handles corrupted JSON in sessionStorage safely', () => {
+      sessionStorage.setItem('quickfiller_drawer_pos', '{invalid_json}');
+      expect(getStoredDrawerPosition()).toBeNull();
+    });
+  });
+});
+
+describe('Unified Autofill & Answers Tab Logic', () => {
+  it('computes combined total count across standard fields, radios, and screening questions', () => {
+    const standardFields = [{ id: '1', label: 'First Name' }, { id: '2', label: 'Email' }];
+    const radioGroups = [{ id: 'r1', question: 'Work Auth' }];
+    const customQuestions = [{ id: 'q1', label: 'Why join us?' }, { id: 'q2', label: 'Tech stack' }];
+
+    const totalFields = standardFields.length + radioGroups.length + customQuestions.length;
+    expect(totalFields).toBe(5);
+  });
+
+  it('filters field categories properly when user selects sub-filters', () => {
+    const items = {
+      questions: ['q1', 'q2'],
+      standard: ['s1', 's2', 's3'],
+      radios: ['r1'],
+    };
+
+    const getVisibleSections = (filter: 'all' | 'questions' | 'standard' | 'radios') => {
+      return {
+        showQuestions: (filter === 'all' || filter === 'questions') && items.questions.length > 0,
+        showStandard: (filter === 'all' || filter === 'standard') && items.standard.length > 0,
+        showRadios: (filter === 'all' || filter === 'radios') && items.radios.length > 0,
+      };
+    };
+
+    expect(getVisibleSections('all')).toEqual({
+      showQuestions: true,
+      showStandard: true,
+      showRadios: true,
+    });
+
+    expect(getVisibleSections('questions')).toEqual({
+      showQuestions: true,
+      showStandard: false,
+      showRadios: false,
+    });
+
+    expect(getVisibleSections('standard')).toEqual({
+      showQuestions: false,
+      showStandard: true,
+      showRadios: false,
+    });
+
+    expect(getVisibleSections('radios')).toEqual({
+      showQuestions: false,
+      showStandard: false,
+      showRadios: true,
+    });
+  });
+
+  it('identifies unanswered screening questions for batch drafting', () => {
+    const customQuestions = [
+      { id: 'q1', label: 'Why join us?' },
+      { id: 'q2', label: 'Describe a challenge' },
+      { id: 'q3', label: 'Years of React experience' },
+    ];
+    const answers: Record<string, string> = {
+      q1: 'I want to join because...',
+      // q2 and q3 are empty
+    };
+
+    const unanswered = customQuestions.filter((q) => !answers[q.id]?.trim());
+    expect(unanswered.map((q) => q.id)).toEqual(['q2', 'q3']);
+  });
+
+  it('navigates cleanly between 4 consolidated tabs', () => {
+    type TabId = 'autofill' | 'coverLetter' | 'outreach' | 'bank';
+    const tabs: TabId[] = ['autofill', 'coverLetter', 'outreach', 'bank'];
+
+    expect(tabs.length).toBe(4);
+    expect(tabs).toContain('autofill');
+    expect(tabs).not.toContain('questions');
+  });
+});

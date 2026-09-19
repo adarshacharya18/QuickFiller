@@ -251,6 +251,57 @@ export interface CursorTargetInfo {
 }
 
 /**
+ * Scans the active document for open or visible messaging boxes (LinkedIn, Gmail, Twitter/X, rich-text).
+ */
+export function findVisibleMessagingTarget(): HTMLElement | null {
+  const candidateSelectors = [
+    // 1. LinkedIn active messaging window & popups
+    'div.msg-form__contenteditable[contenteditable="true"]',
+    'div.msg-form__msg-content-container [contenteditable="true"]',
+    'div.msg-convo-wrapper [contenteditable="true"]',
+    'div[data-artdeco-is-focused="true"][contenteditable="true"]',
+    'textarea#custom-message', // LinkedIn connection invitation note
+    'textarea[name="message"]',
+    'textarea.send-invite__custom-message',
+    // 2. Gmail compose body
+    'div[aria-label*="Message Body"][contenteditable="true"]',
+    'div[role="textbox"][aria-label*="Body"][contenteditable="true"]',
+    // 3. Twitter / X Direct Message & tweet box
+    'div[data-testid="dmComposerTextInput"][contenteditable="true"]',
+    'div[data-testid="tweetTextarea_0"][contenteditable="true"]',
+    // 4. Generic rich text editors & contenteditables
+    'div[role="textbox"][contenteditable="true"]',
+    '[contenteditable="true"]',
+    'textarea:not([disabled]):not([readonly])',
+  ];
+
+  for (const selector of candidateSelectors) {
+    try {
+      const matches = document.querySelectorAll<HTMLElement>(selector);
+      for (const candidate of Array.from(matches)) {
+        if (
+          candidate.closest('quickfiller-drawer') ||
+          candidate.tagName.toLowerCase() === 'quickfiller-drawer'
+        ) {
+          continue;
+        }
+        if (
+          candidate.offsetWidth > 0 ||
+          candidate.offsetHeight > 0 ||
+          candidate.getClientRects().length > 0
+        ) {
+          return candidate;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  return null;
+}
+
+/**
  * Inserts text at the current caret/cursor position or replaces active selection.
  * Handles inputs, textareas, and contenteditable elements while preserving focus.
  */
@@ -293,6 +344,21 @@ export function insertTextAtCursor(
     }
   }
 
+  // Fallback: If still no target or target is not an input/editable, look for visible messaging boxes (LinkedIn popup, etc.)
+  if (
+    !el ||
+    !(el.isConnected ?? document.contains(el)) ||
+    (!el.isContentEditable &&
+      el.getAttribute('contenteditable') !== 'true' &&
+      el.tagName !== 'INPUT' &&
+      el.tagName !== 'TEXTAREA')
+  ) {
+    const discovered = findVisibleMessagingTarget();
+    if (discovered) {
+      el = discovered;
+    }
+  }
+
   const finalConnected = el && (el.isConnected ?? document.contains(el));
   if (!el || !finalConnected) {
     return false;
@@ -301,8 +367,32 @@ export function insertTextAtCursor(
   try {
     el.focus();
 
-    // 1. ContentEditable elements (e.g. rich-text editors)
+    // 1. ContentEditable elements (e.g. LinkedIn message popup, Gmail, rich-text editors)
     if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
+      // Ensure selection is inside el so document.execCommand targets this contenteditable
+      const sel = window.getSelection();
+      if (sel) {
+        if (sel.rangeCount === 0 || !el.contains(sel.anchorNode)) {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          range.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      }
+
+      // Dispatch beforeinput for modern editors like Draft.js / Lexical
+      try {
+        el.dispatchEvent(
+          new InputEvent('beforeinput', {
+            bubbles: true,
+            cancelable: true,
+            data: text,
+            inputType: 'insertText',
+          })
+        );
+      } catch {}
+
       let inserted = false;
       try {
         inserted = document.execCommand('insertText', false, text);
@@ -310,30 +400,56 @@ export function insertTextAtCursor(
         inserted = false;
       }
 
-      if (!inserted) {
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0) {
-          const range = sel.getRangeAt(0);
-          range.deleteContents();
-          const node = document.createTextNode(text);
-          range.insertNode(node);
-          range.setStartAfter(node);
-          range.setEndAfter(node);
-          sel.removeAllRanges();
-          sel.addRange(range);
+      // If execCommand failed or didn't insert, simulate clipboard paste (universal for Draft.js / Lexical)
+      if (!inserted || !el.textContent?.includes(text)) {
+        try {
+          const dt = new DataTransfer();
+          dt.setData('text/plain', text);
+          const pasteEvent = new ClipboardEvent('paste', {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: dt,
+          });
+          el.dispatchEvent(pasteEvent);
+        } catch {}
+      }
+
+      // If text is still not present, direct DOM insertion with paragraph structure
+      if (!el.textContent?.includes(text)) {
+        let p = el.querySelector('p:not(.msg-form__placeholder)');
+        if (!p) {
+          p = el.querySelector('p');
+        }
+        if (p) {
+          p.textContent = text;
         } else {
-          el.innerText = (el.innerText || '') + text;
+          el.textContent = text;
         }
       }
 
+      // Dispatch full suite of reactive framework input & change events (enables LinkedIn "Send" button)
       try {
         el.dispatchEvent(
-          new InputEvent('input', { bubbles: true, cancelable: true, data: text, inputType: 'insertText' })
+          new InputEvent('input', {
+            bubbles: true,
+            cancelable: true,
+            data: text,
+            inputType: 'insertText',
+          })
         );
       } catch {
         el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
       }
       el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+      el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: ' ' }));
+      el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: ' ' }));
+
+      const parentForm = el.closest('form, .msg-form, .msg-convo-wrapper');
+      if (parentForm) {
+        parentForm.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+        parentForm.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+      }
+
       return true;
     }
 

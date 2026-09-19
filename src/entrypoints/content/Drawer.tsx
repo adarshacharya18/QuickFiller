@@ -508,6 +508,15 @@ export const Drawer: React.FC = () => {
         return;
       }
 
+      // Check if target itself, ancestor, or child is an editable or input element (crucial for LinkedIn / rich text editors)
+      const inputOrTextarea = (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') ? el : el.closest('input, textarea');
+      const contentEditable = el.closest<HTMLElement>('[contenteditable="true"]') || (el.isContentEditable ? el : el.querySelector<HTMLElement>('[contenteditable="true"]'));
+      const targetEl = (inputOrTextarea || contentEditable) as HTMLElement | null;
+
+      if (targetEl && !isInsideDrawer(targetEl)) {
+        el = targetEl;
+      }
+
       const tagName = el.tagName?.toUpperCase();
       const isInput = tagName === 'INPUT' || tagName === 'TEXTAREA';
       const isEditable = el.isContentEditable || el.getAttribute('contenteditable') === 'true';

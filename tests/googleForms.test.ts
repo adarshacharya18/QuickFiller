@@ -207,4 +207,127 @@ describe('Google Forms ATS Tech Stack Support', () => {
       expect(hasVisibleSuccessMessage()).toBe(true);
     });
   });
+
+  describe('Google Forms Aria-Labelledby Floating Placeholder ("Your answer") Cleansing', () => {
+    it('strips "Your answer" placeholder element from aria-labelledby to return clean field title', () => {
+      document.body.innerHTML = `
+        <div role="listitem" class="Qr7Oae">
+          <div class="geS5n">
+            <div class="M7eMe" role="heading" aria-level="3" id="i1">
+              Name
+              <span class="vHW8du" aria-label="Required question"> *</span>
+            </div>
+            <div class="Xb9hP">
+              <input type="text" class="whsOnd zHQkBf" jsname="YPqjbf" id="q-name" name="entry.1001" aria-labelledby="i1 i4" />
+              <div id="i4" class="c2gzEf">Your answer</div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const input = document.getElementById('q-name') as HTMLInputElement;
+      expect(findFieldLabel(input)).toBe('Name');
+      expect(classifyField(input, 'Name')).toBe('fullName');
+    });
+
+    it('classifies Google Forms fields with common phrasing into standard fields', () => {
+      const createGFormInput = (label: string, name: string = 'entry.123', type: string = 'text') => {
+        const input = document.createElement('input');
+        input.type = type;
+        input.name = name;
+        input.className = 'whsOnd zHQkBf';
+        return { input, classification: classifyField(input, label) };
+      };
+
+      expect(createGFormInput('Name').classification).toBe('fullName');
+      expect(createGFormInput('Your Name').classification).toBe('fullName');
+      expect(createGFormInput('Full Name').classification).toBe('fullName');
+      expect(createGFormInput('What is your full name?').classification).toBe('fullName');
+
+      expect(createGFormInput('Email Address').classification).toBe('email');
+      expect(createGFormInput('What is your email address?').classification).toBe('email');
+
+      expect(createGFormInput('Phone Number').classification).toBe('phone');
+      expect(createGFormInput('Contact Number').classification).toBe('phone');
+      expect(createGFormInput('Contact No.').classification).toBe('phone');
+      expect(createGFormInput('WhatsApp Number').classification).toBe('phone');
+
+      expect(createGFormInput('LinkedIn Profile').classification).toBe('linkedin');
+      expect(createGFormInput('GitHub Profile URL').classification).toBe('github');
+      expect(createGFormInput('Portfolio Link').classification).toBe('portfolio');
+
+      expect(createGFormInput('Current Location').classification).toBe('city');
+      expect(createGFormInput('Current Location (City, State)').classification).toBe('city');
+      expect(createGFormInput('PIN Code').classification).toBe('postalCode');
+      expect(createGFormInput('Postal Code').classification).toBe('postalCode');
+
+      // Screening questions properly preserved as custom_question
+      expect(createGFormInput('Why do you want to join our team?').classification).toBe('custom_question');
+      expect(createGFormInput('What is your notice period in days?').classification).toBe('custom_question');
+      expect(createGFormInput('Company Name').classification).toBe('custom_question');
+      expect(createGFormInput('College / University Name').classification).toBe('custom_question');
+    });
+
+    it('scans a multi-question Google Form and populates both standardFields and customQuestions', () => {
+      document.body.innerHTML = `
+        <form action="/formResponse" method="POST">
+          <!-- Question 1: Name -->
+          <div role="listitem" class="Qr7Oae">
+            <div class="geS5n">
+              <div class="M7eMe" role="heading" aria-level="3" id="i1">Name *</div>
+              <div class="Xb9hP">
+                <input type="text" class="whsOnd zHQkBf" name="entry.101" id="f-name" aria-labelledby="i1 i4" />
+                <div id="i4" class="c2gzEf">Your answer</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Question 2: Email -->
+          <div role="listitem" class="Qr7Oae">
+            <div class="geS5n">
+              <div class="M7eMe" role="heading" aria-level="3" id="i5">Email Address *</div>
+              <div class="Xb9hP">
+                <input type="email" class="whsOnd zHQkBf" name="entry.102" id="f-email" aria-labelledby="i5 i8" />
+                <div id="i8" class="c2gzEf">Your answer</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Question 3: Contact Number -->
+          <div role="listitem" class="Qr7Oae">
+            <div class="geS5n">
+              <div class="M7eMe" role="heading" aria-level="3" id="i9">Contact Number *</div>
+              <div class="Xb9hP">
+                <input type="text" class="whsOnd zHQkBf" name="entry.103" id="f-phone" aria-labelledby="i9 i12" />
+                <div id="i12" class="c2gzEf">Your answer</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Question 4: Screening custom textarea -->
+          <div role="listitem" class="Qr7Oae">
+            <div class="geS5n">
+              <div class="M7eMe" role="heading" aria-level="3" id="i13">Why are you interested in this position? *</div>
+              <div class="Xb9hP">
+                <textarea class="KHxj8b tL9Wh" name="entry.104" id="f-why" aria-labelledby="i13 i16"></textarea>
+                <div id="i16" class="c2gzEf">Your answer</div>
+              </div>
+            </div>
+          </div>
+        </form>
+      `;
+
+      const { standardFields, customQuestions } = scanFormFields();
+      expect(standardFields.length).toBe(3);
+      expect(customQuestions.length).toBe(1);
+
+      expect(standardFields.map((f) => f.type)).toEqual(['fullName', 'email', 'phone']);
+      expect(standardFields[0].label).toBe('Name');
+      expect(standardFields[1].label).toBe('Email Address');
+      expect(standardFields[2].label).toBe('Contact Number');
+
+      expect(customQuestions[0].label).toBe('Why are you interested in this position?');
+      expect(customQuestions[0].type).toBe('custom_question');
+    });
+  });
 });

@@ -127,7 +127,24 @@ export function findFieldLabel(element: HTMLElement): string {
           if (!el) {
             el = document.getElementById(id);
           }
-          if (el) return extractCleanText(el);
+          if (el) {
+            // Ignore Google Forms floating placeholder / boilerplate text elements (e.g. "Your answer")
+            if (
+              el.classList?.contains('c2gzEf') ||
+              el.classList?.contains('quantumWizTextinputPaperinputPlaceholder')
+            ) {
+              return null;
+            }
+            const clean = extractCleanText(el);
+            if (
+              /^(your answer|short answer text|long answer text|paragraph|your response|type here)$/i.test(
+                clean
+              )
+            ) {
+              return null;
+            }
+            return clean;
+          }
           return null;
         } catch {
           return null;
@@ -166,13 +183,13 @@ export function findFieldLabel(element: HTMLElement): string {
     }
   }
 
-  // 5b. Google Forms item container & heading lookup (div[role="listitem"], .Qr7Oae, .geS5n)
+  // 5b. Google Forms item container & heading lookup (div[role="listitem"], .Qr7Oae, .geS5n, [jsmodel])
   const gformContainer = element.closest(
-    'div[role="listitem"], .Qr7Oae, .geS5n, .freebirdFormviewerViewItemsItemItem'
+    'div[role="listitem"], .Qr7Oae, .geS5n, [jsmodel="CP1oW"], [jsmodel], .freebirdFormviewerViewItemsItemItem, div[data-item-id]'
   );
   if (gformContainer) {
     const gformHeading = gformContainer.querySelector(
-      'div[role="heading"], [jsname="r4nke"], .M7eMe, .freebirdFormviewerViewItemsItemItemTitle, .HoDLxf'
+      'div[role="heading"], [jsname="r4nke"], .M7eMe, .freebirdFormviewerViewItemsItemItemTitle, .HoDLxf, span.M7eMe'
     ) as HTMLElement;
     if (gformHeading) {
       const txt = extractCleanText(gformHeading);
@@ -339,46 +356,92 @@ export function classifyField(
     return 'custom_question';
   }
 
-  if (/(first[-_\s]?name|^first$|given[-_\s]?name|fname|legalnamesection_firstname|preferrednamesection_firstname)/i.test(text)) {
+  // 1. First Name (explicitly avoid "first and last name")
+  if (
+    !/first.*last/i.test(text) &&
+    /(first[-_\s]?name|^first$|given[-_\s]?name|\bfname\b|legalnamesection_firstname|preferrednamesection_firstname)/i.test(text)
+  ) {
     return 'firstName';
   }
-  if (/(last[-_\s]?name|^last$|family[-_\s]?name|surname|lname|legalnamesection_lastname|preferrednamesection_lastname)/i.test(text)) {
+
+  // 2. Last Name (explicitly avoid "first and last name")
+  if (
+    !/first.*last/i.test(text) &&
+    /(last[-_\s]?name|^last$|family[-_\s]?name|surname|\blname\b|legalnamesection_lastname|preferrednamesection_lastname)/i.test(text)
+  ) {
     return 'lastName';
   }
-  if (/(full[-_\s]?name|^name$|candidate[-_\s]?name|legalname\b)/i.test(text)) {
-    return 'fullName';
+
+  // 3. Full Name
+  // Matches "Full Name", "Candidate Name", "Applicant Name", "Legal Name", "Your Name", "First and Last Name", "Name of Candidate"
+  // Also matches standalone "Name" or "Your Name" unless qualified by company/college/school/project/file/manager/etc.
+  const isExcludedName =
+    /(company|employer|organization|org|college|university|school|institute|manager|reference|referrer|friend|file|filename|project|repo|repository|team|bank|middle)/i.test(label || text);
+
+  if (!isExcludedName) {
+    if (
+      /(full[-_\s]?name|candidate[-_\s]?name|applicant[-_\s]?name|legal[-_\s]?name|your[-_\s]?name|name[-_\s]?of[-_\s]?(the)?[-_\s]?(candidate|applicant|person)|first.*last|enter.*name)/i.test(text) ||
+      /\bname\b/i.test(label)
+    ) {
+      return 'fullName';
+    }
   }
-  if (element.type === 'email' || /email|e-mail/i.test(text)) {
+
+  // 4. Email
+  if (element.type === 'email' || /email|e-mail|\bgmail\b/i.test(text)) {
     return 'email';
   }
-  if (element.type === 'tel' || /phone|mobile|telephone|cell/i.test(text)) {
+
+  // 5. Phone / Contact / WhatsApp
+  if (
+    element.type === 'tel' ||
+    /(phone|mobile|telephone|\bcell\b|\bwhatsapp\b|contact[-_\s]?(number|num|no)?\b|calling[-_\s]?number|primary[-_\s]?contact)/i.test(text)
+  ) {
     return 'phone';
   }
+
+  // 6. LinkedIn
   if (/linkedin/i.test(text)) {
     return 'linkedin';
   }
+
+  // 7. GitHub
   if (/github/i.test(text)) {
     return 'github';
   }
-  if (/portfolio|website|personal[-_\s]?url|personal[-_\s]?site/i.test(text)) {
+
+  // 8. Portfolio / Website
+  if (
+    !/company.*(website|url)|employer.*website/i.test(text) &&
+    /(portfolio|personal[-_\s]?website|personal[-_\s]?site|personal[-_\s]?url|personal[-_\s]?page|\bwebsite\b)/i.test(text)
+  ) {
     return 'portfolio';
   }
-  // If input is text and label looks like a screening question
+
+  // 9. Postal Code / ZIP / PIN Code
+  if (/(postal[-_\s]?code|zip[-_\s]?code|^zip$|\bpin[-_\s]?code\b|\bpincode\b|addresssection_postalcode)/i.test(text)) {
+    return 'postalCode';
+  }
+
+  // 10. City / Current Location
+  if (
+    !/job[-_\s]?location|preferred[-_\s]?location|work[-_\s]?location/i.test(text) &&
+    /(current[-_\s]?location|current[-_\s]?city|\bcity\b|\blocation\b|address[-_\s]?city|addresssection_city|residing|residence)/i.test(text)
+  ) {
+    return 'city';
+  }
+
+  // 11. State / Province / Region
+  if (/(\bstate\b|\bprovince\b|\bregion\b|countryregion|addresssection_countryregion)/i.test(text)) {
+    return 'state';
+  }
+
+  // 12. If input is text and label looks like a screening question or long prompt
   if (
     label.length > 25 ||
     /\?|why|describe|years of|experience|salary|authorized|sponsorship|notice/i.test(label)
   ) {
     return 'custom_question';
-  }
-
-  if (/(postal[-_\s]?code|zip[-_\s]?code|^zip$|addresssection_postalcode)/i.test(text)) {
-    return 'postalCode';
-  }
-  if (/(\bstate\b|\bprovince\b|\bregion\b|countryregion|addresssection_countryregion)/i.test(text)) {
-    return 'state';
-  }
-  if (/(city|location|address[-_\s]?city|addresssection_city)/i.test(text)) {
-    return 'city';
   }
 
   return 'custom_question';
@@ -619,11 +682,11 @@ export function scanFormFields(): {
     const container =
       (radiogroup
         ? (radiogroup.closest(
-            'div[role="listitem"], .Qr7Oae, .geS5n, fieldset, .form-group, .field'
+            'div[role="listitem"], .Qr7Oae, .geS5n, fieldset, .form-group, .field, [jsmodel="CP1oW"], [jsmodel], div[data-item-id]'
           ) as HTMLElement | null) || (radiogroup as HTMLElement)
         : null) ||
       (elem.closest(
-        '[role="radiogroup"], fieldset, [data-automation-id*="formField"], div[role="listitem"], .Qr7Oae, .geS5n, .form-group, .field, [class*="radio-group"]'
+        '[role="radiogroup"], fieldset, [data-automation-id*="formField"], div[role="listitem"], .Qr7Oae, .geS5n, .form-group, .field, [class*="radio-group"], [jsmodel="CP1oW"], [jsmodel], div[data-item-id]'
       ) as HTMLElement | null);
 
     const radioName =
@@ -684,7 +747,24 @@ export function scanFormFields(): {
           const parts = ids
             .map((id) => {
               const el = document.getElementById(id);
-              return el ? extractCleanText(el) : null;
+              if (el) {
+                if (
+                  el.classList?.contains('c2gzEf') ||
+                  el.classList?.contains('quantumWizTextinputPaperinputPlaceholder')
+                ) {
+                  return null;
+                }
+                const clean = extractCleanText(el);
+                if (
+                  /^(your answer|short answer text|long answer text|paragraph|your response|type here)$/i.test(
+                    clean
+                  )
+                ) {
+                  return null;
+                }
+                return clean;
+              }
+              return null;
             })
             .filter(Boolean);
           if (parts.length > 0) groupPrompt = parts.join(' ');
@@ -694,7 +774,7 @@ export function scanFormFields(): {
       // c. Google Forms heading: div[role="heading"], .M7eMe, [jsname="r4nke"]
       if (!groupPrompt) {
         const gHeading = container.querySelector(
-          'div[role="heading"], [jsname="r4nke"], .M7eMe, .freebirdFormviewerViewItemsItemItemTitle, .HoDLxf'
+          'div[role="heading"], [jsname="r4nke"], .M7eMe, .freebirdFormviewerViewItemsItemItemTitle, .HoDLxf, span.M7eMe'
         ) as HTMLElement;
         if (gHeading) groupPrompt = extractCleanText(gHeading);
       }
@@ -776,11 +856,13 @@ export function scanFormFields(): {
         if (parentLabel) optLabel = extractCleanText(parentLabel);
       }
 
-      // c. Google Forms option wrapper: .docssharedWizToggleLabeledContainer, .aDTYNe, .snByac
+      // c. Google Forms option wrapper: .docssharedWizToggleLabeledContainer, .nWQGrd, .aDTYNe, .snByac
       if (!optLabel) {
-        const gformOptWrap = el.closest('.docssharedWizToggleLabeledContainer');
+        const gformOptWrap = el.closest(
+          '.docssharedWizToggleLabeledContainer, .nWQGrd, [data-value]'
+        );
         if (gformOptWrap) {
-          const span = gformOptWrap.querySelector('.aDTYNe, .snByac, label');
+          const span = gformOptWrap.querySelector('.aDTYNe, .snByac, .M7eMe, label, span');
           if (span) optLabel = extractCleanText(span as HTMLElement);
         }
       }

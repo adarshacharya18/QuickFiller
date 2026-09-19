@@ -27,6 +27,7 @@ import {
   scanFormFields,
   extractJobMetadata,
   getCleanFormatHint,
+  isInsideQuickFillerDrawer,
   DetectedField,
   JobMetadata,
 } from '../../utils/scanner';
@@ -336,6 +337,32 @@ export const Drawer: React.FC = () => {
       scanPage();
     }, 3500);
 
+    // 1b. Real-time DOM mutation observer for dynamic SPAs (Google Forms, Workday, etc.)
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let observer: MutationObserver | null = null;
+    try {
+      observer = new MutationObserver((mutations) => {
+        if (!isExtensionValid()) {
+          observer?.disconnect();
+          return;
+        }
+        const hasRelevant = mutations.some((m) =>
+          Array.from(m.addedNodes).some(
+            (n) => !isInsideQuickFillerDrawer(n) && n.nodeType === 1
+          )
+        );
+        if (hasRelevant) {
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            if (isExtensionValid()) {
+              scanPage();
+            }
+          }, 300);
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    } catch {}
+
     // 2. Real-time sync: Listen for storage changes from Options page
     const handleStorageChange = (
       _changes: Record<string, chrome.storage.StorageChange>,
@@ -363,6 +390,10 @@ export const Drawer: React.FC = () => {
 
     return () => {
       clearInterval(interval);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      try {
+        observer?.disconnect();
+      } catch {}
       try {
         if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
           chrome.storage.onChanged.removeListener(handleStorageChange);
@@ -905,7 +936,7 @@ export const Drawer: React.FC = () => {
     }
   };
 
-  const totalFields = standardFields.length + customQuestions.length;
+  const totalFields = standardFields.length + radioGroups.length + customQuestions.length;
 
   return (
     <div
@@ -1090,7 +1121,7 @@ export const Drawer: React.FC = () => {
           {/* Tab Navigation */}
           <div className="flex border-b border-slate-200 bg-slate-50/80 px-2 pt-1.5 gap-1">
             {[
-              { id: 'autofill', label: 'Autofill', count: standardFields.length },
+              { id: 'autofill', label: 'Autofill', count: standardFields.length + radioGroups.length },
               { id: 'questions', label: 'Answers', count: customQuestions.length },
               { id: 'coverLetter', label: 'Cover Letter', count: null },
               { id: 'bank', label: 'Paste Bank', count: (storage?.customPasteBank?.length || 0) > 0 ? storage!.customPasteBank.length : null },
@@ -1099,7 +1130,12 @@ export const Drawer: React.FC = () => {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => {
+                    setActiveTab(tab.id as any);
+                    if (tab.id === 'autofill' || tab.id === 'questions') {
+                      scanPage();
+                    }
+                  }}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-1 text-xs font-medium border-b-2 transition-all rounded-t-md active:scale-95 ${
                     isActive
                       ? 'border-sky-600 text-sky-600 font-semibold bg-white shadow-xs'

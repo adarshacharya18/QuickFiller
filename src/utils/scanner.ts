@@ -1,3 +1,10 @@
+import {
+  RadioOption,
+  DetectedRadioGroup,
+  RadioGroupCategory,
+  classifyRadioGroup,
+} from './radioResolver';
+
 export type StandardFieldType =
   | 'firstName'
   | 'lastName'
@@ -65,7 +72,7 @@ function extractCleanText(el: HTMLElement): string {
   const clone = el.cloneNode(true) as HTMLElement;
   clone
     .querySelectorAll(
-      'input, textarea, select, abbr, .requiredAsterisk, [class*="required"], [data-automation-id*="required"], [data-automation-id*="Asterisk"]'
+      'input, textarea, select, abbr, .requiredAsterisk, [class*="required"], [data-automation-id*="required"], [data-automation-id*="Asterisk"], .vHW8du, [aria-label*="Required"], [aria-label*="required"]'
     )
     .forEach((n) => n.remove());
   return (clone.textContent || '').replace(/\s*[\*:]\s*$/, '').trim();
@@ -155,6 +162,20 @@ export function findFieldLabel(element: HTMLElement): string {
     ) as HTMLElement;
     if (lbl) {
       const txt = extractCleanText(lbl);
+      if (txt) return txt;
+    }
+  }
+
+  // 5b. Google Forms item container & heading lookup (div[role="listitem"], .Qr7Oae, .geS5n)
+  const gformContainer = element.closest(
+    'div[role="listitem"], .Qr7Oae, .geS5n, .freebirdFormviewerViewItemsItemItem'
+  );
+  if (gformContainer) {
+    const gformHeading = gformContainer.querySelector(
+      'div[role="heading"], [jsname="r4nke"], .M7eMe, .freebirdFormviewerViewItemsItemItemTitle, .HoDLxf'
+    ) as HTMLElement;
+    if (gformHeading) {
+      const txt = extractCleanText(gformHeading);
       if (txt) return txt;
     }
   }
@@ -474,6 +495,7 @@ export function querySelectorAllDeep<T extends Element = Element>(
 export function scanFormFields(): {
   standardFields: DetectedField[];
   customQuestions: DetectedField[];
+  radioGroups: DetectedRadioGroup[];
 } {
   const inputs = querySelectorAllDeep<HTMLInputElement | HTMLTextAreaElement>(
     'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea',
@@ -482,6 +504,7 @@ export function scanFormFields(): {
 
   const standardFields: DetectedField[] = [];
   const customQuestions: DetectedField[] = [];
+  const radioGroups: DetectedRadioGroup[] = [];
   const seenElements = new Set<Element>();
   const seenQuestionKeys = new Set<string>();
   const seenStandardKeys = new Set<string>();
@@ -564,11 +587,263 @@ export function scanFormFields(): {
     }
   });
 
-  return { standardFields, customQuestions };
+  // Radio button scanning: native radio inputs + ARIA role="radio" buttons (e.g. Google Forms, Workday)
+  const nativeRadios = querySelectorAllDeep<HTMLInputElement>(
+    'input[type="radio"]:not([type="hidden"])',
+    document
+  );
+  const ariaRadios = querySelectorAllDeep<HTMLElement>(
+    '[role="radio"]:not(input)',
+    document
+  );
+
+  const allRadioElements = [...nativeRadios, ...ariaRadios];
+  const rawGroups = new Map<
+    string,
+    {
+      container: HTMLElement | null;
+      elements: (HTMLInputElement | HTMLElement)[];
+      name: string;
+    }
+  >();
+
+  allRadioElements.forEach((elem) => {
+    if (isInsideQuickFillerDrawer(elem)) return;
+    const isVis =
+      isElementVisible(elem) ||
+      (elem.parentElement && isElementVisible(elem.parentElement));
+    if (!isVis) return;
+
+    // Discover grouping container
+    const radiogroup = elem.closest('[role="radiogroup"]');
+    const container =
+      (radiogroup
+        ? (radiogroup.closest(
+            'div[role="listitem"], .Qr7Oae, .geS5n, fieldset, .form-group, .field'
+          ) as HTMLElement | null) || (radiogroup as HTMLElement)
+        : null) ||
+      (elem.closest(
+        '[role="radiogroup"], fieldset, [data-automation-id*="formField"], div[role="listitem"], .Qr7Oae, .geS5n, .form-group, .field, [class*="radio-group"]'
+      ) as HTMLElement | null);
+
+    const radioName =
+      (elem instanceof HTMLInputElement ? elem.name : '') ||
+      elem.getAttribute('name') ||
+      '';
+
+    let groupKey = '';
+    if (container) {
+      if (!container.dataset.qfRadioGroupId) {
+        container.dataset.qfRadioGroupId = `qf_radiogrp_${Math.random().toString(36).slice(2, 9)}`;
+      }
+      groupKey = container.dataset.qfRadioGroupId;
+    } else if (radioName) {
+      groupKey = `name:${radioName}`;
+    } else {
+      const parent = elem.parentElement;
+      if (parent) {
+        if (!parent.dataset.qfRadioGroupId) {
+          parent.dataset.qfRadioGroupId = `qf_p_${Math.random().toString(36).slice(2, 9)}`;
+        }
+        groupKey = parent.dataset.qfRadioGroupId;
+      } else {
+        groupKey = `orphan_${Math.random().toString(36).slice(2, 9)}`;
+      }
+    }
+
+    if (!rawGroups.has(groupKey)) {
+      rawGroups.set(groupKey, {
+        container,
+        elements: [],
+        name: radioName,
+      });
+    }
+    rawGroups.get(groupKey)!.elements.push(elem);
+  });
+
+  const seenRadioLabels = new Set<string>();
+
+  Array.from(rawGroups.values()).forEach((rawGroup, groupIdx) => {
+    const { container, elements, name } = rawGroup;
+    if (elements.length === 0) return;
+
+    // 1. Resolve Overarching Question Prompt
+    let groupPrompt = '';
+    if (container) {
+      // a. <legend> inside fieldset
+      const legend = container.querySelector('legend');
+      if (legend) {
+        groupPrompt = extractCleanText(legend);
+      }
+
+      // b. aria-labelledby
+      if (!groupPrompt) {
+        const labelledBy = container.getAttribute('aria-labelledby');
+        if (labelledBy) {
+          const ids = labelledBy.split(/\s+/).filter(Boolean);
+          const parts = ids
+            .map((id) => {
+              const el = document.getElementById(id);
+              return el ? extractCleanText(el) : null;
+            })
+            .filter(Boolean);
+          if (parts.length > 0) groupPrompt = parts.join(' ');
+        }
+      }
+
+      // c. Google Forms heading: div[role="heading"], .M7eMe, [jsname="r4nke"]
+      if (!groupPrompt) {
+        const gHeading = container.querySelector(
+          'div[role="heading"], [jsname="r4nke"], .M7eMe, .freebirdFormviewerViewItemsItemItemTitle, .HoDLxf'
+        ) as HTMLElement;
+        if (gHeading) groupPrompt = extractCleanText(gHeading);
+      }
+
+      // d. Workday form label: [data-automation-id="formLabel"]
+      if (!groupPrompt) {
+        const wdLabel = container.querySelector('[data-automation-id="formLabel"]') as HTMLElement;
+        if (wdLabel) groupPrompt = extractCleanText(wdLabel);
+      }
+
+      // e. General label / title elements inside container
+      if (!groupPrompt) {
+        const genLabel = container.querySelector(
+          'label, [class*="label"], h3, h4, h5, span.title'
+        ) as HTMLElement;
+        if (genLabel) groupPrompt = extractCleanText(genLabel);
+      }
+
+      // f. aria-label on container or inner radiogroup
+      if (!groupPrompt) {
+        const ariaLbl =
+          container.getAttribute('aria-label') ||
+          container.querySelector('[role="radiogroup"]')?.getAttribute('aria-label');
+        if (ariaLbl) groupPrompt = ariaLbl.replace(/\s*[\*:]\s*$/, '').trim();
+      }
+    }
+
+    // Fallback: search previous sibling of first element or container
+    if (!groupPrompt) {
+      const targetForPrev = container || elements[0];
+      let prev = targetForPrev.previousElementSibling;
+      while (prev) {
+        if (prev.tagName === 'LABEL' || prev.querySelector('label, [role="heading"]')) {
+          const l = (
+            prev.tagName === 'LABEL' ? prev : prev.querySelector('label, [role="heading"]')
+          ) as HTMLElement;
+          if (l) {
+            groupPrompt = extractCleanText(l);
+            break;
+          }
+        }
+        prev = prev.previousElementSibling;
+      }
+    }
+
+    if (!groupPrompt) {
+      groupPrompt = findFieldLabel(elements[0]);
+    }
+
+    const cleanPrompt = groupPrompt.replace(/\s*[\*:]\s*$/, '').trim();
+    const promptNorm = cleanPrompt.toLowerCase();
+
+    // Deduplicate identical question prompts across responsive clones
+    if (promptNorm && promptNorm.length > 8) {
+      if (seenRadioLabels.has(promptNorm)) return;
+      seenRadioLabels.add(promptNorm);
+    }
+
+    // 2. Resolve Options
+    const options: RadioOption[] = [];
+    elements.forEach((el, optIdx) => {
+      let optLabel = '';
+
+      // a. Explicit label[for="..."]
+      if (el.id) {
+        const root = el.getRootNode() as Document | ShadowRoot;
+        try {
+          const l =
+            (root && 'querySelector' in root
+              ? root.querySelector(`label[for="${CSS.escape(el.id)}"]`)
+              : null) || document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+          if (l) optLabel = extractCleanText(l as HTMLElement);
+        } catch {}
+      }
+
+      // b. Wrapping label
+      if (!optLabel) {
+        const parentLabel = el.closest('label');
+        if (parentLabel) optLabel = extractCleanText(parentLabel);
+      }
+
+      // c. Google Forms option wrapper: .docssharedWizToggleLabeledContainer, .aDTYNe, .snByac
+      if (!optLabel) {
+        const gformOptWrap = el.closest('.docssharedWizToggleLabeledContainer');
+        if (gformOptWrap) {
+          const span = gformOptWrap.querySelector('.aDTYNe, .snByac, label');
+          if (span) optLabel = extractCleanText(span as HTMLElement);
+        }
+      }
+
+      // d. ARIA / data attributes
+      if (!optLabel) {
+        optLabel =
+          el.getAttribute('aria-label') ||
+          el.getAttribute('data-value') ||
+          '';
+      }
+
+      // e. Sibling text
+      if (!optLabel && el.nextElementSibling) {
+        optLabel = extractCleanText(el.nextElementSibling as HTMLElement);
+      }
+
+      // f. Fallback: input value
+      const optVal =
+        (el as HTMLInputElement).value ||
+        el.getAttribute('data-value') ||
+        el.getAttribute('value') ||
+        optLabel ||
+        `option_${optIdx + 1}`;
+
+      if (!optLabel) optLabel = optVal;
+
+      const isChecked = Boolean(
+        (el as HTMLInputElement).checked ||
+        el.getAttribute('aria-checked') === 'true'
+      );
+
+      options.push({
+        id: el.id || `${name || 'radio'}_opt_${optIdx}`,
+        value: optVal,
+        label: optLabel,
+        element: el,
+        isChecked,
+      });
+    });
+
+    if (options.length === 0) return;
+
+    const containerAttrs = container
+      ? container.getAttribute('data-automation-id') || container.className || ''
+      : '';
+    const category = classifyRadioGroup(cleanPrompt, name, containerAttrs);
+
+    radioGroups.push({
+      id: `radiogroup_${groupIdx}`,
+      name,
+      label: cleanPrompt || `Radio Question #${groupIdx + 1}`,
+      category,
+      options,
+      containerElement: container || undefined,
+    });
+  });
+
+  return { standardFields, customQuestions, radioGroups };
 }
 
 export function extractJobMetadata(): JobMetadata {
-  const title =
+  let title =
     document.querySelector(
       '[data-automation-id="jobPostingHeader"], h1, .job-title, [class*="job-title"], [class*="position-title"], [class*="jobTitle"]'
     )?.textContent?.trim() ||
@@ -647,6 +922,65 @@ export function extractJobMetadata(): JobMetadata {
         } else {
           company = 'Workday Job';
         }
+      }
+    }
+  } else if (
+    hostname.includes('docs.google.com') &&
+    (window.location.pathname.includes('/forms/') || window.location.pathname.includes('/forms'))
+  ) {
+    // Google Forms
+    const gformHeading = document.querySelector(
+      'div[role="heading"][aria-level="1"], .F9NWFb, .freebirdFormviewerViewHeaderTitle'
+    )?.textContent?.trim();
+
+    if (gformHeading) {
+      title = gformHeading;
+    } else {
+      title = document.title.replace(/\s*[-–—|]\s*Google\s*Forms$/i, '').trim() || 'Job Application';
+    }
+
+    const titleWithoutGForms = document.title.replace(/\s*[-–—|]\s*Google\s*Forms$/i, '').trim();
+    const titleCandidates = [gformHeading, titleWithoutGForms].filter(Boolean) as string[];
+    let foundCompany = '';
+
+    for (const text of titleCandidates) {
+      const atMatch =
+        text.match(/(?:at|with|@)\s+([A-Za-z0-9\s&.,]+)$/i) ||
+        text.match(
+          /(?:at|with|@)\s+([A-Za-z0-9\s&.,]+?)(?:\s*[-–—|:]|\s+application|\s+form|$)/i
+        );
+      if (atMatch && atMatch[1]) {
+        foundCompany = atMatch[1].trim();
+        break;
+      }
+      const prefixMatch = text.match(
+        /^([A-Za-z0-9\s&.,]{2,30}?)\s*[-–—|:]\s*(?:job|internship|application|hiring|engineering|developer|role)/i
+      );
+      if (prefixMatch && prefixMatch[1]) {
+        foundCompany = prefixMatch[1].trim();
+        break;
+      }
+      const hiringMatch = text.match(
+        /(?:hiring|careers|team)\s*(?:at|for)?\s*([A-Za-z0-9\s&.,]{2,30})/i
+      );
+      if (hiringMatch && hiringMatch[1]) {
+        foundCompany = hiringMatch[1].trim();
+        break;
+      }
+    }
+
+    if (foundCompany) {
+      company = foundCompany;
+    } else {
+      const desc =
+        document.querySelector('.cBGGfd, .freebirdFormviewerViewHeaderDescription')?.textContent || '';
+      const descMatch = desc.match(
+        /(?:welcome to|joining|about)\s+([A-Za-z0-9\s&.,]{2,30}?)(?:'s|\s+team|\s+is|\.|\,)/i
+      );
+      if (descMatch && descMatch[1]) {
+        company = descMatch[1].trim();
+      } else {
+        company = 'Company';
       }
     }
   } else {

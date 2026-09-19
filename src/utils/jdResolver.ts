@@ -189,6 +189,8 @@ export function extractInlineJD(doc: Document = document): JobDescriptionResult 
     'main',
     '[class*="job-details"]',
     '[class*="section-job-description"]',
+    '.cBGGfd',
+    '.freebirdFormviewerViewHeaderDescription',
   ];
 
   for (const sel of candidateSelectors) {

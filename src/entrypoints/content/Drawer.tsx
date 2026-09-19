@@ -23,8 +23,24 @@ import {
   CheckCircle,
   Briefcase,
 } from 'lucide-react';
-import { scanFormFields, extractJobMetadata, getCleanFormatHint, DetectedField, JobMetadata } from '../../utils/scanner';
-import { setNativeInputValue, insertTextAtCursor, CursorTargetInfo } from '../../utils/autofill';
+import {
+  scanFormFields,
+  extractJobMetadata,
+  getCleanFormatHint,
+  DetectedField,
+  JobMetadata,
+} from '../../utils/scanner';
+import {
+  setNativeInputValue,
+  setNativeRadioChecked,
+  insertTextAtCursor,
+  CursorTargetInfo,
+} from '../../utils/autofill';
+import {
+  DetectedRadioGroup,
+  RadioOption,
+  resolveRadioOption,
+} from '../../utils/radioResolver';
 import { deriveJobPostingUrl, extractInlineJD } from '../../utils/jdResolver';
 import { getStorageData, updateStorageData, isExtensionValid } from '../../utils/storage';
 import { StorageData, CustomPasteItem, defaultStorageData } from '../../types/storage';
@@ -77,6 +93,7 @@ export const Drawer: React.FC = () => {
   const [storage, setStorage] = useState<StorageData | null>(null);
   const [standardFields, setStandardFields] = useState<DetectedField[]>([]);
   const [customQuestions, setCustomQuestions] = useState<DetectedField[]>([]);
+  const [radioGroups, setRadioGroups] = useState<DetectedRadioGroup[]>([]);
   const [jobMetadata, setJobMetadata] = useState<JobMetadata | null>(null);
   const [activeTab, setActiveTab] = useState<'autofill' | 'questions' | 'coverLetter' | 'bank'>('autofill');
 
@@ -280,9 +297,10 @@ export const Drawer: React.FC = () => {
   // Scan page and load storage
   const scanPage = () => {
     if (!isExtensionValid()) return;
-    const { standardFields: std, customQuestions: cq } = scanFormFields();
+    const { standardFields: std, customQuestions: cq, radioGroups: rg } = scanFormFields();
     setStandardFields(std);
     setCustomQuestions(cq);
+    setRadioGroups(rg || []);
     const meta = extractJobMetadata();
     setJobMetadata(meta);
   };
@@ -815,15 +833,33 @@ export const Drawer: React.FC = () => {
       }
     });
 
-    if (filledCount > 0) {
+    let radioFilledCount = 0;
+    radioGroups.forEach((group) => {
+      const match = resolveRadioOption(
+        group,
+        currentStorage.wizardAnswers,
+        currentStorage.questionBank
+      );
+      if (match && !match.isChecked) {
+        const ok = setNativeRadioChecked(match.element);
+        if (ok) radioFilledCount++;
+      }
+    });
+
+    const totalFilled = filledCount + radioFilledCount;
+    if (totalFilled > 0) {
+      const parts: string[] = [];
+      if (filledCount > 0) parts.push(`${filledCount} text field${filledCount > 1 ? 's' : ''}`);
+      if (radioFilledCount > 0)
+        parts.push(`${radioFilledCount} radio question${radioFilledCount > 1 ? 's' : ''}`);
       setAutofillBanner({
         type: 'success',
-        message: `Successfully autofilled ${filledCount} field${filledCount > 1 ? 's' : ''}!`,
+        message: `Successfully autofilled ${parts.join(' and ')}!`,
       });
     } else {
       setAutofillBanner({
         type: 'info',
-        message: 'No matching profile values found for detected fields on this page.',
+        message: 'No matching profile values or radio answers found for detected fields on this page.',
       });
     }
 
@@ -1571,7 +1607,7 @@ export const Drawer: React.FC = () => {
                     className="flex items-center gap-1.5 text-xs bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg font-medium shadow-xs transition active:scale-95 flex-shrink-0"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    Fill All ({standardFields.length})
+                    Fill All ({standardFields.length + radioGroups.length})
                   </button>
                 </div>
 
@@ -1595,10 +1631,10 @@ export const Drawer: React.FC = () => {
                 )}
 
                 <div className="space-y-2">
-                  {standardFields.length === 0 ? (
+                  {standardFields.length === 0 && radioGroups.length === 0 ? (
                     <div className="text-center py-10 text-slate-400 space-y-2">
-                      <p className="font-medium text-slate-600">No standard fields detected</p>
-                      <p className="text-xs">Navigate to a job application form with text inputs.</p>
+                      <p className="font-medium text-slate-600">No form fields detected</p>
+                      <p className="text-xs">Navigate to a job application or form with inputs.</p>
                     </div>
                   ) : (
                     standardFields.map((field) => {
@@ -1657,6 +1693,97 @@ export const Drawer: React.FC = () => {
                         </div>
                       );
                     })
+                  )}
+
+                  {/* Radio Questions Section */}
+                  {radioGroups.length > 0 && (
+                    <div className="pt-2 space-y-2">
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Radio Questions ({radioGroups.length})
+                        </span>
+                      </div>
+                      {radioGroups.map((group) => {
+                        const matchedOpt = resolveRadioOption(
+                          group,
+                          storage?.wizardAnswers,
+                          storage?.questionBank
+                        );
+
+                        return (
+                          <div
+                            key={group.id}
+                            className="p-2.5 bg-white border border-slate-200/80 rounded-xl shadow-xs space-y-2 hover:border-slate-300 transition"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-medium text-xs text-slate-900 break-words flex-1 min-w-0">
+                                    {group.label}
+                                  </span>
+                                  <span className="text-[9px] font-medium text-purple-600 bg-purple-50 border border-purple-200/60 px-1.5 py-0.2 rounded capitalize flex-shrink-0">
+                                    {group.category.replace('_', ' ')}
+                                  </span>
+                                </div>
+                              </div>
+                              {matchedOpt && (
+                                <button
+                                  onClick={() => {
+                                    setNativeRadioChecked(matchedOpt.element);
+                                    setInsertedId(group.id);
+                                    setTimeout(() => setInsertedId(null), 2000);
+                                    setTimeout(scanPage, 150);
+                                  }}
+                                  className="text-[11px] font-medium text-slate-700 hover:text-slate-900 active:scale-95 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition flex items-center gap-1 flex-shrink-0"
+                                >
+                                  {insertedId === group.id || matchedOpt.isChecked ? (
+                                    <span className="text-emerald-600 flex items-center gap-1 animate-pop">
+                                      <Check className="w-3 h-3" /> Selected
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <CheckCircle className="w-3 h-3 text-slate-500" />
+                                      <span>Select</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Options Pills */}
+                            <div className="flex flex-wrap gap-1">
+                              {group.options.map((opt) => {
+                                const isTarget = matchedOpt?.id === opt.id;
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setNativeRadioChecked(opt.element);
+                                      setTimeout(scanPage, 150);
+                                    }}
+                                    className={`text-[10px] px-2 py-0.5 rounded-md border transition cursor-pointer flex items-center gap-1 ${
+                                      opt.isChecked
+                                        ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-medium'
+                                        : isTarget
+                                        ? 'bg-sky-50 border-sky-300 text-sky-800 font-medium'
+                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                    }`}
+                                  >
+                                    {opt.isChecked ? (
+                                      <Check className="w-2.5 h-2.5 text-emerald-600" />
+                                    ) : isTarget ? (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                                    ) : null}
+                                    <span className="truncate max-w-[150px]">{opt.label}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               </div>

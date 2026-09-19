@@ -16,10 +16,10 @@ export interface StagedJob {
 }
 
 export const CONFIRMATION_URL_REGEX =
-  /(\/applicationsubmitted|\/applicationconfirmation|\/confirmation|\/thank-you|\/thanks|\/applied|\/submitted|application[-_]?submitted|application[-_]?confirmation|\/success|applied=true|status=success|submitted=1)/i;
+  /(\/applicationsubmitted|\/applicationconfirmation|\/confirmation|\/thank-you|\/thanks|\/applied|\/submitted|application[-_]?submitted|application[-_]?confirmation|\/success|applied=true|status=success|submitted=1|\/formresponse)/i;
 
 export const SUCCESS_TEXT_REGEX =
-  /((application|form|submission) (has been )?(successfully )?submitted|(application|form|submission) submitted successfully|thank you for (your application|applying)|your (application|form) (has been|was) received|(application|form) (received|complete)|we('ve| have) received your application|we appreciate your interest in|submission successful|successfully submitted)/i;
+  /((application|form|submission) (has been )?(successfully )?submitted|(application|form|submission) submitted successfully|thank you for (your application|applying)|your (application|form) (has been|was) received|(application|form) (received|complete)|we('ve| have) received your application|we appreciate your interest in|submission successful|successfully submitted|your response (has been|was) recorded|response (has been )?recorded|submit another response)/i;
 
 /**
  * Selectors identifying candidate portal navigation elements across ATS platforms (Workday, SmartRecruiters, Darwinbox, etc.).
@@ -334,7 +334,7 @@ export function hasVisibleSuccessMessage(): boolean {
   }
 
   const prominentElements = querySelectorAllDeep<HTMLElement>(
-    'h1, h2, h3, h4, h5, [role="alert"], [data-automation-id*="success"], [data-automation-id*="confirmation"], [id*="submitted"], [id*="success"], [class*="submitted"], [class*="success"], .confirmation, .success',
+    'h1, h2, h3, h4, h5, [role="alert"], [data-automation-id*="success"], [data-automation-id*="confirmation"], [id*="submitted"], [id*="success"], [class*="submitted"], [class*="success"], [class*="confirmation"], [class*="Confirmation"], .confirmation, .success, .freebirdFormviewerViewResponseConfirmationMessage',
     document
   );
 

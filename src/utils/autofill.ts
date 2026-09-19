@@ -61,7 +61,17 @@ export function setNativeInputValue(
 
     element.dispatchEvent(new Event('input', { bubbles: true, composed: true, cancelable: true }));
     element.dispatchEvent(new Event('change', { bubbles: true, composed: true, cancelable: true }));
+
+    // Key event dispatch for Google Forms / Wiz change detection
+    try {
+      element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, composed: true, key: 'End' }));
+      element.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, composed: true, key: 'End' }));
+    } catch {}
+
     if (shouldBlur) {
+      try {
+        element.blur();
+      } catch {}
       element.dispatchEvent(new Event('blur', { bubbles: true, composed: true, cancelable: true }));
     }
 
@@ -105,6 +115,131 @@ export function setNativeInputValue(
     } catch {
       // Ignore fallback error
     }
+    return false;
+  }
+}
+
+/**
+ * Programmatically checks a radio button (either native HTMLInputElement or ARIA role="radio" element),
+ * triggering prototype setters, value trackers, pointer/mouse events, click, and change events
+ * required by modern reactive frameworks (React, Angular, Vue, Stencil, Google Forms Material, Workday).
+ */
+export function setNativeRadioChecked(element: HTMLInputElement | HTMLElement): boolean {
+  if (!element) return false;
+
+  try {
+    element.focus?.();
+    const win = element.ownerDocument?.defaultView || window;
+    const isNativeRadio =
+      (element instanceof (win.HTMLInputElement || HTMLInputElement) || element.tagName === 'INPUT') &&
+      (element as HTMLInputElement).type === 'radio';
+
+    if (isNativeRadio) {
+      const radioInput = element as HTMLInputElement;
+
+      // 1. Prototype setter call to notify React/Vue/Angular
+      try {
+        const proto = win.HTMLInputElement?.prototype || HTMLInputElement.prototype;
+        const descriptor = Object.getOwnPropertyDescriptor(proto, 'checked');
+        if (descriptor && descriptor.set) {
+          descriptor.set.call(radioInput, true);
+        } else {
+          radioInput.checked = true;
+        }
+      } catch {
+        radioInput.checked = true;
+      }
+
+      // 2. React _valueTracker update
+      try {
+        const tracker = (radioInput as any)._valueTracker;
+        if (tracker) {
+          tracker.setValue(false);
+        }
+      } catch {}
+
+      // 3. Pointer and mouse events leading to native click
+      try {
+        radioInput.dispatchEvent(
+          new PointerEvent('pointerdown', { bubbles: true, composed: true, cancelable: true })
+        );
+        radioInput.dispatchEvent(
+          new MouseEvent('mousedown', { bubbles: true, composed: true, cancelable: true })
+        );
+        radioInput.dispatchEvent(
+          new PointerEvent('pointerup', { bubbles: true, composed: true, cancelable: true })
+        );
+        radioInput.dispatchEvent(
+          new MouseEvent('mouseup', { bubbles: true, composed: true, cancelable: true })
+        );
+      } catch {}
+
+      try {
+        radioInput.click();
+      } catch {}
+
+      radioInput.dispatchEvent(new Event('input', { bubbles: true, composed: true, cancelable: true }));
+      radioInput.dispatchEvent(new Event('change', { bubbles: true, composed: true, cancelable: true }));
+
+      // Web Component / Shadow DOM host synchronization
+      try {
+        const rootNode = radioInput.getRootNode();
+        if (rootNode && 'host' in rootNode) {
+          const host = (rootNode as ShadowRoot).host as any;
+          if (host) {
+            if ('checked' in host) host.checked = true;
+            host.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+            try {
+              host.dispatchEvent(
+                new CustomEvent('dbxChange', { bubbles: true, composed: true, detail: { checked: true } })
+              );
+            } catch {}
+          }
+        }
+      } catch {}
+
+      return true;
+    }
+
+    // ARIA role="radio" (e.g. Google Forms .appsMaterialWizToggleRadiogroupEl or custom divs)
+    if (element.getAttribute?.('role') === 'radio' || element.closest?.('[role="radio"]')) {
+      const target = (
+        element.getAttribute?.('role') === 'radio' ? element : element.closest('[role="radio"]')
+      ) as HTMLElement;
+
+      try {
+        target.setAttribute('aria-checked', 'true');
+        target.dispatchEvent(
+          new PointerEvent('pointerdown', { bubbles: true, composed: true, cancelable: true })
+        );
+        target.dispatchEvent(
+          new MouseEvent('mousedown', { bubbles: true, composed: true, cancelable: true })
+        );
+        target.dispatchEvent(
+          new PointerEvent('pointerup', { bubbles: true, composed: true, cancelable: true })
+        );
+        target.dispatchEvent(
+          new MouseEvent('mouseup', { bubbles: true, composed: true, cancelable: true })
+        );
+      } catch {}
+
+      try {
+        target.click();
+      } catch {}
+
+      target.dispatchEvent(new Event('input', { bubbles: true, composed: true, cancelable: true }));
+      target.dispatchEvent(new Event('change', { bubbles: true, composed: true, cancelable: true }));
+      return true;
+    }
+
+    // Fallback click on whatever element passed
+    element.click?.();
+    return true;
+  } catch (err) {
+    console.error('[QuickFiller] Error setting radio checked:', err);
+    try {
+      element.click?.();
+    } catch {}
     return false;
   }
 }

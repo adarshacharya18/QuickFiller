@@ -72,10 +72,13 @@ function extractCleanText(el: HTMLElement): string {
   const clone = el.cloneNode(true) as HTMLElement;
   clone
     .querySelectorAll(
-      'input, textarea, select, abbr, .requiredAsterisk, [class*="required"], [data-automation-id*="required"], [data-automation-id*="Asterisk"], .vHW8du, [aria-label*="Required"], [aria-label*="required"]'
+      'input, textarea, select, abbr, .requiredAsterisk, [class*="required"], [data-automation-id*="required"], [data-automation-id*="Asterisk"], .vHW8du, [aria-label*="Required"], [aria-label*="required"], .question-number, [data-automation-id="requiredSymbol"], .office-form-question-required'
     )
     .forEach((n) => n.remove());
-  return (clone.textContent || '').replace(/\s*[\*:]\s*$/, '').trim();
+  let text = (clone.textContent || '').replace(/\s*[\*:]\s*$/, '').trim();
+  // Strip leading question numbering prefixes e.g. "1. ", "2. ", "10) ", "3: "
+  text = text.replace(/^\s*\d+[\.\)\-:]\s*/, '').trim();
+  return text;
 }
 
 export function findFieldLabel(element: HTMLElement): string {
@@ -193,6 +196,20 @@ export function findFieldLabel(element: HTMLElement): string {
     ) as HTMLElement;
     if (gformHeading) {
       const txt = extractCleanText(gformHeading);
+      if (txt) return txt;
+    }
+  }
+
+  // 5c. Microsoft Forms item container & heading lookup (div[data-automation-id="questionItem"], .office-form-question)
+  const msFormContainer = element.closest(
+    'div[data-automation-id="questionItem"], .office-form-question, .question-item'
+  );
+  if (msFormContainer) {
+    const msHeading = msFormContainer.querySelector(
+      '[data-automation-id="questionTitle"], .office-form-question-title, span.question-title-box, div.question-title-box'
+    ) as HTMLElement;
+    if (msHeading) {
+      const txt = extractCleanText(msHeading);
       if (txt) return txt;
     }
   }
@@ -682,11 +699,11 @@ export function scanFormFields(): {
     const container =
       (radiogroup
         ? (radiogroup.closest(
-            'div[role="listitem"], .Qr7Oae, .geS5n, fieldset, .form-group, .field, [jsmodel="CP1oW"], [jsmodel], div[data-item-id]'
+            'div[role="listitem"], .Qr7Oae, .geS5n, fieldset, .form-group, .field, [jsmodel="CP1oW"], [jsmodel], div[data-item-id], div[data-automation-id="questionItem"], .office-form-question, .question-item'
           ) as HTMLElement | null) || (radiogroup as HTMLElement)
         : null) ||
       (elem.closest(
-        '[role="radiogroup"], fieldset, [data-automation-id*="formField"], div[role="listitem"], .Qr7Oae, .geS5n, .form-group, .field, [class*="radio-group"], [jsmodel="CP1oW"], [jsmodel], div[data-item-id]'
+        '[role="radiogroup"], fieldset, [data-automation-id*="formField"], div[role="listitem"], .Qr7Oae, .geS5n, .form-group, .field, [class*="radio-group"], [jsmodel="CP1oW"], [jsmodel], div[data-item-id], [data-automation-id="choiceContainer"], div[data-automation-id="questionItem"], .office-form-question, .office-form-question-choice'
       ) as HTMLElement | null);
 
     const radioName =
@@ -779,6 +796,14 @@ export function scanFormFields(): {
         if (gHeading) groupPrompt = extractCleanText(gHeading);
       }
 
+      // c2. Microsoft Forms heading: [data-automation-id="questionTitle"], .office-form-question-title
+      if (!groupPrompt) {
+        const msHeading = container.querySelector(
+          '[data-automation-id="questionTitle"], .office-form-question-title, span.question-title-box, div.question-title-box'
+        ) as HTMLElement;
+        if (msHeading) groupPrompt = extractCleanText(msHeading);
+      }
+
       // d. Workday form label: [data-automation-id="formLabel"]
       if (!groupPrompt) {
         const wdLabel = container.querySelector('[data-automation-id="formLabel"]') as HTMLElement;
@@ -856,13 +881,15 @@ export function scanFormFields(): {
         if (parentLabel) optLabel = extractCleanText(parentLabel);
       }
 
-      // c. Google Forms option wrapper: .docssharedWizToggleLabeledContainer, .nWQGrd, .aDTYNe, .snByac
+      // c. Google Forms & Microsoft Forms option wrapper: .docssharedWizToggleLabeledContainer, .nWQGrd, [data-automation-id="choiceLabel"], .office-form-question-choice-item
       if (!optLabel) {
-        const gformOptWrap = el.closest(
-          '.docssharedWizToggleLabeledContainer, .nWQGrd, [data-value]'
+        const optWrap = el.closest(
+          '.docssharedWizToggleLabeledContainer, .nWQGrd, [data-value], [data-automation-id="choiceLabel"], .office-form-question-choice-item'
         );
-        if (gformOptWrap) {
-          const span = gformOptWrap.querySelector('.aDTYNe, .snByac, .M7eMe, label, span');
+        if (optWrap) {
+          const span = optWrap.querySelector(
+            '[data-automation-id="choiceLabel"], .office-form-question-choice-text, .aDTYNe, .snByac, .M7eMe, label, span'
+          );
           if (span) optLabel = extractCleanText(span as HTMLElement);
         }
       }
@@ -1065,6 +1092,65 @@ export function extractJobMetadata(): JobMetadata {
         company = 'Company';
       }
     }
+  } else if (
+    hostname.includes('forms.office.com') ||
+    hostname.includes('forms.microsoft.com')
+  ) {
+    // Microsoft Forms
+    const msTitle = document.querySelector(
+      '[data-automation-id="formTitle"], .office-form-title, h1'
+    )?.textContent?.trim();
+
+    if (msTitle) {
+      title = msTitle;
+    } else {
+      title = document.title.replace(/\s*[-–—|]\s*Microsoft\s*Forms$/i, '').trim() || 'Job Application';
+    }
+
+    const titleWithoutMSForms = document.title.replace(/\s*[-–—|]\s*Microsoft\s*Forms$/i, '').trim();
+    const titleCandidates = [msTitle, titleWithoutMSForms].filter(Boolean) as string[];
+    let foundCompany = '';
+
+    for (const text of titleCandidates) {
+      const atMatch =
+        text.match(/(?:at|with|@)\s+([A-Za-z0-9\s&.,]+)$/i) ||
+        text.match(
+          /(?:at|with|@)\s+([A-Za-z0-9\s&.,]+?)(?:\s*[-–—|:]|\s+application|\s+form|$)/i
+        );
+      if (atMatch && atMatch[1]) {
+        foundCompany = atMatch[1].trim();
+        break;
+      }
+      const prefixMatch = text.match(
+        /^([A-Za-z0-9\s&.,]{2,30}?)\s*[-–—|:]\s*(?:job|internship|application|hiring|engineering|developer|role|software)/i
+      );
+      if (prefixMatch && prefixMatch[1]) {
+        foundCompany = prefixMatch[1].trim();
+        break;
+      }
+      const hiringMatch = text.match(
+        /(?:hiring|careers|team)\s*(?:at|for)?\s*([A-Za-z0-9\s&.,]{2,30})/i
+      );
+      if (hiringMatch && hiringMatch[1]) {
+        foundCompany = hiringMatch[1].trim();
+        break;
+      }
+    }
+
+    if (foundCompany) {
+      company = foundCompany;
+    } else {
+      const desc =
+        document.querySelector('[data-automation-id="formSubtitle"], .office-form-subtitle')?.textContent || '';
+      const descMatch = desc.match(
+        /(?:welcome to|joining|about)\s+([A-Za-z0-9\s&.,]{2,30}?)(?:'s|\s+team|\s+is|\.|\,)/i
+      );
+      if (descMatch && descMatch[1]) {
+        company = descMatch[1].trim();
+      } else {
+        company = 'Company';
+      }
+    }
   } else {
     // 1. Try explicit DOM element (.company, [class*="company"], [data-automation-id*="company"])
     const domCompany = document
@@ -1099,6 +1185,9 @@ export function extractJobMetadata(): JobMetadata {
   // Description snippet extraction
   const descContainer =
     document.querySelector('[data-automation-id="job-posting-description"]') ||
+    document.querySelector('[data-automation-id="formSubtitle"]') ||
+    document.querySelector('.office-form-subtitle') ||
+    document.querySelector('.cBGGfd') ||
     document.querySelector('#content') ||
     document.querySelector('.description') ||
     document.querySelector('article') ||

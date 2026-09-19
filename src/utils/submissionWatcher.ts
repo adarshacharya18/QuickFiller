@@ -16,10 +16,10 @@ export interface StagedJob {
 }
 
 export const CONFIRMATION_URL_REGEX =
-  /(\/applicationsubmitted|\/applicationconfirmation|\/confirmation|\/thank-you|\/thanks|\/applied|\/submitted|application[-_]?submitted|application[-_]?confirmation|\/success|applied=true|status=success|submitted=1|\/formresponse)/i;
+  /(\/applicationsubmitted|\/applicationconfirmation|\/confirmation|\/thank-you|\/thanks|\/applied|\/submitted|application[-_]?submitted|application[-_]?confirmation|\/success|applied=true|status=success|submitted=1|\/formresponse|\/responsepage\.aspx)/i;
 
 export const SUCCESS_TEXT_REGEX =
-  /((application|form|submission) (has been )?(successfully )?submitted|(application|form|submission) submitted successfully|thank you for (your application|applying)|your (application|form) (has been|was) received|(application|form) (received|complete)|we('ve| have) received your application|we appreciate your interest in|submission successful|successfully submitted|your response (has been|was) recorded|response (has been )?recorded|submit another response)/i;
+  /((application|form|submission) (has been )?(successfully )?submitted|(application|form|submission) submitted successfully|thank you for (your application|applying)|your (application|form) (has been|was) received|(application|form) (received|complete)|we('ve| have) received your application|we appreciate your interest in|submission successful|successfully submitted|your response (has been|was) (recorded|submitted)|response (has been )?(recorded|submitted)|\bthanks!\b|submit another response)/i;
 
 /**
  * Selectors identifying candidate portal navigation elements across ATS platforms (Workday, SmartRecruiters, Darwinbox, etc.).
@@ -322,19 +322,19 @@ export function isConfirmationUrl(url: string = window.location.href): boolean {
  * Strictly ignores hidden elements (e.g. display: none or hidden parent modals).
  */
 export function hasVisibleSuccessMessage(): boolean {
-  // Check Workday specific status banners and success containers
+  // Check Workday & Microsoft Forms specific status banners and success containers
   const workdaySuccess = document.querySelector(
-    '[data-automation-id="applicationSubmitted"], [data-automation-id="applicationConfirmation"], [data-automation-id="statusBanner"], [data-automation-id="successMessage"], [data-automation-id="alert-success"]'
+    '[data-automation-id="applicationSubmitted"], [data-automation-id="applicationConfirmation"], [data-automation-id="statusBanner"], [data-automation-id="successMessage"], [data-automation-id="alert-success"], [data-automation-id="thankYouMessage"], .office-form-thank-you'
   );
   if (workdaySuccess && isElementVisible(workdaySuccess as HTMLElement)) {
     const txt = (workdaySuccess.textContent || '').trim();
-    if (txt && (SUCCESS_TEXT_REGEX.test(txt) || /submitted|thank you|success|congratulations/i.test(txt))) {
+    if (txt && (SUCCESS_TEXT_REGEX.test(txt) || /submitted|thank you|success|congratulations|thanks/i.test(txt))) {
       return true;
     }
   }
 
   const prominentElements = querySelectorAllDeep<HTMLElement>(
-    'h1, h2, h3, h4, h5, [role="alert"], [data-automation-id*="success"], [data-automation-id*="confirmation"], [id*="submitted"], [id*="success"], [class*="submitted"], [class*="success"], [class*="confirmation"], [class*="Confirmation"], .confirmation, .success, .freebirdFormviewerViewResponseConfirmationMessage',
+    'h1, h2, h3, h4, h5, [role="alert"], [data-automation-id*="success"], [data-automation-id*="confirmation"], [data-automation-id="thankYouMessage"], [id*="submitted"], [id*="success"], [class*="submitted"], [class*="success"], [class*="confirmation"], [class*="Confirmation"], .confirmation, .success, .freebirdFormviewerViewResponseConfirmationMessage, .office-form-thank-you, .office-form-thank-you-title, .office-form-thank-you-sub-title',
     document
   );
 

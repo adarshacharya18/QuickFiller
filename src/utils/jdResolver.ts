@@ -191,6 +191,8 @@ export function extractInlineJD(doc: Document = document): JobDescriptionResult 
     '[class*="section-job-description"]',
     '.cBGGfd',
     '.freebirdFormviewerViewHeaderDescription',
+    '[data-automation-id="formSubtitle"]',
+    '.office-form-subtitle',
   ];
 
   for (const sel of candidateSelectors) {

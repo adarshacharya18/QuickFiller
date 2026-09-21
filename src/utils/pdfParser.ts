@@ -2,6 +2,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { ExtractedLink, CandidateProfile, ProjectItem, ExperienceItem, EducationItem } from '../types/profile';
 import { validatePdfBuffer } from './security';
+import { splitPhoneAndExtension } from './phoneUtils';
 
 // Set worker source for pdfjs
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -468,8 +469,12 @@ export async function parseResumePdf(fileBuffer: ArrayBuffer): Promise<ParsedRes
   const emailMatch = fullText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   const email = emailMatch ? emailMatch[0] : '';
 
-  const phoneMatch = fullText.match(/(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
-  const phone = phoneMatch ? phoneMatch[0].trim() : '';
+  const phoneMatch = fullText.match(
+    /(?:(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\+?\d{10,13})(?:[,\s]+(?:ext(?:ension)?|x|#)\s*[:.]?\s*[0-9a-zA-Z]+\b)?/i
+  );
+  const { phone, extension: phoneExtension } = splitPhoneAndExtension(
+    phoneMatch ? phoneMatch[0].trim() : ''
+  );
 
   // 6. Extract candidate name cleanly before contact info
   const { firstName, lastName } = extractCandidateName(fullText, email, phone);
@@ -508,6 +513,7 @@ export async function parseResumePdf(fileBuffer: ArrayBuffer): Promise<ParsedRes
         lastName,
         email,
         phone,
+        phoneExtension,
         city: detectedCity,
         linkedinUrl,
         githubUrl: finalGithubUrl,

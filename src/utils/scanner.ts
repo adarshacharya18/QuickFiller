@@ -11,6 +11,7 @@ export type StandardFieldType =
   | 'fullName'
   | 'email'
   | 'phone'
+  | 'phoneExtension'
   | 'linkedin'
   | 'github'
   | 'portfolio'
@@ -337,7 +338,25 @@ export function classifyField(
   if (/\bemail\b|contactinformation_email/.test(combinedAutoId)) {
     return 'email';
   }
-  if (/phone[-_]?number|phonenumber|contactinformation_phone/.test(combinedAutoId)) {
+  if (
+    /phone[-_]?extension|phoneextension|contactinformation_phoneextension|\bextension\b/.test(
+      combinedAutoId
+    )
+  ) {
+    return 'phoneExtension';
+  }
+  if (
+    /country[-_]?phone[-_]?code|countryphonecode|phone[-_]?device[-_]?type|phonedevicetype/.test(
+      combinedAutoId
+    )
+  ) {
+    return 'custom_question';
+  }
+  if (
+    /phone[-_]?number|phonenumber|contactinformation_phonenumber|\bphonenumber\b|contactinformation_phone(?!extension)/.test(
+      combinedAutoId
+    )
+  ) {
     return 'phone';
   }
   if (/addresssection_postalcode|\bpostalcode\b|\bzipcode\b/.test(combinedAutoId)) {
@@ -371,6 +390,20 @@ export function classifyField(
 
   if (element.tagName === 'TEXTAREA') {
     return 'custom_question';
+  }
+
+  // Phone Extension (explicitly check before Phone and exclude 'external', 'extent')
+  const isExtensionText =
+    !/external|extent/i.test(text) &&
+    (
+      /(?:^|\b)(?:phone[-_\s]?)?ext(?:ension)?(?:\.|\b|:)/i.test(label || hostLabel) ||
+      /(?:^|\b)extension(?:\b|$|:)/i.test(label || hostLabel) ||
+      /phone[-_]?extension|phoneextension|phone[-_]?ext\b/i.test(automationId || name || id) ||
+      /(?:^|\b)extension(?:\b|$)/i.test(automationId || name || id)
+    );
+
+  if (isExtensionText) {
+    return 'phoneExtension';
   }
 
   // 1. First Name (explicitly avoid "first and last name")
@@ -409,10 +442,19 @@ export function classifyField(
     return 'email';
   }
 
-  // 5. Phone / Contact / WhatsApp
+  const isPhoneDeviceOrCountryCode =
+    /(country[-_\s]?(?:phone[-_\s]?)?code|device[-_\s]?type|country[-_\s]?calling[-_\s]?code)/i.test(
+      text
+    );
+
+  // 5. Phone / Contact / WhatsApp (explicitly exclude extension, device type, country code)
   if (
-    element.type === 'tel' ||
-    /(phone|mobile|telephone|\bcell\b|\bwhatsapp\b|contact[-_\s]?(number|num|no)?\b|calling[-_\s]?number|primary[-_\s]?contact)/i.test(text)
+    !isExtensionText &&
+    !isPhoneDeviceOrCountryCode &&
+    (
+      element.type === 'tel' ||
+      /(phone|mobile|telephone|\bcell\b|\bwhatsapp\b|contact[-_\s]?(number|num|no)?\b|calling[-_\s]?number|primary[-_\s]?contact)/i.test(text)
+    )
   ) {
     return 'phone';
   }

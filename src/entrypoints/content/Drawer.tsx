@@ -47,8 +47,10 @@ import {
   setNativeInputValue,
   setNativeRadioChecked,
   insertTextAtCursor,
+  resolveStandardFieldValue,
   CursorTargetInfo,
 } from '../../utils/autofill';
+import { cleanPhoneNumber, extractPhoneExtension } from '../../utils/phoneUtils';
 import {
   DetectedRadioGroup,
   RadioOption,
@@ -587,35 +589,7 @@ export const Drawer: React.FC = () => {
   }, []);
 
   const resolveFieldValue = (field: DetectedField, profile?: CandidateProfile): string => {
-    if (!profile) return '';
-    const p = profile.personal;
-
-    switch (field.type) {
-      case 'firstName':
-        return p.firstName || '';
-      case 'lastName':
-        return p.lastName || '';
-      case 'fullName':
-        return `${p.firstName} ${p.lastName}`.trim() || p.firstName || '';
-      case 'email':
-        return p.email || '';
-      case 'phone':
-        return p.phone || '';
-      case 'city':
-        return p.city || '';
-      case 'state':
-        return p.state || '';
-      case 'postalCode':
-        return p.postalCode || '';
-      case 'linkedin':
-        return p.linkedinUrl || '';
-      case 'github':
-        return p.githubUrl || '';
-      case 'portfolio':
-        return p.portfolioUrl || profile.portfolioDetails?.url || '';
-      default:
-        return '';
-    }
+    return resolveStandardFieldValue(field, profile);
   };
 
   const handleCopy = (text: string, id: string) => {
@@ -2622,6 +2596,8 @@ export const Drawer: React.FC = () => {
                 { label: 'Notice Period', value: storage.wizardAnswers.noticePeriod },
                 { label: 'Desired Salary', value: storage.wizardAnswers.desiredSalary },
                 { label: 'Open to Relocation', value: storage.wizardAnswers.openToRelocation },
+                { label: 'Phone Number', value: cleanPhoneNumber(storage.profile.personal.phone || '') },
+                { label: 'Phone Extension', value: storage.profile.personal.phoneExtension || extractPhoneExtension(storage.profile.personal.phone || '') },
                 { label: 'Portfolio URL', value: storage.profile.personal.portfolioUrl || '' },
                 { label: 'GitHub URL', value: storage.profile.personal.githubUrl || '' },
                 { label: 'LinkedIn URL', value: storage.profile.personal.linkedinUrl || '' },

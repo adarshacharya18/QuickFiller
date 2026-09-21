@@ -39,6 +39,7 @@ export interface CandidateProfile {
     lastName: string;
     email: string;
     phone: string;
+    phoneExtension?: string;
     city: string;
     state?: string;
     country?: string;
@@ -68,6 +69,7 @@ export const defaultProfile: CandidateProfile = {
     lastName: '',
     email: '',
     phone: '',
+    phoneExtension: '',
     city: '',
     state: '',
     country: '',

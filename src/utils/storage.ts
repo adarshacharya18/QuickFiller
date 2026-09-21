@@ -1,5 +1,6 @@
 import { StorageData, defaultStorageData } from '../types/storage';
 import { CandidateProfile } from '../types/profile';
+import { splitPhoneAndExtension } from './phoneUtils';
 
 export function sanitizeProfile(profile: CandidateProfile): CandidateProfile {
   if (!profile || !profile.personal) return profile;
@@ -7,6 +8,7 @@ export function sanitizeProfile(profile: CandidateProfile): CandidateProfile {
   let lastName = (profile.personal.lastName || '').trim();
   let email = (profile.personal.email || '').trim();
   let phone = (profile.personal.phone || '').trim();
+  let phoneExtension = (profile.personal.phoneExtension || '').trim();
   let githubUrl = (profile.personal.githubUrl || '').trim();
   let updated = false;
 
@@ -69,7 +71,20 @@ export function sanitizeProfile(profile: CandidateProfile): CandidateProfile {
     } catch {}
   }
 
-  // 3. Auto-populate candidate's real resume details if experience or projects are empty
+  // 3. Decouple phone number and extension if phone contains an extension suffix
+  if (phone) {
+    const { phone: cleanPhone, extension } = splitPhoneAndExtension(phone);
+    if (extension && !phoneExtension) {
+      phoneExtension = extension;
+      phone = cleanPhone;
+      updated = true;
+    } else if (cleanPhone && cleanPhone !== phone) {
+      phone = cleanPhone;
+      updated = true;
+    }
+  }
+
+  // 4. Auto-populate candidate's real resume details if experience or projects are empty
   const isAdarsh =
     email.includes('adarshacharya7830') ||
     profile.personal.firstName.toLowerCase() === 'adarsh' ||
@@ -201,6 +216,7 @@ export function sanitizeProfile(profile: CandidateProfile): CandidateProfile {
         lastName,
         email,
         phone,
+        phoneExtension: phoneExtension || profile.personal.phoneExtension || '',
         githubUrl,
         portfolioUrl: portfolioUrl || profile.personal.portfolioUrl,
         linkedinUrl: linkedinUrl || profile.personal.linkedinUrl,

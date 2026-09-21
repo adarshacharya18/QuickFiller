@@ -1,3 +1,7 @@
+import { CandidateProfile } from '../types/profile';
+import { DetectedField } from './scanner';
+import { splitPhoneAndExtension } from './phoneUtils';
+
 export function setNativeInputValue(
   element: HTMLInputElement | HTMLTextAreaElement,
   value: string,
@@ -518,6 +522,53 @@ export function insertTextAtCursor(
   } catch (err) {
     console.error('[QuickFiller] Error inserting text at cursor:', err);
     return false;
+  }
+}
+
+/**
+ * Resolves standard profile values for detected fields.
+ * Safely handles phone numbers by decoupling any extension and returning clean phone values,
+ * and extracts extensions for dedicated phone extension fields without polluting with the base phone number.
+ */
+export function resolveStandardFieldValue(
+  field: DetectedField,
+  profile?: CandidateProfile
+): string {
+  if (!profile) return '';
+  const p = profile.personal;
+
+  switch (field.type) {
+    case 'firstName':
+      return p.firstName || '';
+    case 'lastName':
+      return p.lastName || '';
+    case 'fullName':
+      return `${p.firstName} ${p.lastName}`.trim() || p.firstName || '';
+    case 'email':
+      return p.email || '';
+    case 'phone': {
+      const { phone } = splitPhoneAndExtension(p.phone || '');
+      return phone || p.phone || '';
+    }
+    case 'phoneExtension': {
+      if (p.phoneExtension) return p.phoneExtension.trim();
+      const { extension } = splitPhoneAndExtension(p.phone || '');
+      return extension || '';
+    }
+    case 'city':
+      return p.city || '';
+    case 'state':
+      return p.state || '';
+    case 'postalCode':
+      return p.postalCode || '';
+    case 'linkedin':
+      return p.linkedinUrl || '';
+    case 'github':
+      return p.githubUrl || '';
+    case 'portfolio':
+      return p.portfolioUrl || profile.portfolioDetails?.url || '';
+    default:
+      return '';
   }
 }
 

@@ -55,6 +55,22 @@ describe('Storage & Profile Data Engine', () => {
       expect(sanitized.personal.lastName).toBe('Acharya');
       expect(sanitized.personal.githubUrl).toBe('https://github.com/adarshacharya18');
     });
+
+    it('decouples phone extension from phone in profile sanitization', () => {
+      const profile: CandidateProfile = {
+        personal: {
+          firstName: 'Adarsh',
+          lastName: 'Acharya',
+          email: 'adarsh@example.com',
+          phone: '+1 (555) 123-4567 ext. 101',
+          phoneExtension: '',
+        },
+      };
+
+      const sanitized = sanitizeProfile(profile);
+      expect(sanitized.personal.phone).toBe('+1 (555) 123-4567');
+      expect(sanitized.personal.phoneExtension).toBe('101');
+    });
   });
 
   describe('Storage State & Persistence', () => {

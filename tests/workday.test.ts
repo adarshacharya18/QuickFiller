@@ -11,6 +11,8 @@ import {
   hasVisibleSuccessMessage,
   CONFIRMATION_URL_REGEX,
 } from '../src/utils/submissionWatcher';
+import { resolveStandardFieldValue } from '../src/utils/autofill';
+import { defaultProfile, CandidateProfile } from '../src/types/profile';
 
 describe('Workday ATS Tech Stack Support', () => {
   beforeEach(() => {
@@ -85,6 +87,11 @@ describe('Workday ATS Tech Stack Support', () => {
       expect(classifyField(createField('email'), '')).toBe('email');
       expect(classifyField(createField('phone-number'), '')).toBe('phone');
       expect(classifyField(createField('phoneNumber'), '')).toBe('phone');
+      expect(classifyField(createField('phone-extension'), '')).toBe('phoneExtension');
+      expect(classifyField(createField('phoneExtension'), '')).toBe('phoneExtension');
+      expect(classifyField(createField('contactInformation_phoneExtension'), '')).toBe('phoneExtension');
+      expect(classifyField(createField('phone-device-type'), '')).toBe('custom_question');
+      expect(classifyField(createField('countryPhoneCode'), '')).toBe('custom_question');
       expect(classifyField(createField('addressSection_postalCode'), '')).toBe('postalCode');
       expect(classifyField(createField('addressSection_countryRegion'), '')).toBe('state');
       expect(classifyField(createField('addressSection_city'), '')).toBe('city');
@@ -324,6 +331,79 @@ describe('Workday ATS Tech Stack Support', () => {
       const screeningField = customQuestions.find((f) => f.type === 'custom_question');
       expect(screeningField).toBeDefined();
       expect(screeningField?.label).toBe('What is your notice period?');
+    });
+
+    it('accurately distinguishes Workday Phone Number and Phone Extension and decouples extension from phone value', () => {
+      document.body.innerHTML = `
+        <form>
+          <div data-automation-id="formField-contactInformation_phone">
+            <div data-automation-id="formField-phone-device-type">
+              <label data-automation-id="formLabel">Phone Device Type</label>
+              <input data-automation-id="phone-device-type" type="text" />
+            </div>
+            <div data-automation-id="formField-country-phone-code">
+              <label data-automation-id="formLabel">Country Phone Code</label>
+              <input data-automation-id="country-phone-code" type="text" />
+            </div>
+            <div data-automation-id="formField-phone-number">
+              <label data-automation-id="formLabel">Phone Number</label>
+              <input data-automation-id="phone-number" id="wd-phone" type="tel" />
+            </div>
+            <div data-automation-id="formField-phone-extension">
+              <label data-automation-id="formLabel">Phone Extension</label>
+              <input data-automation-id="phone-extension" id="wd-ext" type="text" />
+            </div>
+          </div>
+        </form>
+      `;
+
+      const { standardFields } = scanFormFields();
+      const phoneField = standardFields.find((f) => f.id === 'wd-phone');
+      const extField = standardFields.find((f) => f.id === 'wd-ext');
+
+      expect(phoneField).toBeDefined();
+      expect(phoneField?.type).toBe('phone');
+
+      expect(extField).toBeDefined();
+      expect(extField?.type).toBe('phoneExtension');
+
+      // Scenario A: Candidate profile has phone formatted with an extension (e.g. +1 (555) 123-4567 ext. 101)
+      const profileWithExt: CandidateProfile = {
+        ...defaultProfile,
+        personal: {
+          ...defaultProfile.personal,
+          phone: '+1 (555) 123-4567 ext. 101',
+        },
+      };
+
+      // In phone number field: extension MUST NOT be included!
+      const resolvedPhone = resolveStandardFieldValue(phoneField!, profileWithExt);
+      expect(resolvedPhone).toBe('+1 (555) 123-4567');
+      expect(resolvedPhone).not.toContain('ext');
+      expect(resolvedPhone).not.toContain('101');
+
+      // In phone extension field: extension digits MUST be extracted, NOT the whole phone number!
+      const resolvedExt = resolveStandardFieldValue(extField!, profileWithExt);
+      expect(resolvedExt).toBe('101');
+      expect(resolvedExt).not.toContain('+1');
+
+      // Scenario B: Candidate profile has clean phone without extension (e.g. 9876543210)
+      const profileNoExt: CandidateProfile = {
+        ...defaultProfile,
+        personal: {
+          ...defaultProfile.personal,
+          phone: '9876543210',
+          phoneExtension: '',
+        },
+      };
+
+      const cleanPhone = resolveStandardFieldValue(phoneField!, profileNoExt);
+      expect(cleanPhone).toBe('9876543210');
+
+      // In phone extension field: MUST return empty string so autofill NEVER puts the phone number into extension!
+      const emptyExt = resolveStandardFieldValue(extField!, profileNoExt);
+      expect(emptyExt).toBe('');
+      expect(emptyExt).not.toBe('9876543210');
     });
   });
 });

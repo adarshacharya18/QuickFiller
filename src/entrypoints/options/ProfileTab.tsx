@@ -58,6 +58,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
           lastName: result.suggestedProfile.personal?.lastName || prev.personal.lastName,
           email: result.suggestedProfile.personal?.email || prev.personal.email,
           phone: result.suggestedProfile.personal?.phone || prev.personal.phone,
+          phoneExtension: result.suggestedProfile.personal?.phoneExtension || prev.personal.phoneExtension,
           city: result.suggestedProfile.personal?.city || prev.personal.city,
           linkedinUrl: result.suggestedProfile.personal?.linkedinUrl || prev.personal.linkedinUrl,
           githubUrl: result.suggestedProfile.personal?.githubUrl || prev.personal.githubUrl,
@@ -298,19 +299,37 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
               className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">Phone Number</label>
-            <input
-              type="tel"
-              value={formData.personal.phone}
-              onChange={(e) =>
-                setFormData((p) => ({
-                  ...p,
-                  personal: { ...p.personal, phone: e.target.value },
-                }))
-              }
-              className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-medium text-slate-700 mb-1">Phone Number</label>
+              <input
+                type="tel"
+                placeholder="e.g. +1 (555) 123-4567"
+                value={formData.personal.phone}
+                onChange={(e) =>
+                  setFormData((p) => ({
+                    ...p,
+                    personal: { ...p.personal, phone: e.target.value },
+                  }))
+                }
+                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Extension</label>
+              <input
+                type="text"
+                placeholder="e.g. 101"
+                value={formData.personal.phoneExtension || ''}
+                onChange={(e) =>
+                  setFormData((p) => ({
+                    ...p,
+                    personal: { ...p.personal, phoneExtension: e.target.value },
+                  }))
+                }
+                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">City / Location</label>

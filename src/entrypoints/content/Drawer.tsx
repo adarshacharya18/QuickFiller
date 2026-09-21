@@ -698,6 +698,7 @@ export const Drawer: React.FC = () => {
       setCoverLetterJD(inline.jdText);
       setCoverLetterJDSource('Current Page');
       if (inline.title && !targetRole) setTargetRole(inline.title);
+      if (inline.company && !targetCompany) setTargetCompany(inline.company);
       setShowJDInput(false);
       setIsResolvingJD(false);
       return;
@@ -715,6 +716,7 @@ export const Drawer: React.FC = () => {
           setCoverLetterJD(resp.jdText);
           setCoverLetterJDSource('Job Posting Link');
           if (resp.title && !targetRole) setTargetRole(resp.title);
+          if (resp.company && !targetCompany) setTargetCompany(resp.company);
           setShowJDInput(false);
           setIsResolvingJD(false);
           return;
@@ -747,6 +749,7 @@ export const Drawer: React.FC = () => {
           setCoverLetterJD(resp.jdText);
           setCoverLetterJDSource('Previous Page / Referrer');
           if (resp.title && !targetRole) setTargetRole(resp.title);
+          if (resp.company && !targetCompany) setTargetCompany(resp.company);
           setShowJDInput(false);
           setIsResolvingJD(false);
           return;
@@ -781,6 +784,9 @@ export const Drawer: React.FC = () => {
         setCoverLetterJDSource(`Fetched from ${new URL(userJDUrl.trim()).hostname}`);
         if (resp.title && !targetRole) {
           setTargetRole(resp.title);
+        }
+        if (resp.company && !targetCompany) {
+          setTargetCompany(resp.company);
         }
         setShowJDInput(false);
         setBankNotice({ type: 'success', message: 'Job Description fetched successfully!' });

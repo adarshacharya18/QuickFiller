@@ -214,12 +214,13 @@ export default defineBackground(() => {
           const cappedHtml = html.length > 2500000 ? html.slice(0, 2500000) : html;
           const extracted = extractCleanJDFromHtml(cappedHtml);
           const isValid = isValidJobDescription(extracted.jdText);
-          sendResponse({
-            success: true,
-            title: extracted.title,
-            jdText: extracted.jdText,
-            isValid,
-          });
+            sendResponse({
+              success: true,
+              title: extracted.title,
+              company: extracted.company,
+              jdText: extracted.jdText,
+              isValid,
+            });
         })
         .catch((err) => {
           console.error('[QuickFiller] External JD fetch error:', err);

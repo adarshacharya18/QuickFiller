@@ -100,24 +100,27 @@ export function deriveJobPostingUrl(currentUrl: string): string | null {
       }
     }
 
-    // 5. Workday
+    // 5. Workday: Handle /apply, /apply/applyManually, /apply/autofillWithResume, etc.
     if (host.includes('myworkdayjobs.com') || host.includes('workday.com')) {
-      if (path.endsWith('/apply')) {
-        url.pathname = path.replace(/\/apply\/?$/, '');
+      if (/\/apply(?:\/.*)?$/i.test(path)) {
+        url.pathname = path.replace(/\/apply(?:\/.*)?$/i, '');
         url.hash = '';
+        url.search = '';
         return url.toString();
       }
     }
 
-    // 6. Generic rule: strip trailing /apply or /application
-    if (/\/apply\/?$/i.test(path)) {
-      url.pathname = path.replace(/\/apply\/?$/i, '');
+    // 6. Generic rule: strip trailing /apply or /application with optional subpaths
+    if (/\/apply(?:\/.*)?$/i.test(path)) {
+      url.pathname = path.replace(/\/apply(?:\/.*)?$/i, '');
       url.hash = '';
+      url.search = '';
       return url.toString();
     }
-    if (/\/application\/?$/i.test(path)) {
-      url.pathname = path.replace(/\/application\/?$/i, '');
+    if (/\/application(?:\/.*)?$/i.test(path)) {
+      url.pathname = path.replace(/\/application(?:\/.*)?$/i, '');
       url.hash = '';
+      url.search = '';
       return url.toString();
     }
 
@@ -128,13 +131,119 @@ export function deriveJobPostingUrl(currentUrl: string): string | null {
 }
 
 /**
+ * Normalizes an HTML snippet into clean, readable text by converting block tags into newlines.
+ */
+export function cleanHtmlSnippet(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/<(h[1-6]|p|div|li|tr|br)[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .join('\n');
+}
+
+/**
+ * Parses Schema.org JobPosting from a JSON-LD string.
+ */
+export function parseJobPostingFromLdJson(
+  rawJson: string
+): { title?: string; company?: string; jdText?: string } | null {
+  try {
+    const data = JSON.parse(rawJson);
+    const items = Array.isArray(data) ? data : [data];
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      // Handle @graph schema arrays (common in WordPress / Yoast SEO)
+      if (Array.isArray(item['@graph'])) {
+        for (const subItem of item['@graph']) {
+          if (subItem && (subItem['@type'] === 'JobPosting' || String(subItem['@type']).includes('JobPosting'))) {
+            const desc = cleanHtmlSnippet(subItem.description || '');
+            if (
+              desc.length >= 80 &&
+              (isValidJobDescription(desc) ||
+                /responsibilit|requirement|qualificat|experience|skills|duties|about/i.test(desc))
+            ) {
+              return {
+                title: subItem.title ? String(subItem.title).split(/[-|–•]/)[0].trim() : undefined,
+                company: subItem.hiringOrganization?.name ? String(subItem.hiringOrganization.name).trim() : undefined,
+                jdText: desc.slice(0, 4000),
+              };
+            }
+          }
+        }
+      }
+
+      if (item['@type'] === 'JobPosting' || String(item['@type']).includes('JobPosting')) {
+        const desc = cleanHtmlSnippet(item.description || '');
+        if (
+          desc.length >= 80 &&
+          (isValidJobDescription(desc) ||
+            /responsibilit|requirement|qualificat|experience|skills|duties|about/i.test(desc))
+        ) {
+          return {
+            title: item.title ? String(item.title).split(/[-|–•]/)[0].trim() : undefined,
+            company: item.hiringOrganization?.name ? String(item.hiringOrganization.name).trim() : undefined,
+            jdText: desc.slice(0, 4000),
+          };
+        }
+      }
+    }
+  } catch {}
+  return null;
+}
+
+/**
  * Cleans an HTML document string (from external fetch) into clean, high-density text for LLM consumption.
- * Strips script tags, navigation, headers, footers, SVGs, and normalizes whitespaces.
+ * Checks for Schema.org JSON-LD first (critical for SPAs like Workday), then falls back to visible text parsing.
  */
 export function extractCleanJDFromHtml(html: string): { title?: string; company?: string; jdText: string } {
   if (!html) return { jdText: '' };
 
-  // Strip non-content blocks
+  // 1. Check if raw response is JSON (e.g. Workday CXS API or ATS REST endpoint)
+  if (html.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(html);
+      // Workday CXS API format: { jobPostingInfo: { title, jobDescription }, hiringOrganization: { name } }
+      if (parsed?.jobPostingInfo?.jobDescription) {
+        const jdClean = cleanHtmlSnippet(parsed.jobPostingInfo.jobDescription);
+        if (isValidJobDescription(jdClean)) {
+          return {
+            title: parsed.jobPostingInfo.title || undefined,
+            company: parsed.hiringOrganization?.name || undefined,
+            jdText: jdClean.slice(0, 4000),
+          };
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Try extracting standard Schema.org JobPosting from <script type="application/ld+json">
+  const ldJsonRegex = /<script\b[^>]*type=[\"']application\/ld\+json[\"'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = ldJsonRegex.exec(html)) !== null) {
+    const rawContent = match[1]?.trim();
+    if (rawContent) {
+      const parsedLd = parseJobPostingFromLdJson(rawContent);
+      if (parsedLd && parsedLd.jdText) {
+        return {
+          title: parsedLd.title,
+          company: parsedLd.company,
+          jdText: parsedLd.jdText,
+        };
+      }
+    }
+  }
+
+  // 3. Fallback: Parse visible HTML text (strip non-content blocks)
   let cleaned = html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
@@ -151,28 +260,11 @@ export function extractCleanJDFromHtml(html: string): { title?: string; company?
     title = title.split(/[-|–•]/)[0].trim();
   }
 
-  // Format line breaks and block tags
-  cleaned = cleaned
-    .replace(/<(h[1-6]|p|div|li|tr|br)[^>]*>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-
-  const lines = cleaned
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-
-  const fullText = lines.join('\n');
-  const excerpt = fullText.slice(0, 4000);
+  const jdText = cleanHtmlSnippet(cleaned).slice(0, 4000);
 
   return {
     title,
-    jdText: excerpt,
+    jdText,
   };
 }
 
@@ -180,8 +272,35 @@ export function extractCleanJDFromHtml(html: string): { title?: string; company?
  * Scans the current DOM to detect if an inline Job Description container is already present on page.
  */
 export function extractInlineJD(doc: Document = document): JobDescriptionResult | null {
+  // 1. Check for standard Schema.org JobPosting in <script type="application/ld+json">
+  try {
+    const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+    for (const script of Array.from(scripts)) {
+      const text = script.textContent || '';
+      if (!text.trim()) continue;
+      const parsedLd = parseJobPostingFromLdJson(text);
+      if (parsedLd && parsedLd.jdText) {
+        const title =
+          parsedLd.title ||
+          doc.querySelector('[data-automation-id="jobPostingHeader"], h1, .job-title, [class*="job-title"]')?.textContent?.trim() ||
+          doc.title.split(/[-|–]/)[0]?.trim();
+        return {
+          source: 'inline_dom',
+          title,
+          company: parsedLd.company,
+          jdText: parsedLd.jdText,
+          confidence: 'high',
+        };
+      }
+    }
+  } catch {}
+
+  // 2. Check Candidate DOM Selectors (including Workday, Greenhouse, Lever, Ashby, Google Forms, MS Forms)
   const candidateSelectors = [
+    '[data-automation-id="jobPostingDescription"]',
     '[data-automation-id="job-posting-description"]',
+    '[data-automation-id="richText"]',
+    '[data-automation-id="jobPostingPage"]',
     '.job-description',
     '#content',
     '.description',
@@ -198,13 +317,21 @@ export function extractInlineJD(doc: Document = document): JobDescriptionResult 
   for (const sel of candidateSelectors) {
     const el = doc.querySelector(sel);
     if (el) {
-      const text = el.textContent || '';
-      if (isValidJobDescription(text)) {
-        const title = doc.querySelector('h1')?.textContent?.trim() || doc.title.split(/[-|–]/)[0]?.trim();
+      const rawText = el.textContent || '';
+      const clean = cleanHtmlSnippet(rawText);
+      if (isValidJobDescription(clean)) {
+        const title =
+          doc.querySelector('[data-automation-id="jobPostingHeader"], h1, .job-title, [class*="job-title"]')?.textContent?.trim() ||
+          doc.title.split(/[-|–]/)[0]?.trim();
+        const company =
+          doc.querySelector('[data-automation-id="companyName"], [data-automation-id="legalEntity"], [class*="company-name"]')?.textContent?.trim() ||
+          undefined;
+
         return {
           source: 'inline_dom',
           title,
-          jdText: text.replace(/\s+/g, ' ').trim().slice(0, 4000),
+          company,
+          jdText: clean.slice(0, 4000),
           confidence: 'high',
         };
       }

@@ -264,7 +264,7 @@ describe('Google Forms ATS Tech Stack Support', () => {
       // Screening questions properly preserved as custom_question
       expect(createGFormInput('Why do you want to join our team?').classification).toBe('custom_question');
       expect(createGFormInput('What is your notice period in days?').classification).toBe('custom_question');
-      expect(createGFormInput('Company Name').classification).toBe('custom_question');
+      expect(createGFormInput('Company Name').classification).toBe('company');
       expect(createGFormInput('College / University Name').classification).toBe('custom_question');
     });
 

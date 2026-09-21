@@ -135,6 +135,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
       id: `exp_${Date.now()}`,
       company: '',
       role: '',
+      location: '',
       startDate: '',
       endDate: 'Present',
       highlights: [''],
@@ -332,7 +333,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">City / Location</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">City / Current Location</label>
             <input
               type="text"
               placeholder="e.g. Pune, India or San Francisco, CA"
@@ -345,6 +346,38 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
               }
               className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
             />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">State / Province / Region</label>
+              <input
+                type="text"
+                placeholder="e.g. California or Maharashtra"
+                value={formData.personal.state || ''}
+                onChange={(e) =>
+                  setFormData((p) => ({
+                    ...p,
+                    personal: { ...p.personal, state: e.target.value },
+                  }))
+                }
+                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Postal / Zip Code</label>
+              <input
+                type="text"
+                placeholder="e.g. 94105 or 411001"
+                value={formData.personal.postalCode || ''}
+                onChange={(e) =>
+                  setFormData((p) => ({
+                    ...p,
+                    personal: { ...p.personal, postalCode: e.target.value },
+                  }))
+                }
+                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Portfolio URL</label>
@@ -571,7 +604,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
                   <div>
                     <label className="block text-[11px] text-slate-500 mb-1">Role / Title</label>
                     <input
@@ -579,6 +612,16 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
                       value={exp.role}
                       onChange={(e) => updateExperience(exp.id, { role: e.target.value })}
                       placeholder="e.g. Junior Software Developer"
+                      className="w-full text-xs p-2 rounded-md border border-slate-200 bg-white outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-1">Location</label>
+                    <input
+                      type="text"
+                      value={exp.location || ''}
+                      onChange={(e) => updateExperience(exp.id, { location: e.target.value })}
+                      placeholder="e.g. San Francisco, CA or Remote"
                       className="w-full text-xs p-2 rounded-md border border-slate-200 bg-white outline-none"
                     />
                   </div>

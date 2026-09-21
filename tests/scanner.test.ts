@@ -119,6 +119,11 @@ describe('Scanner & Field Identification', () => {
       expect(classifyField(createInput({ name: 'city' }), 'City')).toBe('city');
       expect(classifyField(createInput({ name: 'state' }), 'State')).toBe('state');
       expect(classifyField(createInput({ name: 'zip' }), 'Postal Code')).toBe('postalCode');
+      expect(classifyField(createInput({ name: 'current_company' }), 'Current Company')).toBe('company');
+      expect(classifyField(createInput({ name: 'employer' }), 'Employer')).toBe('company');
+      expect(classifyField(createInput({ name: 'company' }), 'Company Name')).toBe('company');
+      expect(classifyField(createInput({ name: 'job_title' }), 'Job Title')).toBe('jobTitle');
+      expect(classifyField(createInput({ name: 'current_title' }), 'Current Role')).toBe('jobTitle');
     });
 
     it('classifies fields using Angular formControlName and host attributes', () => {

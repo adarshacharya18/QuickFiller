@@ -544,6 +544,21 @@ export function resolveStandardFieldValue(
       return p.lastName || '';
     case 'fullName':
       return `${p.firstName} ${p.lastName}`.trim() || p.firstName || '';
+    case 'company': {
+      if (profile.experience && profile.experience.length > 0) {
+        const latest = profile.experience[0];
+        if (latest.company) return latest.company.trim();
+      }
+      if ((p as any).currentCompany) return (p as any).currentCompany.trim();
+      return '';
+    }
+    case 'jobTitle': {
+      if (profile.experience && profile.experience.length > 0) {
+        const latest = profile.experience[0];
+        if (latest.role) return latest.role.trim();
+      }
+      return '';
+    }
     case 'email':
       return p.email || '';
     case 'phone': {

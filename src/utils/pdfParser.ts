@@ -211,18 +211,32 @@ export function parseExperience(lines: string[]): ExperienceItem[] {
         role = lines[i - 1];
       }
 
+      let location = '';
+      const locMatch = line.match(/\b(?:Remote|Hybrid|[A-Z][a-zA-Z\s]+,\s*(?:[A-Z]{2}|[A-Za-z]+))\b/i);
+      if (locMatch) {
+        location = locMatch[0].trim();
+      }
+
       currentExp = {
         id: `exp_${Date.now()}_${experiences.length}`,
         company: defaultCompany || 'Universaltech',
         role: role || 'Software Developer',
+        location,
         startDate: startDate || '',
         endDate: endDate || 'Present',
         highlights: [],
       };
       experiences.push(currentExp);
     } else if (!isBullet) {
-      if (!line.endsWith('.') && line.length < 60 && !line.includes(':') && !line.includes('•')) {
-        defaultCompany = line.trim();
+      if (!line.endsWith('.') && line.length < 80 && !line.includes(':') && !line.includes('•')) {
+        const parts = line.split(/\s*[|•·]\s*/);
+        defaultCompany = parts[0].trim();
+        if (parts.length > 1 && currentExp && !currentExp.location) {
+          const possibleLoc = parts[1].trim();
+          if (/(?:Remote|Hybrid|[A-Z][a-zA-Z\s]+,\s*[A-Z]{2}|India|USA|UK)/i.test(possibleLoc)) {
+            currentExp.location = possibleLoc;
+          }
+        }
         if (currentExp && !currentExp.company) {
           currentExp.company = defaultCompany;
         }

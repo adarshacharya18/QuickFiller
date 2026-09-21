@@ -98,6 +98,12 @@ describe('Workday ATS Tech Stack Support', () => {
       expect(classifyField(createField('linkedinQuestion'), '')).toBe('linkedin');
       expect(classifyField(createField('githubQuestion'), '')).toBe('github');
       expect(classifyField(createField('websiteQuestion'), '')).toBe('portfolio');
+      expect(classifyField(createField('company'), '')).toBe('company');
+      expect(classifyField(createField('companyName'), '')).toBe('company');
+      expect(classifyField(createField('employer'), '')).toBe('company');
+      expect(classifyField(createField('previousEmployerName'), '')).toBe('company');
+      expect(classifyField(createField('jobTitle'), '')).toBe('jobTitle');
+      expect(classifyField(createField('jobProfile'), '')).toBe('jobTitle');
       expect(classifyField(createField('coverLetter', 'textarea'), '')).toBe('cover_letter');
       expect(classifyField(createField('statementOfPurpose', 'textarea'), '')).toBe('cover_letter');
     });
@@ -404,6 +410,53 @@ describe('Workday ATS Tech Stack Support', () => {
       const emptyExt = resolveStandardFieldValue(extField!, profileNoExt);
       expect(emptyExt).toBe('');
       expect(emptyExt).not.toBe('9876543210');
+    });
+
+    it('accurately scans and autofills Workday Company Name and Job Title from candidate work experience', () => {
+      document.body.innerHTML = `
+        <form>
+          <div data-automation-id="formField-company">
+            <label data-automation-id="formLabel">Company</label>
+            <input data-automation-id="company" id="wd-company" type="text" />
+          </div>
+          <div data-automation-id="formField-jobTitle">
+            <label data-automation-id="formLabel">Job Title</label>
+            <input data-automation-id="jobTitle" id="wd-title" type="text" />
+          </div>
+        </form>
+      `;
+
+      const { standardFields } = scanFormFields();
+      const compField = standardFields.find((f) => f.id === 'wd-company');
+      const titleField = standardFields.find((f) => f.id === 'wd-title');
+
+      expect(compField).toBeDefined();
+      expect(compField?.type).toBe('company');
+
+      expect(titleField).toBeDefined();
+      expect(titleField?.type).toBe('jobTitle');
+
+      const testProfile: CandidateProfile = {
+        ...defaultProfile,
+        experience: [
+          {
+            id: 'exp_1',
+            company: 'Universaltech',
+            role: 'Lead AI Engineer',
+            location: 'San Francisco, CA',
+            startDate: '2024-01',
+            endDate: 'Present',
+            highlights: ['Built real-time agentic pipelines'],
+          },
+        ],
+      };
+
+      const resolvedCompany = resolveStandardFieldValue(compField!, testProfile);
+      const resolvedTitle = resolveStandardFieldValue(titleField!, testProfile);
+
+      expect(resolvedCompany).toBe('Universaltech');
+      expect(resolvedTitle).toBe('Lead AI Engineer');
+      expect(testProfile.experience[0].location).toBe('San Francisco, CA');
     });
   });
 });

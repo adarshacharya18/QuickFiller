@@ -32,7 +32,7 @@ export function buildCoverLetterSystemPrompt(
     .filter((e) => e.company || e.role)
     .map(
       (e) =>
-        `- ${e.role} at ${e.company} (${e.startDate || 'N/A'} - ${e.endDate || 'Present'}):\n  ${(
+        `- ${e.role} at ${e.company}${e.location ? ` in ${e.location}` : ''} (${e.startDate || 'N/A'} - ${e.endDate || 'Present'}):\n  ${(
           e.highlights || []
         )
           .map((h) => `• ${h}`)

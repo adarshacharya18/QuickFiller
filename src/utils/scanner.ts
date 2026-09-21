@@ -12,6 +12,8 @@ export type StandardFieldType =
   | 'email'
   | 'phone'
   | 'phoneExtension'
+  | 'company'
+  | 'jobTitle'
   | 'linkedin'
   | 'github'
   | 'portfolio'
@@ -335,6 +337,19 @@ export function classifyField(
   ) {
     return 'lastName';
   }
+  if (
+    /\b(?:formfield-)?(?:company|companyname|employer|previousemployername|currentcompany)\b/i.test(
+      combinedAutoId
+    ) &&
+    !/target[-_]?company|hiring[-_]?company/i.test(combinedAutoId)
+  ) {
+    return 'company';
+  }
+  if (
+    /\b(?:formfield-)?(?:jobtitle|jobprofile|positiontitle)\b/i.test(combinedAutoId)
+  ) {
+    return 'jobTitle';
+  }
   if (/\bemail\b|contactinformation_email/.test(combinedAutoId)) {
     return 'email';
   }
@@ -495,7 +510,39 @@ export function classifyField(
     return 'state';
   }
 
-  // 12. If input is text and label looks like a screening question or long prompt
+  // 12. Candidate Employer / Current Company
+  const isCompanyField =
+    !/company[-_\s]?(website|url)|employer[-_\s]?website/i.test(text) &&
+    (
+      /(?:current[-_\s]?company|company[-_\s]?name|^company$|employer[-_\s]?name|^employer$|current[-_\s]?employer|most[-_\s]?recent[-_\s]?(?:company|employer)|organization[-_\s]?name|^organization$|current[-_\s]?org(?:anization)?)/i.test(
+        label || hostLabel
+      ) ||
+      /(?:current[-_\s]?company|company[-_\s]?name|^company$|employer[-_\s]?name|^employer$|current[-_\s]?employer|organization[-_\s]?name|^organization$)/i.test(
+        automationId || name || id
+      )
+    );
+
+  if (isCompanyField && !/college|university|school|degree|institution/i.test(text)) {
+    return 'company';
+  }
+
+  // 13. Candidate Current Job Title / Role
+  const isJobTitleField =
+    !/search|filter/i.test(text) &&
+    (
+      /(?:current[-_\s]?title|job[-_\s]?title|^title$|current[-_\s]?role|position[-_\s]?title|^role$|current[-_\s]?designation|designation)/i.test(
+        label || hostLabel
+      ) ||
+      /(?:current[-_\s]?title|job[-_\s]?title|^title$|current[-_\s]?role|position[-_\s]?title|^role$|current[-_\s]?designation|designation)/i.test(
+        automationId || name || id
+      )
+    );
+
+  if (isJobTitleField && !/greeting|salutation|degree|academic/i.test(text)) {
+    return 'jobTitle';
+  }
+
+  // 14. If input is text and label looks like a screening question or long prompt
   if (
     label.length > 25 ||
     /\?|why|describe|years of|experience|salary|authorized|sponsorship|notice/i.test(label)

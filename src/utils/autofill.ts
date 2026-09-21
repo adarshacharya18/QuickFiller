@@ -1,6 +1,7 @@
 import { CandidateProfile } from '../types/profile';
 import { DetectedField } from './scanner';
 import { splitPhoneAndExtension } from './phoneUtils';
+import { normalizeLinkedInUrl, normalizeGitHubUrl, normalizePortfolioUrl } from './urlUtils';
 
 export function setNativeInputValue(
   element: HTMLInputElement | HTMLTextAreaElement,
@@ -577,11 +578,11 @@ export function resolveStandardFieldValue(
     case 'postalCode':
       return p.postalCode || '';
     case 'linkedin':
-      return p.linkedinUrl || '';
+      return normalizeLinkedInUrl(p.linkedinUrl || '');
     case 'github':
-      return p.githubUrl || '';
+      return normalizeGitHubUrl(p.githubUrl || '');
     case 'portfolio':
-      return p.portfolioUrl || profile.portfolioDetails?.url || '';
+      return normalizePortfolioUrl(p.portfolioUrl || profile.portfolioDetails?.url || '');
     default:
       return '';
   }

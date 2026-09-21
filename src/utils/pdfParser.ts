@@ -3,6 +3,7 @@ import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { ExtractedLink, CandidateProfile, ProjectItem, ExperienceItem, EducationItem } from '../types/profile';
 import { validatePdfBuffer } from './security';
 import { splitPhoneAndExtension } from './phoneUtils';
+import { normalizeLinkedInUrl, normalizeGitHubUrl, normalizePortfolioUrl } from './urlUtils';
 
 // Set worker source for pdfjs
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -446,10 +447,10 @@ export async function parseResumePdf(fileBuffer: ArrayBuffer): Promise<ParsedRes
     const { category, isProfile, username } = classifyResumeUrl(rawUrl);
 
     if (category === 'linkedin' && isProfile && !linkedinUrl) {
-      linkedinUrl = rawUrl;
+      linkedinUrl = normalizeLinkedInUrl(rawUrl);
     } else if (category === 'github') {
       if (isProfile && !explicitGithubProfile) {
-        explicitGithubProfile = rawUrl;
+        explicitGithubProfile = normalizeGitHubUrl(rawUrl);
       }
     } else if (category === 'project') {
       // If we find a GitHub repo link, infer the profile link as fallback

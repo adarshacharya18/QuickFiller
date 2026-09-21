@@ -458,5 +458,34 @@ describe('Workday ATS Tech Stack Support', () => {
       expect(resolvedTitle).toBe('Lead AI Engineer');
       expect(testProfile.experience[0].location).toBe('San Francisco, CA');
     });
+
+    it('normalizes regional and decorated LinkedIn URLs to Workday-compliant canonical format', () => {
+      document.body.innerHTML = `
+        <div data-automation-id="formField-linkedinQuestion">
+          <input data-automation-id="linkedinQuestion" id="wd-linkedin" type="url" />
+        </div>
+      `;
+
+      const { standardFields } = scanFormFields();
+      const liField = standardFields.find((f) => f.id === 'wd-linkedin');
+      expect(liField).toBeDefined();
+      expect(liField?.type).toBe('linkedin');
+
+      // Candidate in India whose browser address bar was in.linkedin.com with trailing slash and tracking query
+      const regionalProfile: CandidateProfile = {
+        ...defaultProfile,
+        personal: {
+          ...defaultProfile.personal,
+          linkedinUrl: 'https://in.linkedin.com/in/adarsh-acharya/?trk=public_profile',
+        },
+      };
+
+      const resolved = resolveStandardFieldValue(liField!, regionalProfile);
+      // Must be transformed to Workday canonical format: https://www.linkedin.com/in/<username>
+      expect(resolved).toBe('https://www.linkedin.com/in/adarsh-acharya');
+      expect(resolved).not.toContain('in.linkedin.com');
+      expect(resolved).not.toContain('?trk');
+      expect(resolved.endsWith('/')).toBe(false);
+    });
   });
 });

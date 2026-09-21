@@ -14,6 +14,7 @@ import {
 import { CandidateProfile, ProjectItem, ExperienceItem, EducationItem } from '../../types/profile';
 import { parseResumePdf } from '../../utils/pdfParser';
 import { isSafeWebUrl, sanitizeWebUrl } from '../../utils/security';
+import { normalizeLinkedInUrl, normalizeGitHubUrl, normalizePortfolioUrl } from '../../utils/urlUtils';
 
 interface ProfileTabProps {
   profile: CandidateProfile;
@@ -392,6 +393,16 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
                   portfolioDetails: { ...p.portfolioDetails, url: e.target.value },
                 }))
               }
+              onBlur={(e) => {
+                const norm = normalizePortfolioUrl(e.target.value);
+                if (norm && norm !== e.target.value) {
+                  setFormData((p) => ({
+                    ...p,
+                    personal: { ...p.personal, portfolioUrl: norm },
+                    portfolioDetails: { ...p.portfolioDetails, url: norm },
+                  }));
+                }
+              }}
               className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
             />
           </div>
@@ -407,6 +418,15 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
                   personal: { ...p.personal, githubUrl: e.target.value },
                 }))
               }
+              onBlur={(e) => {
+                const norm = normalizeGitHubUrl(e.target.value);
+                if (norm && norm !== e.target.value) {
+                  setFormData((p) => ({
+                    ...p,
+                    personal: { ...p.personal, githubUrl: norm },
+                  }));
+                }
+              }}
               className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
             />
           </div>
@@ -414,7 +434,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
             <label className="block text-xs font-medium text-slate-700 mb-1">LinkedIn URL</label>
             <input
               type="url"
-              placeholder="https://linkedin.com/in/username"
+              placeholder="https://www.linkedin.com/in/username"
               value={formData.personal.linkedinUrl || ''}
               onChange={(e) =>
                 setFormData((p) => ({
@@ -422,6 +442,15 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ profile, onSaveProfile }
                   personal: { ...p.personal, linkedinUrl: e.target.value },
                 }))
               }
+              onBlur={(e) => {
+                const norm = normalizeLinkedInUrl(e.target.value);
+                if (norm && norm !== e.target.value) {
+                  setFormData((p) => ({
+                    ...p,
+                    personal: { ...p.personal, linkedinUrl: norm },
+                  }));
+                }
+              }}
               className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
             />
           </div>

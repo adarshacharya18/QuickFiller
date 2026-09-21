@@ -2,7 +2,7 @@ import { defineBackground } from 'wxt/utils/define-background';
 import { getStorageData } from '../utils/storage';
 import { fetchOllamaModels } from '../utils/llm/ollama';
 import { generateAnswer } from '../utils/llm';
-import { buildSystemPrompt } from '../utils/llm/prompt';
+import { buildSystemPrompt, cleanAnswerOutput } from '../utils/llm/prompt';
 import { setupOllamaDNRRules } from '../utils/rules';
 import { extractCleanJDFromHtml, isValidJobDescription } from '../utils/jdResolver';
 import {
@@ -342,7 +342,10 @@ export default defineBackground(() => {
             userPrompt += `\n\nSpecific Instruction: ${customInstructions}`;
           }
 
-          const answer = await generateAnswer(activeSettings, systemPrompt, userPrompt);
+          userPrompt += `\n\nCRITICAL: Output ONLY the direct answer text. Do NOT wrap your answer in XML tags like <screening_answer> or </screening_answer>. Do NOT use markdown code blocks.`;
+
+          const rawAnswer = await generateAnswer(activeSettings, systemPrompt, userPrompt);
+          const answer = cleanAnswerOutput(rawAnswer);
           sendResponse({ success: true, answer });
         })
         .catch((err) => {

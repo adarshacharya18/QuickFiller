@@ -62,6 +62,7 @@ import { StorageData, CustomPasteItem, defaultStorageData } from '../../types/st
 import { CandidateProfile } from '../../types/profile';
 import { JobApplication, ApplicationStatus } from '../../types/applications';
 import { cleanCoverLetterOutput } from '../../utils/llm/coverLetterPrompt';
+import { cleanAnswerOutput } from '../../utils/llm/prompt';
 import { initSubmissionWatcher, extractApplicationPortalUrl } from '../../utils/submissionWatcher';
 import { isSafeWebUrl, sanitizeWebUrl } from '../../utils/security';
 
@@ -218,7 +219,7 @@ export const Drawer: React.FC = () => {
     const newItem: CustomPasteItem = {
       id: `paste_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       label: label.slice(0, 60),
-      value,
+      value: cleanAnswerOutput(value),
     };
     const current = storage?.customPasteBank || [];
     const updated = [newItem, ...current];
@@ -593,13 +594,14 @@ export const Drawer: React.FC = () => {
   };
 
   const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(cleanAnswerOutput(text));
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
   const handleInsert = async (field: DetectedField, text: string) => {
-    if (!text) return;
+    const cleanText = cleanAnswerOutput(text);
+    if (!cleanText) return;
 
     let target: HTMLInputElement | HTMLTextAreaElement | null = null;
     const isConnected = field.element && (field.element.isConnected ?? document.body.contains(field.element));
@@ -617,7 +619,7 @@ export const Drawer: React.FC = () => {
     }
 
     if (target) {
-      setNativeInputValue(target, text);
+      setNativeInputValue(target, cleanText);
       setInsertedId(field.id);
       setTimeout(() => setInsertedId(null), 2000);
       setTimeout(scanPage, 150);
@@ -625,8 +627,9 @@ export const Drawer: React.FC = () => {
   };
 
   const handleInsertAtCursor = (text: string, id: string) => {
-    if (!text) return;
-    const success = insertTextAtCursor(text, lastFocusedCursorRef.current);
+    const cleanText = cleanAnswerOutput(text);
+    if (!cleanText) return;
+    const success = insertTextAtCursor(cleanText, lastFocusedCursorRef.current);
     if (success) {
       setInsertedId(id);
       setTimeout(() => setInsertedId(null), 2000);
@@ -1114,7 +1117,7 @@ export const Drawer: React.FC = () => {
             return;
           }
           if (res?.success && res.answer) {
-            setAnswers((prev) => ({ ...prev, [field.id]: res.answer }));
+            setAnswers((prev) => ({ ...prev, [field.id]: cleanAnswerOutput(res.answer) }));
           } else {
             alert(`Error generating answer: ${res?.error || 'Unknown error'}`);
           }

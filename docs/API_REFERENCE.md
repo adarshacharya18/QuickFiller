@@ -281,5 +281,7 @@ Records tracked job submissions:
 | :--- | :--- |
 | [`generateAnswer`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/llm/index.ts) | Dispatches prompts to the active provider (Ollama, Gemini, OpenAI, Anthropic) based on user configuration. |
 | [`buildSystemPrompt`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/llm/prompt.ts) | Compiles CandidateProfile, WizardAnswers, QuestionBank, and CustomPasteBank into an expert system prompt for screening questions. |
+| [`cleanAnswerOutput`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/llm/prompt.ts) | Sanitizes LLM-drafted screening answers: removes XML tags (`<screening_answer>`, `<answer>`), markdown fences, preambles, outros, and enclosing quotes. |
 | [`buildCoverLetterSystemPrompt`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/llm/coverLetterPrompt.ts) | Formulates a professional cover letter writing persona incorporating past projects and experience. |
+| [`cleanCoverLetterOutput`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/llm/coverLetterPrompt.ts) | Strips markdown code blocks, conversational greetings, and closing offers from drafted cover letters. |
 | [`buildOutreachSystemPrompt`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/llm/outreachPrompt.ts) | Configures tone and formatting rules for recruiter or technical outreach pitches. |

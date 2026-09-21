@@ -16,10 +16,10 @@ export interface StagedJob {
 }
 
 export const CONFIRMATION_URL_REGEX =
-  /(\/applicationsubmitted|\/applicationconfirmation|\/confirmation|\/thank-you|\/thanks|\/applied|\/submitted|application[-_]?submitted|application[-_]?confirmation|\/success|applied=true|status=success|submitted=1|\/formresponse|\/responsepage\.aspx)/i;
+  /(\/applicationsubmitted|\/applicationconfirmation|\/confirmation|\/confirm(?:\/|\?|#|$|\b)|\/jobconfirm|\/thank-you|\/thanks|\/applied|\/submitted|application[-_]?submitted|application[-_]?confirmation|\/success|applied=true|status=success|submitted=1|\/formresponse|\/responsepage\.aspx)/i;
 
 export const SUCCESS_TEXT_REGEX =
-  /((application|form|submission) (has been )?(successfully )?submitted|(application|form|submission) submitted successfully|thank you for (your application|applying)|your (application|form) (has been|was) received|(application|form) (received|complete)|we('ve| have) received your application|we appreciate your interest in|submission successful|successfully submitted|your response (has been|was) (recorded|submitted)|response (has been )?(recorded|submitted)|\bthanks!\b|submit another response)/i;
+  /((application|form|submission|profile) (has been |got |was )?(successfully |sucessfully )?(submitted|submited)|(application|form|submission|profile) (submitted|submited) (successfully|sucessfully)|thank you for (your application|applying|your interest)|\bthank you\b\s*!*|\bthanks\b\s*!*|your (application|form|profile) (has been|was|got) received|(application|form|profile) (received|complete)|we('ve| have) received your (application|profile)|we appreciate your interest in|submission successful|successfully submitted|your response (has been|was) (recorded|submitted)|response (has been )?(recorded|submitted)|submit another response)/i;
 
 /**
  * Selectors identifying candidate portal navigation elements across ATS platforms (Workday, SmartRecruiters, Darwinbox, etc.).
@@ -230,6 +230,12 @@ export function isSubmitTriggerElement(elem: HTMLElement | null): boolean {
   const tagName = elem.tagName.toLowerCase();
   const automationId = (elem.getAttribute('data-automation-id') || '').toLowerCase();
   const dataQa = (elem.getAttribute('data-qa') || '').toLowerCase();
+  const dataTestId = (
+    elem.getAttribute('data-testid') ||
+    elem.getAttribute('data-test-id') ||
+    elem.getAttribute('data-cy') ||
+    ''
+  ).toLowerCase();
   const id = (elem.id || '').toLowerCase();
   const className = (typeof elem.className === 'string' ? elem.className : '').toLowerCase();
   const role = (elem.getAttribute('role') || '').toLowerCase();
@@ -239,7 +245,9 @@ export function isSubmitTriggerElement(elem: HTMLElement | null): boolean {
   // Negative check: never trigger on Back, Cancel, Previous, Close, Remove, Add, etc.
   if (
     /^(back|cancel|previous|prev|close|add|remove|delete|save for later)$/i.test(text) ||
-    /back-button|cancel-button|prev-button|close-button|delete-button|remove-button|add-button/i.test(automationId)
+    /back-button|cancel-button|prev-button|close-button|delete-button|remove-button|add-button/i.test(
+      automationId || dataTestId
+    )
   ) {
     return false;
   }
@@ -252,13 +260,15 @@ export function isSubmitTriggerElement(elem: HTMLElement | null): boolean {
     return true;
   }
 
-  // 2. ATS / Web Component specific attributes (Workday, Greenhouse, Ashby, Lever, Darwinbox)
+  // 2. ATS / Web Component specific attributes (Workday, Greenhouse, Ashby, Lever, Darwinbox, Angular Material)
   if (
     type === 'submit' ||
     automationId.includes('submit') ||
     automationId === 'bottom-submit-button' ||
     automationId === 'page-navigation-submit-button' ||
     dataQa.includes('submit') ||
+    dataTestId.includes('submit') ||
+    dataTestId === 'submit-application-btn' ||
     id.includes('submit') ||
     className.includes('submit-btn') ||
     className.includes('submit-application') ||
@@ -322,19 +332,23 @@ export function isConfirmationUrl(url: string = window.location.href): boolean {
  * Strictly ignores hidden elements (e.g. display: none or hidden parent modals).
  */
 export function hasVisibleSuccessMessage(): boolean {
-  // Check Workday & Microsoft Forms specific status banners and success containers
-  const workdaySuccess = document.querySelector(
-    '[data-automation-id="applicationSubmitted"], [data-automation-id="applicationConfirmation"], [data-automation-id="statusBanner"], [data-automation-id="successMessage"], [data-automation-id="alert-success"], [data-automation-id="thankYouMessage"], .office-form-thank-you'
+  // Check Workday, Microsoft Forms, and Angular ATS (CRISIL) specific status banners and success containers
+  const specificSuccess = document.querySelector(
+    '[data-automation-id="applicationSubmitted"], [data-automation-id="applicationConfirmation"], [data-automation-id="statusBanner"], [data-automation-id="successMessage"], [data-automation-id="alert-success"], [data-automation-id="thankYouMessage"], app-jobconfirm, lib-apply-confirmation, .jobConfirm-sec, .apply-confirmation, .office-form-thank-you, .swal2-container, .swal2-popup'
   );
-  if (workdaySuccess && isElementVisible(workdaySuccess as HTMLElement)) {
-    const txt = (workdaySuccess.textContent || '').trim();
-    if (txt && (SUCCESS_TEXT_REGEX.test(txt) || /submitted|thank you|success|congratulations|thanks/i.test(txt))) {
+  if (specificSuccess && isElementVisible(specificSuccess as HTMLElement)) {
+    const txt = (specificSuccess.textContent || '').trim();
+    if (
+      txt &&
+      (SUCCESS_TEXT_REGEX.test(txt) ||
+        /submitted|submited|thank you|success|sucess|congratulations|thanks/i.test(txt))
+    ) {
       return true;
     }
   }
 
   const prominentElements = querySelectorAllDeep<HTMLElement>(
-    'h1, h2, h3, h4, h5, [role="alert"], [data-automation-id*="success"], [data-automation-id*="confirmation"], [data-automation-id="thankYouMessage"], [id*="submitted"], [id*="success"], [class*="submitted"], [class*="success"], [class*="confirmation"], [class*="Confirmation"], .confirmation, .success, .freebirdFormviewerViewResponseConfirmationMessage, .office-form-thank-you, .office-form-thank-you-title, .office-form-thank-you-sub-title',
+    'h1, h2, h3, h4, h5, [role="alert"], [data-automation-id*="success"], [data-automation-id*="confirmation"], [data-automation-id="thankYouMessage"], [id*="submitted"], [id*="success"], [class*="submitted"], [class*="success"], [class*="confirmation"], [class*="Confirmation"], app-jobconfirm, lib-apply-confirmation, .jobConfirm-sec, .apply-confirmation, [class*="jobConfirm"], [class*="apply-confirmation"], .confirmation, .success, .swal2-title, .swal2-html-container, .freebirdFormviewerViewResponseConfirmationMessage, .office-form-thank-you, .office-form-thank-you-title, .office-form-thank-you-sub-title',
     document
   );
 

@@ -994,12 +994,44 @@ export function scanFormFields(): {
 }
 
 export function extractJobMetadata(): JobMetadata {
-  let title =
+  let rawTitle =
     document.querySelector(
-      '[data-automation-id="jobPostingHeader"], h1, .job-title, [class*="job-title"], [class*="position-title"], [class*="jobTitle"]'
-    )?.textContent?.trim() ||
+      '[data-automation-id="jobPostingHeader"], h1, .job-title, [class*="job-title"], [class*="position-title"], [class*="jobTitle"], [class*="align-titleJob"], [class*="jobVwHeading"], [class*="job-view__title"] h2, .job-details-header h2'
+    )?.textContent?.trim() || '';
+
+  // Clean "Applying to <Role>" prefix if present (e.g. from CRISIL / Angular job apply header)
+  if (rawTitle.toLowerCase().startsWith('applying to ')) {
+    rawTitle = rawTitle.slice(12).trim();
+  }
+
+  // If heading not found or is generic, inspect URL slug (e.g. /jobview/associate-engineer-gen-ai-pune-maharashtra-india-2026083113512451)
+  let titleFromSlug = '';
+  try {
+    const jobviewMatch = window.location.pathname.match(/\/jobview\/(?:campus\/)?([a-zA-Z0-9_-]+)/i);
+    if (jobviewMatch && jobviewMatch[1]) {
+      const cleanSlug = jobviewMatch[1]
+        .replace(/-\d{8,}/, '')
+        .replace(/[-_]/g, ' ')
+        .trim();
+      if (cleanSlug) {
+        titleFromSlug = cleanSlug
+          .split(' ')
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+      }
+    }
+  } catch {}
+
+  let title =
+    rawTitle ||
+    titleFromSlug ||
     document.title.split(/[-|–|—|\|]/)[0]?.trim() ||
     'Job Application';
+
+  // If title extracted from document.title was generic ("Crisil" or "Careers"), prefer titleFromSlug if available
+  if (titleFromSlug && (/^careers?$/i.test(title) || title.length < 3)) {
+    title = titleFromSlug;
+  }
 
   // Company detection heuristics
   let company = '';
@@ -1202,11 +1234,16 @@ export function extractJobMetadata(): JobMetadata {
       ?.textContent?.split(/[•|\-|—]/)[0]
       ?.trim();
 
-    // 2. Try document title (e.g. "Job Title Application - Acme Corp" -> "Acme Corp")
+    // 2. Try document title (e.g. "Job Title Application - Acme Corp" -> "Acme Corp" or "Crisil - Careers" -> "Crisil")
     let titleCompany = '';
-    const titleParts = document.title.split(/[-|–|—|\|]/);
+    const titleParts = document.title.split(/[-|–|—|\|]/).map((p) => p.trim()).filter(Boolean);
     if (titleParts.length > 1) {
-      titleCompany = titleParts[titleParts.length - 1].trim();
+      const lastPart = titleParts[titleParts.length - 1];
+      if (/^(careers?|jobs?|careers?\s*portal|job\s*board|opportunities)$/i.test(lastPart)) {
+        titleCompany = titleParts[0];
+      } else {
+        titleCompany = lastPart;
+      }
     }
 
     // 3. Try meta tag or hostname
@@ -1214,7 +1251,19 @@ export function extractJobMetadata(): JobMetadata {
       .querySelector('meta[property="og:site_name"]')
       ?.getAttribute('content');
 
-    const hostNamePart = hostname ? hostname.replace('www.', '').split('.')[0] : '';
+    // Corporate recruiting subdomain check: e.g. career.crisil.com or jobs.apple.com
+    let hostNamePart = '';
+    if (hostname) {
+      const hostParts = hostname.replace(/^www\./, '').split('.');
+      if (
+        hostParts.length > 2 &&
+        /^(career|careers|jobs|job|apply|recruiting|recruitment|talent|work|join|corp)$/i.test(hostParts[0])
+      ) {
+        hostNamePart = hostParts[1];
+      } else {
+        hostNamePart = hostParts[0];
+      }
+    }
 
     company =
       domCompany ||

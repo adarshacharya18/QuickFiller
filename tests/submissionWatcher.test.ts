@@ -10,6 +10,7 @@ import {
   initSubmissionWatcher,
   extractApplicationPortalUrl,
 } from '../src/utils/submissionWatcher';
+import { extractJobMetadata } from '../src/utils/scanner';
 import { resetMockChromeStorage } from './setup';
 
 describe('Submission Watcher & Job Tracker', () => {
@@ -453,6 +454,158 @@ describe('Submission Watcher & Job Tracker', () => {
       expect(trackedApps.length).toBe(1);
       expect(trackedApps[0].id).toBe('app_existing_123');
       expect(trackedApps[0].portalUrl).toBe('https://my.smartrecruiters.com/candidate/applications');
+
+      unwatch();
+    });
+  });
+
+  describe('CRISIL Job Application Tech Stack Support (career.crisil.com)', () => {
+    it('detects CRISIL confirmation route via isConfirmationUrl', () => {
+      expect(
+        isConfirmationUrl(
+          'https://career.crisil.com/crisil/confirm'
+        )
+      ).toBe(true);
+      expect(
+        isConfirmationUrl(
+          'https://career.crisil.com/crisil/confirm?source=linkedin'
+        )
+      ).toBe(true);
+      expect(
+        isConfirmationUrl('/crisil/confirm')
+      ).toBe(true);
+    });
+
+    it('identifies CRISIL Angular Material submit button with data-testid="submit-application-btn"', () => {
+      const btn = document.createElement('button');
+      btn.setAttribute('mat-raised-button', '');
+      btn.setAttribute('color', 'primary');
+      btn.setAttribute('data-testid', 'submit-application-btn');
+      btn.textContent = 'Submit';
+
+      expect(isSubmitTriggerElement(btn)).toBe(true);
+
+      // Inner touch target span simulation
+      const innerSpan = document.createElement('span');
+      innerSpan.className = 'mat-mdc-button-touch-target';
+      btn.appendChild(innerSpan);
+
+      expect(isSubmitTriggerElement(innerSpan)).toBe(true);
+    });
+
+    it('detects CRISIL Angular confirmation component and success text in hasVisibleSuccessMessage', () => {
+      document.body.innerHTML = `
+        <app-root>
+          <main>
+            <router-outlet></router-outlet>
+            <app-jobconfirm>
+              <section class="mtb-30 mt-80 jobConfirm-sec">
+                <div class="container text-section">
+                  <lib-apply-confirmation>
+                    <div class="container apply-confirmation">
+                      <div class="content text-center">
+                        <h3>Thank You</h3>
+                        <p>Your profile got submited sucessfully</p>
+                      </div>
+                    </div>
+                  </lib-apply-confirmation>
+                </div>
+              </section>
+            </app-jobconfirm>
+          </main>
+        </app-root>
+      `;
+
+      expect(hasVisibleSuccessMessage()).toBe(true);
+      expect(hasActiveFormFields()).toBe(false);
+    });
+
+    it('extracts CRISIL company name and role title from heading and career.crisil.com domain', () => {
+      delete (window as any).location;
+      (window as any).location = new URL(
+        'https://career.crisil.com/crisil/jobview/associate-engineer-gen-ai-pune-maharashtra-india-2026083113512451?source=linkedin'
+      );
+
+      document.title = 'Crisil - Careers';
+      document.body.innerHTML = `
+        <app-root>
+          <app-jobview>
+            <section class="mtb-30 mt-80 jobView-sec">
+              <div class="job-details-header">
+                <div class="listing-header jobVwHeading mrgn-tp-btm">
+                  <h2 class="defThmSubHeading align-titleJob">Associate Engineer - Gen AI</h2>
+                </div>
+              </div>
+              <div class="crisil-info">
+                <h3>About Crisil Limited</h3>
+              </div>
+            </section>
+          </app-jobview>
+        </app-root>
+      `;
+
+      const meta = extractJobMetadata();
+      expect(meta.company).toBe('Crisil');
+      expect(meta.title).toBe('Associate Engineer - Gen AI');
+    });
+
+    it('tracks application end-to-end when user submits on CRISIL and Angular routes to /crisil/confirm', async () => {
+      delete (window as any).location;
+      (window as any).location = new URL(
+        'https://career.crisil.com/crisil/jobview/associate-engineer-gen-ai-pune-maharashtra-india-2026083113512451?source=linkedin'
+      );
+
+      document.title = 'Crisil - Careers';
+      document.body.innerHTML = `
+        <app-root>
+          <app-jobview>
+            <div class="listing-header jobVwHeading">
+              <h2 class="align-titleJob">Associate Engineer - Gen AI</h2>
+            </div>
+            <lib-job-apply>
+              <form id="apply-form">
+                <input name="firstName" value="Adarsh" />
+                <input name="email" value="adarsh@example.com" />
+                <button type="button" data-testid="submit-application-btn" id="crisil-submit">
+                  <span class="mdc-button__label">Submit</span>
+                </button>
+              </form>
+            </lib-job-apply>
+          </app-jobview>
+        </app-root>
+      `;
+
+      const trackedApps: any[] = [];
+      const unwatch = initSubmissionWatcher({
+        onAutoTracked: (app) => trackedApps.push(app),
+      });
+
+      // User clicks submit
+      const submitBtn = document.getElementById('crisil-submit')!;
+      submitBtn.click();
+
+      // Simulate Angular SPA router navigation to /crisil/confirm and DOM transition
+      (window as any).location = new URL('https://career.crisil.com/crisil/confirm');
+      document.body.innerHTML = `
+        <app-root>
+          <app-jobconfirm>
+            <lib-apply-confirmation>
+              <div class="content text-center">
+                <h3>Thank You</h3>
+                <p>Your profile got submited sucessfully</p>
+              </div>
+            </lib-apply-confirmation>
+          </app-jobconfirm>
+        </app-root>
+      `;
+
+      // Allow MutationObserver and interval to detect the confirmation
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(trackedApps.length).toBe(1);
+      expect(trackedApps[0].company).toBe('Crisil');
+      expect(trackedApps[0].title).toBe('Associate Engineer - Gen AI');
+      expect(trackedApps[0].status).toBe('Applied');
 
       unwatch();
     });

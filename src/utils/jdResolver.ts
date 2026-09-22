@@ -116,7 +116,24 @@ export function deriveJobPostingUrl(currentUrl: string): string | null {
       }
     }
 
-    // 6. Generic rule: strip trailing /apply or /application with optional subpaths
+    // 6. SAP SuccessFactors: Flip career_ns=job_application to career_ns=job_listing or /jobapplication -> /jobreqentry
+    if (host.includes('successfactors.com') || host.includes('successfactors.eu')) {
+      let modified = false;
+      if (url.searchParams.get('career_ns') === 'job_application') {
+        url.searchParams.set('career_ns', 'job_listing');
+        modified = true;
+      }
+      if (path.includes('/jobapplication')) {
+        url.pathname = path.replace('/jobapplication', '/jobreqentry');
+        modified = true;
+      }
+      if (modified) {
+        url.hash = '';
+        return url.toString();
+      }
+    }
+
+    // 7. Generic rule: strip trailing /apply or /application with optional subpaths
     if (/\/apply(?:\/.*)?$/i.test(path)) {
       url.pathname = path.replace(/\/apply(?:\/.*)?$/i, '');
       url.hash = '';

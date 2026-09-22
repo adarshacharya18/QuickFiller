@@ -17,10 +17,10 @@ export interface StagedJob {
 }
 
 export const CONFIRMATION_URL_REGEX =
-  /(\/applicationsubmitted|\/applicationconfirmation|\/confirmation|\/confirm(?:\/|\?|#|$|\b)|\/jobconfirm|\/thank-you|\/thanks|\/applied|\/submitted|application[-_]?submitted|application[-_]?confirmation|\/success|applied=true|status=success|submitted=1|\/formresponse|\/responsepage\.aspx)/i;
+  /(\/applicationsubmitted|\/applicationconfirmation|\/confirmation|\/confirm(?:\/|\?|#|$|\b)|\/jobconfirm|\/thank-you|\/thanks|\/applied|\/submitted|application[-_]?submitted|application[-_]?confirmation|\/success|applied=true|status=success|submitted=1|\/formresponse|\/responsepage\.aspx|career_ns=job_application_status|navBarLevel=MY_APPLICATIONS|status=submitted)/i;
 
 export const SUCCESS_TEXT_REGEX =
-  /((application|form|submission|profile) (has been |got |was )?(successfully |sucessfully )?(submitted|submited)|(application|form|submission|profile) (submitted|submited) (successfully|sucessfully)|thank you for (your application|applying|your interest)|\bthank you\b\s*!*|\bthanks\b\s*!*|your (application|form|profile) (has been|was|got) received|(application|form|profile) (received|complete)|we('ve| have) received your (application|profile)|we appreciate your interest in|submission successful|successfully submitted|your response (has been|was) (recorded|submitted)|response (has been )?(recorded|submitted)|submit another response)/i;
+  /((application|form|submission|profile) (has been |got |was )?(successfully |sucessfully )?(submitted|submited)|(application|form|submission|profile) (submitted|submited) (successfully|sucessfully)|thank you for (your application|applying|your interest)|thanks for (applying|your application|your interest)|\bthank you\b\s*!*|\bthanks\b\s*!*|your (application|form|profile) (has been|was|got) received|(application|form|profile) (received|complete)|we('ve| have) received your (application|profile)|check your (email|inbox)|we('ve| have) sent (your|a) (take-home|test|assignment|brief|confirmation)|take-home assignment|we appreciate your interest in|submission successful|successfully submitted|your response (has been|was) (recorded|submitted)|response (has been )?(recorded|submitted)|submit another response)/i;
 
 /**
  * Selectors identifying candidate portal navigation elements across ATS platforms (Workday, SmartRecruiters, Darwinbox, etc.).
@@ -50,7 +50,7 @@ export const PORTAL_TEXT_REGEX =
   /(candidate\s*(home|portal)|applicant\s*(home|portal)|view\s*(your\s*|my\s*)?application\s*status|check\s*(your\s*|my\s*)?(application\s*)?status|track\s*(your\s*|my\s*)?application|my\s*applications|my\s*submissions|view\s*submitted\s*application|manage\s*(your\s*|my\s*)?applications|application\s*status)/i;
 
 export const PORTAL_HREF_REGEX =
-  /(\/candidatehome|\/userhome|\/candidate-home|\/user-home|\/candidate-portal|\/applicant-portal|\/my-applications|\/myapplications|my\.smartrecruiters\.com|my\.greenhouse\.io|\/application[-_]?status|\/candidatev2\/main\/applications|\/my_submissions)/i;
+  /(\/candidatehome|\/userhome|\/candidate-home|\/user-home|\/candidate-portal|\/applicant-portal|\/my-applications|\/myapplications|navBarLevel=MY_APPLICATIONS|navBarLevel=MY_PROFILE|my\.smartrecruiters\.com|my\.greenhouse\.io|\/application[-_]?status|\/candidatev2\/main\/applications|\/my_submissions)/i;
 
 export const EXCLUDED_PORTAL_TEXT_REGEX =
   /^(careers?(\s*home)?|home|back|back\s*to.*|search\s*jobs|browse\s*jobs|view\s*(all\s*|other\s*)?jobs|explore\s*(all\s*|other\s*)?jobs|privacy(\s*policy)?|terms(\s*of\s*service)?|help|contact(\s*us)?|faq|sign\s*out|log\s*out|sign\s*in|log\s*in)$/i;
@@ -328,7 +328,9 @@ export function isSubmitTriggerElement(elem: HTMLElement | null): boolean {
     id.includes('submit') ||
     className.includes('submit-btn') ||
     className.includes('submit-application') ||
-    className.includes('dbx-btn-submit')
+    className.includes('dbx-btn-submit') ||
+    className.includes('sapmbtn') ||
+    className.includes('sapuibtn')
   ) {
     return true;
   }
@@ -388,23 +390,41 @@ export function isConfirmationUrl(url: string = window.location.href): boolean {
  * Strictly ignores hidden elements (e.g. display: none or hidden parent modals).
  */
 export function hasVisibleSuccessMessage(): boolean {
-  // Check Workday, Microsoft Forms, and Angular ATS (CRISIL) specific status banners and success containers
+  // Check Workday, Microsoft Forms, Angular ATS (CRISIL), SAP SuccessFactors, and Next.js / React modal dialogs
   const specificSuccess = document.querySelector(
-    '[data-automation-id="applicationSubmitted"], [data-automation-id="applicationConfirmation"], [data-automation-id="statusBanner"], [data-automation-id="successMessage"], [data-automation-id="alert-success"], [data-automation-id="thankYouMessage"], app-jobconfirm, lib-apply-confirmation, .jobConfirm-sec, .apply-confirmation, .office-form-thank-you, .swal2-container, .swal2-popup'
+    '[data-automation-id="applicationSubmitted"], [data-automation-id="applicationConfirmation"], [data-automation-id="statusBanner"], [data-automation-id="successMessage"], [data-automation-id="alert-success"], [data-automation-id="thankYouMessage"], app-jobconfirm, lib-apply-confirmation, .jobConfirm-sec, .apply-confirmation, .office-form-thank-you, .swal2-container, .swal2-popup, [role="dialog"][aria-labelledby*="success"], [role="dialog"][aria-labelledby*="apply"], [aria-modal="true"][aria-labelledby*="success"], [aria-modal="true"][aria-labelledby*="apply"], [id*="apply-success"], [id*="applySuccess"], .sapMMessageStripSuccess, .sapUiMsgSuccess, [class*="applicationSuccess"], [id*="applicationSuccess"]'
   );
   if (specificSuccess && isElementVisible(specificSuccess as HTMLElement)) {
     const txt = (specificSuccess.textContent || '').trim();
     if (
       txt &&
       (SUCCESS_TEXT_REGEX.test(txt) ||
-        /submitted|submited|thank you|success|sucess|congratulations|thanks/i.test(txt))
+        /submitted|submited|thank you|thanks|success|sucess|congratulations|received|check your email|assignment/i.test(txt))
     ) {
       return true;
     }
   }
 
+  // Also check any active dialog/modal element for confirmation text
+  const openModals = querySelectorAllDeep<HTMLElement>(
+    'dialog[open], [role="dialog"][aria-modal="true"], [role="dialog"], [aria-modal="true"]',
+    document
+  );
+  for (const modal of openModals) {
+    if (isElementVisible(modal)) {
+      const modalText = (modal.textContent || '').trim();
+      if (
+        modalText &&
+        (SUCCESS_TEXT_REGEX.test(modalText) ||
+          /submitted|submited|thank you for applying|thanks for applying|application received|check your email|check your inbox/i.test(modalText))
+      ) {
+        return true;
+      }
+    }
+  }
+
   const prominentElements = querySelectorAllDeep<HTMLElement>(
-    'h1, h2, h3, h4, h5, [role="alert"], [data-automation-id*="success"], [data-automation-id*="confirmation"], [data-automation-id="thankYouMessage"], [id*="submitted"], [id*="success"], [class*="submitted"], [class*="success"], [class*="confirmation"], [class*="Confirmation"], app-jobconfirm, lib-apply-confirmation, .jobConfirm-sec, .apply-confirmation, [class*="jobConfirm"], [class*="apply-confirmation"], .confirmation, .success, .swal2-title, .swal2-html-container, .freebirdFormviewerViewResponseConfirmationMessage, .office-form-thank-you, .office-form-thank-you-title, .office-form-thank-you-sub-title',
+    'h1, h2, h3, h4, h5, [role="alert"], [role="status"], [role="dialog"] h1, [role="dialog"] h2, [role="dialog"] h3, [role="dialog"] p, [aria-modal="true"] h1, [aria-modal="true"] h2, [aria-modal="true"] p, [data-automation-id*="success"], [data-automation-id*="confirmation"], [data-automation-id="thankYouMessage"], [id*="submitted"], [id*="success"], [id*="confirm"], [id*="apply-success"], [class*="submitted"], [class*="success"], [class*="confirmation"], [class*="Confirmation"], app-jobconfirm, lib-apply-confirmation, .jobConfirm-sec, .apply-confirmation, [class*="jobConfirm"], [class*="apply-confirmation"], .confirmation, .success, .swal2-title, .swal2-html-container, .freebirdFormviewerViewResponseConfirmationMessage, .office-form-thank-you, .office-form-thank-you-title, .office-form-thank-you-sub-title, .sapMMessageStripSuccess, .sapUiMsgSuccess, [class*="applicationSuccess"]',
     document
   );
 
@@ -415,6 +435,14 @@ export function hasVisibleSuccessMessage(): boolean {
     const content = (el.textContent || '').trim();
     if (content && SUCCESS_TEXT_REGEX.test(content)) {
       return true;
+    }
+    // Also check parent container text if element has success/confirm id or class
+    const elIdOrClass = `${el.id} ${el.className}`;
+    if (/success|confirm|submitted/i.test(elIdOrClass)) {
+      const containerText = (el.closest('[role="dialog"], [aria-modal="true"], .modal, div')?.textContent || '').trim();
+      if (containerText && SUCCESS_TEXT_REGEX.test(containerText)) {
+        return true;
+      }
     }
   }
 
@@ -742,8 +770,8 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     const meta = extractJobMetadata();
     stageCurrentJobMetadata(meta, true);
 
-    // Staggered check intervals to capture SPA DOM updates
-    [100, 300, 700, 1500].forEach((delay) => {
+    // Staggered check intervals to capture async API calls and SPA DOM updates
+    [150, 400, 800, 1500, 2500, 3800, 5200, 7000].forEach((delay) => {
       setTimeout(() => {
         if (!isListening || !isExtensionValid()) {
           teardown();

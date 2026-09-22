@@ -106,6 +106,7 @@ export const Drawer: React.FC = () => {
   });
   const currentPosRef = useRef<{ x: number; y: number } | null>(customPosition);
   const drawerContainerRef = useRef<HTMLDivElement | null>(null);
+  const drawerBodyRef = useRef<HTMLDivElement | null>(null);
   const activeDragCleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -1168,6 +1169,98 @@ export const Drawer: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Prevent mouse wheel inside Copilot window from scrolling the host application page
+  useEffect(() => {
+    const container = drawerContainerRef.current;
+    if (!container || !isOpen) return;
+
+    const rootNode = container.getRootNode();
+    const shadowRoot = rootNode instanceof ShadowRoot ? rootNode : null;
+
+    const handleWheel = (e: WheelEvent) => {
+      // 1. ALWAYS cancel default action & stop propagation so the host page CANNOT scroll
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === 'function') {
+        e.stopImmediatePropagation();
+      }
+
+      const scrollBody = drawerBodyRef.current;
+      if (!scrollBody) return;
+
+      // 2. Handle horizontal trackpad swipe if horizontal delta dominates
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > 4) {
+        const path = e.composedPath();
+        for (const node of path) {
+          if (node === container) break;
+          if (node instanceof HTMLElement) {
+            const style = window.getComputedStyle(node);
+            if (
+              (style.overflowX === 'auto' || style.overflowX === 'scroll') &&
+              node.scrollWidth > node.clientWidth
+            ) {
+              node.scrollLeft += e.deltaX;
+              return;
+            }
+          }
+        }
+      }
+
+      // 3. Normalize vertical wheel delta across browsers and input devices
+      let delta = e.deltaY;
+      if (e.deltaMode === 1) {
+        // Line mode (Firefox / discrete mouse wheels)
+        delta *= 28;
+      } else if (e.deltaMode === 2) {
+        // Page mode
+        delta *= 300;
+      }
+
+      if (!delta) return;
+
+      // 4. Check if the wheel occurred directly over an inner scrollable preview element
+      const path = e.composedPath();
+      let innerScrollable: HTMLElement | null = null;
+
+      for (const node of path) {
+        if (node === container || node === scrollBody) break;
+        if (node instanceof HTMLElement) {
+          const style = window.getComputedStyle(node);
+          const isScrollable =
+            (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+            node.scrollHeight > node.clientHeight;
+          if (isScrollable) {
+            const canScrollDown = delta > 0 && node.scrollTop + node.clientHeight < node.scrollHeight - 1;
+            const canScrollUp = delta < 0 && node.scrollTop > 0;
+            if (canScrollDown || canScrollUp) {
+              innerScrollable = node;
+              break;
+            }
+          }
+        }
+      }
+
+      // 5. Directly and smoothly scroll the active container inside the popup window
+      if (innerScrollable) {
+        innerScrollable.scrollTop += delta;
+      } else {
+        scrollBody.scrollTop += delta;
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    if (shadowRoot) {
+      shadowRoot.addEventListener('wheel', handleWheel as EventListener, { passive: false });
+    }
+
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+      if (shadowRoot) {
+        shadowRoot.removeEventListener('wheel', handleWheel as EventListener);
+      }
+    };
+  }, [isOpen]);
+
   const handlePointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) {
       return;
@@ -1269,8 +1362,8 @@ export const Drawer: React.FC = () => {
     <div
       ref={drawerContainerRef}
       data-quickfiller-ui="true"
-      style={
-        isOpen && customPosition
+      style={{
+        ...(isOpen && customPosition
           ? {
               position: 'fixed',
               left: `${customPosition.x}px`,
@@ -1278,11 +1371,12 @@ export const Drawer: React.FC = () => {
               bottom: 'auto',
               right: 'auto',
             }
-          : undefined
-      }
+          : {}),
+        overscrollBehavior: 'contain',
+      }}
       className={`${
         isOpen && customPosition ? '' : 'fixed bottom-3 right-3 sm:bottom-5 sm:right-5'
-      } z-[2147483647] font-sans text-slate-800 text-sm`}
+      } z-[2147483647] font-sans text-slate-800 text-sm overscroll-contain`}
     >
       {/* Auto-Tracked Toast when collapsed */}
       {!isOpen && autoTrackedToast && (
@@ -1344,9 +1438,10 @@ export const Drawer: React.FC = () => {
       {/* Expanded Copilot Drawer */}
       {isOpen && (
         <div
+          style={{ overscrollBehavior: 'contain' }}
           className={`flex flex-col ${
             isDragging ? 'transition-none' : 'transition-all duration-200 ease-in-out'
-          } bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-scale-in origin-bottom-right ${
+          } bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-scale-in origin-bottom-right overscroll-contain ${
             isExpanded
               ? 'w-[580px] sm:w-[680px] max-w-[calc(100vw-24px)] h-[640px] sm:h-[680px] max-h-[92vh]'
               : 'w-[380px] sm:w-[440px] max-w-[calc(100vw-24px)] h-[580px] sm:h-[620px] max-h-[90vh]'
@@ -1535,7 +1630,11 @@ export const Drawer: React.FC = () => {
           </div>
 
           {/* Drawer Body */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-3.5 space-y-3 bg-slate-50/50">
+          <div
+            ref={drawerBodyRef}
+            style={{ overscrollBehavior: 'contain' }}
+            className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-3.5 space-y-3 bg-slate-50/50 overscroll-contain"
+          >
             {/* TAB: Cover Letter Generator */}
             {activeTab === 'coverLetter' && (
               <div className="space-y-3 animate-fade-in">
@@ -1758,7 +1857,10 @@ export const Drawer: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="p-3 bg-slate-50/70 border border-slate-200/60 rounded-xl max-h-80 overflow-y-auto select-text">
+                    <div
+                      style={{ overscrollBehavior: 'contain' }}
+                      className="p-3 bg-slate-50/70 border border-slate-200/60 rounded-xl max-h-80 overflow-y-auto select-text overscroll-contain"
+                    >
                       <p className="text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
                         {generatedCoverLetter}
                       </p>
@@ -2582,7 +2684,10 @@ export const Drawer: React.FC = () => {
                             </button>
                           </div>
                         </div>
-                        <div className="p-2.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 leading-relaxed whitespace-pre-wrap select-text max-h-[220px] overflow-y-auto">
+                        <div
+                          style={{ overscrollBehavior: 'contain' }}
+                          className="p-2.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 leading-relaxed whitespace-pre-wrap select-text max-h-[220px] overflow-y-auto overscroll-contain"
+                        >
                           {outreachResult.fullPitch}
                         </div>
                       </div>

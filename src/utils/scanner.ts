@@ -285,6 +285,14 @@ export function classifyField(
     ''
   ).toLowerCase();
   const ariaLabel = (element.getAttribute('aria-label') || '').toLowerCase();
+  const dataFieldId = (
+    element.getAttribute('data-field-id') ||
+    element.getAttribute('data-field') ||
+    element.getAttribute('data-sap-ui') ||
+    element.getAttribute('data-id') ||
+    element.closest('[data-field-id]')?.getAttribute('data-field-id') ||
+    ''
+  ).toLowerCase();
 
   // Also inspect container automation id (Workday formField container convention: div[data-automation-id="formField-legalNameSection_firstName"])
   const containerAutomationId = (
@@ -325,8 +333,8 @@ export function classifyField(
     // Ignore
   }
 
-  // Workday high-confidence direct data-automation-id checks
-  const combinedAutoId = `${automationId} ${containerAutomationId} ${hostAutomationId}`;
+  // Workday, SAP SuccessFactors, and ATS high-confidence direct automation / field id checks
+  const combinedAutoId = `${automationId} ${containerAutomationId} ${hostAutomationId} ${dataFieldId}`;
   if (
     /legalnamesection_firstname|preferrednamesection_firstname|\bfirstname\b/.test(combinedAutoId)
   ) {
@@ -374,7 +382,7 @@ export function classifyField(
   ) {
     return 'phone';
   }
-  if (/addresssection_postalcode|\bpostalcode\b|\bzipcode\b/.test(combinedAutoId)) {
+  if (/addresssection_postalcode|\bpostalcode\b|\bzipcode\b|\bzip\b/.test(combinedAutoId)) {
     return 'postalCode';
   }
   if (/addresssection_countryregion|countryregion|\bregion\b|\bstate\b/.test(combinedAutoId)) {
@@ -396,7 +404,7 @@ export function classifyField(
     return 'cover_letter';
   }
 
-  const text = `${label} ${hostLabel} ${name} ${hostName} ${id} ${placeholder} ${hostPlaceholder} ${autocomplete} ${automationId} ${containerAutomationId} ${hostAutomationId} ${ariaLabel}`.toLowerCase();
+  const text = `${label} ${hostLabel} ${name} ${hostName} ${id} ${placeholder} ${hostPlaceholder} ${autocomplete} ${automationId} ${containerAutomationId} ${hostAutomationId} ${dataFieldId} ${ariaLabel}`.toLowerCase();
 
   // Explicit cover letter detection
   if (/cover[-_\s]?letter|statement\s*of\s*(purpose|interest)|motivation[-_\s]?letter|letter\s*of\s*motivation/i.test(text)) {
@@ -493,7 +501,7 @@ export function classifyField(
   }
 
   // 9. Postal Code / ZIP / PIN Code
-  if (/(postal[-_\s]?code|zip[-_\s]?code|^zip$|\bpin[-_\s]?code\b|\bpincode\b|addresssection_postalcode)/i.test(text)) {
+  if (/(postal[-_\s]?code|zip[-_\s]?code|\bzip\b|\bpin[-_\s]?code\b|\bpincode\b|addresssection_postalcode)/i.test(text)) {
     return 'postalCode';
   }
 
@@ -1043,19 +1051,29 @@ export function scanFormFields(): {
 export function extractJobMetadata(): JobMetadata {
   let rawTitle =
     document.querySelector(
-      '[data-automation-id="jobPostingHeader"], h1, .job-title, [class*="job-title"], [class*="position-title"], [class*="jobTitle"], [class*="align-titleJob"], [class*="jobVwHeading"], [class*="job-view__title"] h2, .job-details-header h2'
+      '[data-automation-id="jobPostingHeader"], h1, .job-title, [class*="job-title"], [class*="position-title"], [class*="jobTitle"], [id*="jobTitle"], [id*="job-title"], .sf-job-title, .jobtitle, #job-title, [class*="align-titleJob"], [class*="jobVwHeading"], [class*="job-view__title"] h2, .job-details-header h2'
     )?.textContent?.trim() || '';
 
-  // Clean "Applying to <Role>" prefix if present (e.g. from CRISIL / Angular job apply header)
+  // Clean "Applying to / for <Role>" or "Apply for <Role>" prefix if present
   if (rawTitle.toLowerCase().startsWith('applying to ')) {
     rawTitle = rawTitle.slice(12).trim();
+  } else if (rawTitle.toLowerCase().startsWith('applying for ')) {
+    rawTitle = rawTitle.slice(13).trim();
+  } else if (rawTitle.toLowerCase().startsWith('apply for ')) {
+    rawTitle = rawTitle.slice(10).trim();
+  } else if (rawTitle.toLowerCase().startsWith('apply to ')) {
+    rawTitle = rawTitle.slice(9).trim();
+  } else if (rawTitle.toLowerCase().startsWith('application for ')) {
+    rawTitle = rawTitle.slice(16).trim();
   }
 
-  // If heading not found or is generic, inspect URL slug (e.g. /jobview/associate-engineer-gen-ai-pune-maharashtra-india-2026083113512451)
+  // If heading not found or is generic, inspect URL slug (e.g. /jobview/associate-engineer... or /careers/software-engineer/apply)
   let titleFromSlug = '';
   try {
-    const jobviewMatch = window.location.pathname.match(/\/jobview\/(?:campus\/)?([a-zA-Z0-9_-]+)/i);
-    if (jobviewMatch && jobviewMatch[1]) {
+    const jobviewMatch =
+      window.location.pathname.match(/\/jobview\/(?:campus\/)?([a-zA-Z0-9_-]+)/i) ||
+      window.location.pathname.match(/\/(?:careers|career|jobs|job)\/([a-zA-Z0-9_-]+)(?:\/apply|\/application)?/i);
+    if (jobviewMatch && jobviewMatch[1] && !/^(apply|application|all|openings|search|list)$/i.test(jobviewMatch[1])) {
       const cleanSlug = jobviewMatch[1]
         .replace(/-\d{8,}/, '')
         .replace(/[-_]/g, ' ')
@@ -1069,10 +1087,15 @@ export function extractJobMetadata(): JobMetadata {
     }
   } catch {}
 
+  // Strip SAP SuccessFactors platform suffix from document.title if present
+  const cleanDocTitle = document.title
+    .replace(/\s*[-–—|]\s*SAP\s*SuccessFactors.*$/i, '')
+    .trim();
+
   let title =
     rawTitle ||
     titleFromSlug ||
-    document.title.split(/[-|–|—|\|]/)[0]?.trim() ||
+    cleanDocTitle.split(/[-|–|—|\|]/)[0]?.trim() ||
     'Job Application';
 
   // If title extracted from document.title was generic ("Crisil" or "Careers"), prefer titleFromSlug if available
@@ -1197,6 +1220,79 @@ export function extractJobMetadata(): JobMetadata {
           company = 'Workday Job';
         }
       }
+    }
+  } else if (
+    hostname.includes('successfactors.com') ||
+    hostname.includes('successfactors.eu')
+  ) {
+    // SAP SuccessFactors: career4.successfactors.com, career2.successfactors.com, career5.successfactors.eu, etc.
+    const domCompany = document
+      .querySelector(
+        '.company, [class*="company-name"], [class*="companyName"], [data-automation-id*="company"], [data-qa*="company"], .org-name, .header-company-name, .company-name, [class*="headerLogo"] img[alt], [class*="site-logo"] img[alt], [class*="logo"] img[alt], header img[alt]'
+      )
+      ?.textContent?.split(/[•|\-|—|\|]/)[0]
+      ?.trim();
+
+    const logoAlt = document
+      .querySelector(
+        '[class*="headerLogo"] img[alt], [class*="site-logo"] img[alt], [class*="logo"] img[alt], header img[alt]'
+      )
+      ?.getAttribute('alt');
+
+    const cleanLogoAlt = logoAlt
+      ? logoAlt.replace(/logo|careers|jobs|home|portal/gi, '').trim()
+      : '';
+
+    const metaCompany = document
+      .querySelector('meta[property="og:site_name"]')
+      ?.getAttribute('content');
+
+    // Query parameter: ?company=<companyId> (e.g. ?company=tataindiaP or ?company=lamresearch)
+    let queryCompany = '';
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const rawCompany = urlParams.get('company');
+      if (rawCompany) {
+        const cleaned = rawCompany
+          .replace(/([a-z])([A-Z])/g, '$1 $2')
+          .replace(/[-_]/g, ' ')
+          .trim();
+        queryCompany = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+      }
+    } catch {}
+
+    // Document title (strip SuccessFactors branding)
+    let titleCompany = '';
+    const titleParts = document.title
+      .replace(/\s*[-–—|]\s*SAP\s*SuccessFactors.*$/i, '')
+      .split(/[-|–|—|\|]/)
+      .map((p) => p.trim())
+      .filter(
+        (p) =>
+          p &&
+          !/^(sap\s*successfactors|successfactors|careers?|jobs?|job\s*details|apply|application)$/i.test(
+            p
+          )
+      );
+
+    if (titleParts.length > 1) {
+      titleCompany = titleParts[titleParts.length - 1];
+    } else if (titleParts.length === 1 && !/successfactors/i.test(titleParts[0])) {
+      titleCompany = titleParts[0];
+    }
+
+    if (domCompany && !/successfactors/i.test(domCompany)) {
+      company = domCompany;
+    } else if (cleanLogoAlt && !/successfactors/i.test(cleanLogoAlt)) {
+      company = cleanLogoAlt;
+    } else if (metaCompany && !/successfactors/i.test(metaCompany)) {
+      company = metaCompany;
+    } else if (titleCompany) {
+      company = titleCompany;
+    } else if (queryCompany) {
+      company = queryCompany;
+    } else {
+      company = 'Company';
     }
   } else if (
     hostname.includes('docs.google.com') &&
@@ -1325,24 +1421,7 @@ export function extractJobMetadata(): JobMetadata {
       ?.textContent?.split(/[•|\-|—]/)[0]
       ?.trim();
 
-    // 2. Try document title (e.g. "Job Title Application - Acme Corp" -> "Acme Corp" or "Crisil - Careers" -> "Crisil")
-    let titleCompany = '';
-    const titleParts = document.title.split(/[-|–|—|\|]/).map((p) => p.trim()).filter(Boolean);
-    if (titleParts.length > 1) {
-      const lastPart = titleParts[titleParts.length - 1];
-      if (/^(careers?|jobs?|careers?\s*portal|job\s*board|opportunities)$/i.test(lastPart)) {
-        titleCompany = titleParts[0];
-      } else {
-        titleCompany = lastPart;
-      }
-    }
-
-    // 3. Try meta tag or hostname
-    const metaCompany = document
-      .querySelector('meta[property="og:site_name"]')
-      ?.getAttribute('content');
-
-    // Corporate recruiting subdomain check: e.g. career.crisil.com or jobs.apple.com
+    // Corporate recruiting subdomain check: e.g. career.crisil.com or jobs.apple.com or trao.ai
     let hostNamePart = '';
     if (hostname) {
       const hostParts = hostname.replace(/^www\./, '').split('.');
@@ -1354,7 +1433,30 @@ export function extractJobMetadata(): JobMetadata {
       } else {
         hostNamePart = hostParts[0];
       }
+      if (hostNamePart) {
+        hostNamePart = hostNamePart.charAt(0).toUpperCase() + hostNamePart.slice(1);
+      }
     }
+
+    // 2. Try document title (e.g. "Job Title Application - Acme Corp" -> "Acme Corp", "Crisil - Careers" -> "Crisil", "Trao - AI Careers" -> "Trao")
+    let titleCompany = '';
+    const titleParts = document.title.split(/[-|–|—|\|]/).map((p) => p.trim()).filter(Boolean);
+    if (titleParts.length > 1) {
+      const firstPart = titleParts[0];
+      const lastPart = titleParts[titleParts.length - 1];
+      if (hostNamePart && firstPart.toLowerCase() === hostNamePart.toLowerCase()) {
+        titleCompany = firstPart;
+      } else if (/careers?|jobs?|careers?\s*portal|job\s*board|opportunities|openings|apply|application/i.test(lastPart)) {
+        titleCompany = firstPart;
+      } else {
+        titleCompany = lastPart;
+      }
+    }
+
+    // 3. Try meta tag
+    const metaCompany = document
+      .querySelector('meta[property="og:site_name"]')
+      ?.getAttribute('content');
 
     company =
       domCompany ||
@@ -1370,6 +1472,10 @@ export function extractJobMetadata(): JobMetadata {
     document.querySelector('[data-automation-id="formSubtitle"]') ||
     document.querySelector('.office-form-subtitle') ||
     document.querySelector('.cBGGfd') ||
+    document.querySelector('.jobdescription') ||
+    document.querySelector('.job-description') ||
+    document.querySelector('#job-description') ||
+    document.querySelector('.job_description') ||
     document.querySelector('#content') ||
     document.querySelector('.description') ||
     document.querySelector('article') ||

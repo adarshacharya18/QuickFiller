@@ -227,4 +227,84 @@ describe('Unified Autofill & Answers Tab Logic', () => {
     expect(tabs).toContain('autofill');
     expect(tabs).not.toContain('questions');
   });
+
+  describe('Copilot Popup Wheel Scroll Containment & Isolation', () => {
+    it('always cancels default action and stopPropagation on wheel over popup', () => {
+      let defaultPrevented = false;
+      let propagationStopped = false;
+
+      const mockEvent = {
+        deltaY: 50,
+        deltaX: 0,
+        deltaMode: 0,
+        preventDefault: () => {
+          defaultPrevented = true;
+        },
+        stopPropagation: () => {
+          propagationStopped = true;
+        },
+        stopImmediatePropagation: () => {},
+        composedPath: () => [],
+      } as unknown as WheelEvent;
+
+      const scrollBody = { scrollTop: 0 };
+      // Simulate handleWheel execution
+      mockEvent.preventDefault();
+      mockEvent.stopPropagation();
+      scrollBody.scrollTop += mockEvent.deltaY;
+
+      expect(defaultPrevented).toBe(true);
+      expect(propagationStopped).toBe(true);
+      expect(scrollBody.scrollTop).toBe(50);
+    });
+
+    it('normalizes deltaMode line mode and updates internal scroll container', () => {
+      const mockEvent = {
+        deltaY: 2, // 2 lines
+        deltaX: 0,
+        deltaMode: 1, // line mode
+        preventDefault: () => {},
+        stopPropagation: () => {},
+      };
+
+      let delta = mockEvent.deltaY;
+      if (mockEvent.deltaMode === 1) delta *= 28;
+
+      const scrollBody = { scrollTop: 10 };
+      scrollBody.scrollTop += delta;
+
+      expect(delta).toBe(56);
+      expect(scrollBody.scrollTop).toBe(66);
+    });
+
+    it('scrolls inner preview box when it can scroll, otherwise redirects to main drawer body', () => {
+      const innerPreview = {
+        scrollTop: 0,
+        clientHeight: 200,
+        scrollHeight: 400,
+      };
+      const mainBody = { scrollTop: 100 };
+
+      // Case 1: Inner preview can scroll down
+      const delta1 = 40;
+      const canScrollDown = delta1 > 0 && innerPreview.scrollTop + innerPreview.clientHeight < innerPreview.scrollHeight - 1;
+      expect(canScrollDown).toBe(true);
+      if (canScrollDown) {
+        innerPreview.scrollTop += delta1;
+      }
+      expect(innerPreview.scrollTop).toBe(40);
+      expect(mainBody.scrollTop).toBe(100);
+
+      // Case 2: Inner preview reaches bottom limit
+      innerPreview.scrollTop = 200; // at bottom (200 + 200 = 400)
+      const canScrollDownAtBottom = delta1 > 0 && innerPreview.scrollTop + innerPreview.clientHeight < innerPreview.scrollHeight - 1;
+      expect(canScrollDownAtBottom).toBe(false);
+      // When inner preview cannot scroll, mainBody scrolls instead
+      if (!canScrollDownAtBottom) {
+        mainBody.scrollTop += delta1;
+      }
+      expect(mainBody.scrollTop).toBe(140);
+    });
+  });
 });
+

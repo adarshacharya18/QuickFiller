@@ -890,5 +890,100 @@ describe('Submission Watcher & Job Tracker', () => {
       unwatch();
     });
   });
+
+  describe('Next.js Careers & In-Page Modal Job Application Support (trao.ai)', () => {
+    it('extracts company and role title correctly from URL slug and page header on trao.ai', () => {
+      delete (window as any).location;
+      (window as any).location = new URL('https://trao.ai/careers/software-engineer/apply');
+      document.title = 'Trao - AI Careers';
+      document.body.innerHTML = `
+        <header>
+          <a href="/">Trao</a>
+        </header>
+        <main>
+          <h1>Apply for Software Engineer</h1>
+          <form id="application-form">
+            <input name="fullName" value="" />
+            <input name="email" value="" />
+            <button type="submit">Submit Application</button>
+          </form>
+        </main>
+      `;
+
+      const meta = extractJobMetadata();
+      expect(meta.company).toBe('Trao');
+      expect(meta.title).toBe('Software Engineer');
+    });
+
+    it('identifies in-page modal dialog with "Check your email" and "Thanks for applying" as visible success', () => {
+      delete (window as any).location;
+      (window as any).location = new URL('https://trao.ai/careers/software-engineer/apply');
+      document.body.innerHTML = `
+        <form id="application-form" style="opacity: 0.5;">
+          <input name="fullName" value="Jane Doe" />
+          <input name="email" value="jane@example.com" />
+          <button type="submit">Submitting...</button>
+        </form>
+        <div role="dialog" aria-modal="true" aria-labelledby="apply-success-title" class="fixed inset-0 z-50">
+          <div class="modal-content">
+            <h2 id="apply-success-title">Check your email</h2>
+            <p>Thanks for applying for <strong>Software Engineer</strong>. We've sent your take-home assignment to your inbox.</p>
+          </div>
+        </div>
+      `;
+
+      expect(hasVisibleSuccessMessage()).toBe(true);
+    });
+
+    it('tracks application end-to-end when user clicks submit and modal dialog appears asynchronously', async () => {
+      delete (window as any).location;
+      (window as any).location = new URL('https://trao.ai/careers/software-engineer/apply');
+      document.title = 'Trao - Careers';
+
+      document.body.innerHTML = `
+        <div id="root">
+          <h1>Software Engineer</h1>
+          <form id="app-form">
+            <input name="name" value="Jane Candidate" />
+            <input name="email" value="jane@example.com" />
+            <button type="submit" id="submit-btn">Submit Application</button>
+          </form>
+        </div>
+      `;
+
+      const trackedApps: any[] = [];
+      const unwatch = initSubmissionWatcher({
+        onAutoTracked: (app) => trackedApps.push(app),
+      });
+
+      const submitBtn = document.getElementById('submit-btn')!;
+      submitBtn.click();
+
+      // Simulate Next.js API response popping open modal dialog
+      const modal = document.createElement('div');
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'apply-success-title');
+      modal.innerHTML = `
+        <h2 id="apply-success-title">Check your email</h2>
+        <p>Thanks for applying for <strong>Software Engineer</strong>. We've sent your take-home assignment to jane@example.com.</p>
+      `;
+      document.body.appendChild(modal);
+
+      // Allow staggered watcher timer to trigger
+      await new Promise((r) => setTimeout(r, 450));
+
+      expect(trackedApps.length).toBe(1);
+      expect(trackedApps[0].company).toBe('Trao');
+      expect(trackedApps[0].title).toBe('Software Engineer');
+      expect(trackedApps[0].url).toBe('https://trao.ai/careers/software-engineer');
+
+      const storageData = await (await import('../src/utils/storage')).getStorageData();
+      expect(storageData.applications?.length).toBe(1);
+      expect(storageData.applications?.[0].company).toBe('Trao');
+
+      unwatch();
+    });
+  });
 });
 

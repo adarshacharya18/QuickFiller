@@ -40,6 +40,7 @@ export default defineContentScript({
       position: 'inline',
       anchor: 'body',
       append: 'last',
+      isolateEvents: ['keydown', 'keyup', 'keypress', 'wheel'],
       onMount: (container) => {
         const root = ReactDOM.createRoot(container);
         root.render(<Drawer />);

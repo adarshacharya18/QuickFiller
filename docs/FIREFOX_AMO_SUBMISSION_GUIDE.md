@@ -74,7 +74,10 @@ Because QuickFiller uses TypeScript, React, Vite, and WXT bundling, Mozilla revi
    4. Build Firefox extension:
       npm run build:firefox
    5. The output files are generated in `.output/firefox-mv2/` and match the submitted extension zip.
-   6. Repository: https://github.com/adarshacharya18/QuickFiller
+   6. Third-Party Libraries & Linter Warnings:
+      - The innerHTML warnings originate from React DOM (react-dom) core JSX runtime. No custom innerHTML is used in application code.
+      - The Function constructor (eval) and dynamic import warnings originate from Mozilla's official `pdfjs-dist` (PDF.js) library used for client-side resume parsing.
+   7. Repository: https://github.com/adarshacharya18/QuickFiller
    ```
 4. Click **Continue**.
 
@@ -173,6 +176,10 @@ Testing without external accounts:
 Network / AI Privacy:
 - QuickFiller does not transmit any user data to any developer server.
 - AI features are 100% BYOK (Bring-Your-Own-Key) or run completely offline via user-installed Ollama on http://localhost:11434.
+
+Linter Warnings Note:
+- innerHTML warnings are internal to the React DOM / JSX runtime.
+- The Function constructor and dynamic import warnings are internal to Mozilla's official pdfjs-dist library used for local PDF resume parsing.
 ```
 
 ---

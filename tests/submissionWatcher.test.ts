@@ -779,5 +779,116 @@ describe('Submission Watcher & Job Tracker', () => {
       unwatch();
     });
   });
+
+  describe('REGRESSION GUARD: Prevent Duplicate Applications on Workday Test App & Rapid Submissions', () => {
+    it('records EXACTLY ONE application when user submits workday-test-app.html once without filling data', async () => {
+      delete (window as any).location;
+      (window as any).location = new URL(
+        'file:///home/adarsh/Documents/Projects/QuickFiller/workday-test-app.html'
+      );
+
+      document.title = 'Senior Distributed Systems Engineer - Workday Technologies Careers';
+      document.body.innerHTML = `
+        <div class="wkd-brand">
+          <div class="wkd-company-name" data-automation-id="companyName">Workday Technologies</div>
+        </div>
+        <div class="wkd-job-title" data-automation-id="jobPostingHeader">Senior Distributed Systems Engineer</div>
+
+        <div id="application-view">
+          <input name="firstName" value="" />
+          <input name="lastName" value="" />
+          <input name="email" value="" />
+          <button type="button" id="workday-submit-btn" data-automation-id="bottom-submit-button">
+            Submit Application
+          </button>
+        </div>
+
+        <div data-automation-id="applicationSubmitted" id="confirmation-view" style="display: none;">
+          <div data-automation-id="statusBanner">
+            <h2 class="success-title">Thank you for your application!</h2>
+            <p class="success-desc">
+              Your application for Senior Distributed Systems Engineer has been successfully submitted.
+            </p>
+          </div>
+        </div>
+        <div id="inspector-log">Initial state</div>
+      `;
+
+      const trackedApps: any[] = [];
+      const unwatch = initSubmissionWatcher({
+        onAutoTracked: (app) => trackedApps.push(app),
+      });
+
+      // User submits without filling data
+      const submitBtn = document.getElementById('workday-submit-btn')!;
+      submitBtn.click();
+
+      // Mirror test app's submission handler: hide form, show confirmation, set hash, trigger DOM log mutation
+      document.getElementById('application-view')!.style.display = 'none';
+      document.getElementById('confirmation-view')!.style.display = 'block';
+      window.location.hash = '#applicationSubmitted';
+      document.getElementById('inspector-log')!.textContent = 'Form submitted!';
+
+      // Wait for staggered timers (100, 300, 700) and MutationObserver to complete
+      await new Promise((r) => setTimeout(r, 600));
+
+      // Trigger additional mutations while on confirmation screen (e.g. dynamic log updates)
+      document.getElementById('inspector-log')!.textContent = 'Further dynamic DOM changes...';
+      await new Promise((r) => setTimeout(r, 200));
+
+      const storageData = await (await import('../src/utils/storage')).getStorageData();
+
+      // MUST have tracked EXACTLY 1 application, not duplicated
+      expect(trackedApps.length).toBe(1);
+      expect(storageData.applications?.length).toBe(1);
+      expect(trackedApps[0].company).toBe('Workday Technologies');
+      expect(trackedApps[0].title).toBe('Senior Distributed Systems Engineer');
+      expect(trackedApps[0].status).toBe('Applied');
+
+      unwatch();
+    });
+
+    it('prevents concurrent race conditions when submit is triggered rapidly', async () => {
+      delete (window as any).location;
+      (window as any).location = new URL(
+        'https://workday.myworkdayjobs.com/en-US/careers/job/Staff-Software-Engineer'
+      );
+
+      document.title = 'Staff Software Engineer at Workday';
+      document.body.innerHTML = `
+        <div class="company" data-automation-id="companyName">Workday</div>
+        <h1 data-automation-id="jobPostingHeader">Staff Software Engineer</h1>
+        <div id="form-wrap">
+          <input name="name" value="Candidate" />
+          <button type="button" id="submit-btn" data-automation-id="bottom-submit-button">Submit</button>
+        </div>
+        <div id="success" style="display: none;" data-automation-id="applicationSubmitted">
+          Thank you for your application!
+        </div>
+      `;
+
+      const trackedApps: any[] = [];
+      const unwatch = initSubmissionWatcher({
+        onAutoTracked: (app) => trackedApps.push(app),
+      });
+
+      const submitBtn = document.getElementById('submit-btn')!;
+      // Simulate rapid user double clicking submit
+      submitBtn.click();
+      submitBtn.click();
+
+      // Show success
+      document.getElementById('form-wrap')!.style.display = 'none';
+      document.getElementById('success')!.style.display = 'block';
+
+      await new Promise((r) => setTimeout(r, 500));
+
+      expect(trackedApps.length).toBe(1);
+      const storageData = await (await import('../src/utils/storage')).getStorageData();
+      expect(storageData.applications?.length).toBe(1);
+
+      unwatch();
+    });
+  });
 });
 

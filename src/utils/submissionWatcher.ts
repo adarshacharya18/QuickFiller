@@ -455,6 +455,8 @@ export interface SubmissionWatcherOptions {
 export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => void {
   let isListening = true;
   let submitAttemptTimestamp = 0;
+  let isCommitting = false;
+  let hasCommittedForCurrentSubmission = false;
 
   const teardown = () => {
     if (!isListening) return;
@@ -477,6 +479,15 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
       return;
     }
 
+    if (hasCommittedForCurrentSubmission) {
+      enrichTrackedApplicationsWithPortal();
+      return;
+    }
+
+    if (isCommitting) {
+      return;
+    }
+
     // Safety check 1: must either be a redirect confirmation URL OR a recent submit attempt
     const recentSubmit =
       submitAttemptTimestamp > 0 && Date.now() - submitAttemptTimestamp < SUBMIT_WINDOW_MS;
@@ -490,153 +501,168 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
       return;
     }
 
-    let storage;
+    isCommitting = true;
     try {
-      storage = await getStorageData();
-    } catch {
-      return;
-    }
-
-    if (storage.jobTrackerEnabled === false || storage.autoTrackOnSubmit === false) {
-      return;
-    }
-
-    let staged: StagedJob | null = getStagedJobMetadata();
-
-    // Cross-origin and multi-tab fallback (e.g. boards.greenhouse.io -> job-boards.greenhouse.io)
-    if (!staged && storage.lastStagedJob) {
-      const timeDiff = Date.now() - (storage.lastStagedJob.timestamp || 0);
-      if (timeDiff < STAGE_EXPIRATION_MS) {
-        const lastUrl = (storage.lastStagedJob.url || '').toLowerCase();
-        const currentUrl = window.location.href.toLowerCase();
-        const derived = (deriveJobPostingUrl(currentUrl) || '').toLowerCase();
-        let isHostMatch = false;
-        try {
-          isHostMatch = currentUrl.includes(new URL(storage.lastStagedJob.url).hostname.toLowerCase());
-        } catch {}
-
-        if (
-          lastUrl.includes(window.location.hostname.toLowerCase()) ||
-          isHostMatch ||
-          lastUrl === derived ||
-          (storage.lastStagedJob.company &&
-            window.location.pathname.toLowerCase().includes(storage.lastStagedJob.company.toLowerCase()))
-        ) {
-          staged = { ...storage.lastStagedJob };
-        }
-      }
-    }
-
-    if (!staged) {
-      const derivedUrl = deriveJobPostingUrl(window.location.href);
-      const backToJobLink = findJobPostingLinkOnConfirmation(document);
-      const targetUrl = backToJobLink
-        ? (deriveJobPostingUrl(backToJobLink) || backToJobLink)
-        : (derivedUrl || window.location.href);
-
-      const meta = extractJobMetadata();
-      let title = meta.title;
-      let company = meta.company;
-
-      if (isGenericConfirmationTitle(title)) {
-        title = company && company !== 'Company' ? `${company} Application` : 'Job Application';
+      let storage;
+      try {
+        storage = await getStorageData();
+      } catch {
+        return;
       }
 
-      staged = {
-        company: company || 'Company',
-        title: title || 'Job Application',
-        url: targetUrl,
-        timestamp: Date.now(),
-        submitted: true,
-      };
-    } else {
-      // Clean staged URL if it was on a confirmation URL or has query tracking parameters
-      const cleanUrl = deriveJobPostingUrl(staged.url);
-      if (cleanUrl) {
-        staged.url = cleanUrl;
+      if (storage.jobTrackerEnabled === false || storage.autoTrackOnSubmit === false) {
+        return;
       }
-    }
 
-    const currentApps = storage.applications || [];
-    const normalizedStagedUrl = staged.url.split('?')[0].replace(/\/$/, '').toLowerCase();
+      let staged: StagedJob | null = getStagedJobMetadata();
 
-    // Prevent duplicate entries (exclude local test files so developers can test repeatedly)
-    const isTestFile =
-      normalizedStagedUrl.includes('test-form.html') ||
-      normalizedStagedUrl.includes('test-app') ||
-      normalizedStagedUrl.includes('darwinbox-test');
-
-    const isAlreadyTracked = currentApps.some((a) => {
-      if (isTestFile) return false;
-      const normAppUrl = a.url.split('?')[0].replace(/\/$/, '').toLowerCase();
-      if (normAppUrl === normalizedStagedUrl) {
-        return true;
-      }
-      if (
-        a.company.toLowerCase() === staged!.company.toLowerCase() &&
-        a.title.toLowerCase() === staged!.title.toLowerCase()
-      ) {
-        const diffMs = Date.now() - new Date(a.appliedDate || 0).getTime();
-        return diffMs < 2 * 60 * 1000;
-      }
-      return false;
-    });
-
-    // Scan for candidate portal link on the confirmation / success DOM
-    const portalUrl = extractApplicationPortalUrl(document) || undefined;
-
-    if (isAlreadyTracked) {
-      if (portalUrl) {
-        let hasChanges = false;
-        const updatedApps = currentApps.map((a) => {
-          const normAppUrl = a.url.split('?')[0].replace(/\/$/, '').toLowerCase();
-          const matches =
-            normAppUrl === normalizedStagedUrl ||
-            (a.company.toLowerCase() === staged!.company.toLowerCase() &&
-              a.title.toLowerCase() === staged!.title.toLowerCase());
-          if (matches && (!a.portalUrl || a.portalUrl !== portalUrl)) {
-            hasChanges = true;
-            return { ...a, portalUrl, updatedAt: new Date().toISOString() };
-          }
-          return a;
-        });
-        if (hasChanges) {
+      // Cross-origin and multi-tab fallback (e.g. boards.greenhouse.io -> job-boards.greenhouse.io)
+      if (!staged && storage.lastStagedJob) {
+        const timeDiff = Date.now() - (storage.lastStagedJob.timestamp || 0);
+        if (timeDiff < STAGE_EXPIRATION_MS) {
+          const lastUrl = (storage.lastStagedJob.url || '').toLowerCase();
+          const currentUrl = window.location.href.toLowerCase();
+          const derived = (deriveJobPostingUrl(currentUrl) || '').toLowerCase();
+          let isHostMatch = false;
           try {
-            await updateStorageData({ applications: updatedApps });
-            const updatedApp = updatedApps.find((a) => a.portalUrl === portalUrl);
-            if (updatedApp) {
-              options.onAutoTracked(updatedApp);
-            }
+            isHostMatch = currentUrl.includes(new URL(storage.lastStagedJob.url).hostname.toLowerCase());
           } catch {}
+
+          if (
+            lastUrl.includes(window.location.hostname.toLowerCase()) ||
+            isHostMatch ||
+            lastUrl === derived ||
+            (storage.lastStagedJob.company &&
+              window.location.pathname.toLowerCase().includes(storage.lastStagedJob.company.toLowerCase()))
+          ) {
+            staged = { ...storage.lastStagedJob };
+          }
         }
+      }
+
+      if (!staged) {
+        const derivedUrl = deriveJobPostingUrl(window.location.href);
+        const backToJobLink = findJobPostingLinkOnConfirmation(document);
+        const targetUrl = backToJobLink
+          ? (deriveJobPostingUrl(backToJobLink) || backToJobLink)
+          : (derivedUrl || window.location.href);
+
+        const meta = extractJobMetadata();
+        let title = meta.title;
+        let company = meta.company;
+
+        if (isGenericConfirmationTitle(title)) {
+          title = company && company !== 'Company' ? `${company} Application` : 'Job Application';
+        }
+
+        staged = {
+          company: company || 'Company',
+          title: title || 'Job Application',
+          url: targetUrl,
+          timestamp: Date.now(),
+          submitted: true,
+        };
+      } else {
+        // Clean staged URL if it was on a confirmation URL or has query tracking parameters
+        const cleanUrl = deriveJobPostingUrl(staged.url);
+        if (cleanUrl) {
+          staged.url = cleanUrl;
+        }
+      }
+
+      const currentApps = storage.applications || [];
+      const normalizedStagedUrl = staged.url.split('?')[0].replace(/\/$/, '').toLowerCase();
+
+      // Prevent duplicate entries (exclude local test files so developers can test repeatedly)
+      const isTestFile =
+        normalizedStagedUrl.includes('test-form.html') ||
+        normalizedStagedUrl.includes('test-app') ||
+        normalizedStagedUrl.includes('darwinbox-test');
+
+      const isAlreadyTracked = currentApps.some((a) => {
+        const normAppUrl = a.url.split('?')[0].replace(/\/$/, '').toLowerCase();
+        const diffMs = Date.now() - new Date(a.appliedDate || 0).getTime();
+
+        if (isTestFile) {
+          // For test files, prevent duplicate creation within 10 seconds of an existing entry for the same URL
+          if (normAppUrl === normalizedStagedUrl && diffMs < 10 * 1000) {
+            return true;
+          }
+          return false;
+        }
+
+        if (normAppUrl === normalizedStagedUrl) {
+          return true;
+        }
+        if (
+          a.company.toLowerCase() === staged!.company.toLowerCase() &&
+          a.title.toLowerCase() === staged!.title.toLowerCase()
+        ) {
+          return diffMs < 2 * 60 * 1000;
+        }
+        return false;
+      });
+
+      // Scan for candidate portal link on the confirmation / success DOM
+      const portalUrl = extractApplicationPortalUrl(document) || undefined;
+
+      if (isAlreadyTracked) {
+        if (portalUrl) {
+          let hasChanges = false;
+          const updatedApps = currentApps.map((a) => {
+            const normAppUrl = a.url.split('?')[0].replace(/\/$/, '').toLowerCase();
+            const matches =
+              normAppUrl === normalizedStagedUrl ||
+              (a.company.toLowerCase() === staged!.company.toLowerCase() &&
+                a.title.toLowerCase() === staged!.title.toLowerCase());
+            if (matches && (!a.portalUrl || a.portalUrl !== portalUrl)) {
+              hasChanges = true;
+              return { ...a, portalUrl, updatedAt: new Date().toISOString() };
+            }
+            return a;
+          });
+          if (hasChanges) {
+            try {
+              await updateStorageData({ applications: updatedApps });
+              const updatedApp = updatedApps.find((a) => a.portalUrl === portalUrl);
+              if (updatedApp) {
+                options.onAutoTracked(updatedApp);
+              }
+            } catch {}
+          }
+        }
+        clearStagedJobMetadata();
+        submitAttemptTimestamp = 0;
+        hasCommittedForCurrentSubmission = true;
+        return;
+      }
+
+      const newApp: JobApplication = {
+        id: `app_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        company: staged.company,
+        title: staged.title,
+        url: staged.url,
+        portalUrl,
+        appliedDate: new Date().toISOString(),
+        status: 'Applied',
+        notes: 'Auto-tracked on application submission',
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedApps = [newApp, ...currentApps];
+      try {
+        await updateStorageData({ applications: updatedApps });
+      } catch {
+        return;
       }
       clearStagedJobMetadata();
       submitAttemptTimestamp = 0;
-      return;
+      hasCommittedForCurrentSubmission = true;
+
+      options.onAutoTracked(newApp);
+    } finally {
+      isCommitting = false;
     }
-
-    const newApp: JobApplication = {
-      id: `app_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      company: staged.company,
-      title: staged.title,
-      url: staged.url,
-      portalUrl,
-      appliedDate: new Date().toISOString(),
-      status: 'Applied',
-      notes: 'Auto-tracked on application submission',
-      updatedAt: new Date().toISOString(),
-    };
-
-    const updatedApps = [newApp, ...currentApps];
-    try {
-      await updateStorageData({ applications: updatedApps });
-    } catch {
-      return;
-    }
-    clearStagedJobMetadata();
-    submitAttemptTimestamp = 0;
-
-    options.onAutoTracked(newApp);
   };
 
   // Helper to enrich existing tracked applications if portal link renders asynchronously on success page
@@ -711,6 +737,7 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
       teardown();
       return;
     }
+    hasCommittedForCurrentSubmission = false;
     submitAttemptTimestamp = Date.now();
     const meta = extractJobMetadata();
     stageCurrentJobMetadata(meta, true);
@@ -720,6 +747,9 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
       setTimeout(() => {
         if (!isListening || !isExtensionValid()) {
           teardown();
+          return;
+        }
+        if (hasCommittedForCurrentSubmission) {
           return;
         }
         if (hasVisibleSuccessMessage() || (isConfirmationUrl() && !hasActiveFormFields())) {
@@ -762,6 +792,10 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
       teardown();
       return;
     }
+    if (hasCommittedForCurrentSubmission) {
+      enrichTrackedApplicationsWithPortal();
+      return;
+    }
     const recentSubmit =
       submitAttemptTimestamp > 0 && Date.now() - submitAttemptTimestamp < SUBMIT_WINDOW_MS;
 
@@ -784,7 +818,16 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
       return;
     }
     if (window.location.href !== lastUrl) {
+      const prevUrl = lastUrl;
       lastUrl = window.location.href;
+      const prevBase = prevUrl.split('#')[0].split('?')[0];
+      const currBase = window.location.href.split('#')[0].split('?')[0];
+      if (prevBase !== currBase) {
+        hasCommittedForCurrentSubmission = false;
+      }
+      if (hasCommittedForCurrentSubmission) {
+        return;
+      }
       if (isConfirmationUrl()) {
         const recentSubmit =
           submitAttemptTimestamp > 0 && Date.now() - submitAttemptTimestamp < SUBMIT_WINDOW_MS;

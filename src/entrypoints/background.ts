@@ -43,27 +43,121 @@ export default defineBackground(() => {
     });
   }
 
+  const getGlobalBrowser = () => (globalThis as any).browser;
+  const getTabsApi = () => getGlobalBrowser()?.tabs || chrome.tabs;
+
+  const queryTabsSafely = async (queryInfo: chrome.tabs.QueryInfo): Promise<chrome.tabs.Tab[]> => {
+    return new Promise((resolve) => {
+      try {
+        const tabsApi = getTabsApi();
+        const res = tabsApi?.query(queryInfo, (tabs: chrome.tabs.Tab[]) => {
+          if (chrome.runtime?.lastError) resolve([]);
+          else resolve(tabs || []);
+        });
+        if (res && typeof (res as any).then === 'function') {
+          (res as any).then((tabs: chrome.tabs.Tab[]) => resolve(tabs || [])).catch(() => resolve([]));
+        }
+      } catch {
+        resolve([]);
+      }
+    });
+  };
+
+  const getTabSafely = async (tabId: number): Promise<chrome.tabs.Tab | null> => {
+    return new Promise((resolve) => {
+      try {
+        const tabsApi = getTabsApi();
+        const res = tabsApi?.get(tabId, (tab: chrome.tabs.Tab) => {
+          if (chrome.runtime?.lastError) resolve(null);
+          else resolve(tab || null);
+        });
+        if (res && typeof (res as any).then === 'function') {
+          (res as any).then((tab: chrome.tabs.Tab) => resolve(tab || null)).catch(() => resolve(null));
+        }
+      } catch {
+        resolve(null);
+      }
+    });
+  };
+
+  const sendTabMessageSafely = async (tabId: number, msg: any): Promise<boolean> => {
+    return new Promise((resolve) => {
+      try {
+        const tabsApi = getTabsApi();
+        const res = tabsApi?.sendMessage(tabId, msg, (response: any) => {
+          if (chrome.runtime?.lastError || !response) resolve(false);
+          else resolve(true);
+        });
+        if (res && typeof (res as any).then === 'function') {
+          (res as any).then(() => resolve(true)).catch(() => resolve(false));
+        }
+      } catch {
+        resolve(false);
+      }
+    });
+  };
+
+  const injectContentScriptSafely = async (tabId: number, autoOpen = true): Promise<void> => {
+    const tabsApi = getTabsApi();
+
+    // MV3 chrome.scripting
+    if (chrome.scripting?.executeScript) {
+      if (autoOpen) {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          func: () => {
+            (window as any).__QUICKFILLER_AUTO_OPEN__ = true;
+          },
+        });
+      }
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content-scripts/content.js'],
+      });
+      return;
+    }
+
+    // MV2 tabs.executeScript (Firefox)
+    if (tabsApi?.executeScript) {
+      if (autoOpen) {
+        await new Promise<void>((resolve) => {
+          try {
+            const res = tabsApi.executeScript(tabId, { code: 'window.__QUICKFILLER_AUTO_OPEN__ = true;' }, () => resolve());
+            if (res && typeof (res as any).then === 'function') (res as any).then(() => resolve()).catch(() => resolve());
+          } catch {
+            resolve();
+          }
+        });
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        try {
+          const res = tabsApi.executeScript(tabId, { file: 'content-scripts/content.js' }, () => {
+            if (chrome.runtime?.lastError) reject(new Error(chrome.runtime.lastError.message));
+            else resolve();
+          });
+          if (res && typeof (res as any).then === 'function') (res as any).then(() => resolve()).catch(reject);
+        } catch (err) {
+          reject(err);
+        }
+      });
+      return;
+    }
+
+    throw new Error('No script injection API available');
+  };
+
   // Handle Alt+Shift+Q keyboard shortcut to toggle Copilot Drawer on active tab
   if (typeof chrome !== 'undefined' && chrome.commands?.onCommand) {
     chrome.commands.onCommand.addListener(async (command) => {
       if (command === 'toggle_drawer') {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const tabs = await queryTabsSafely({ active: true, currentWindow: true });
+        const tab = tabs[0];
         if (tab?.id && tab.url && !isSensitiveOrInternalUrl(tab.url)) {
-          try {
-            await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_DRAWER' });
-          } catch {
-            // In on-click mode, dynamically inject content script if not yet loaded
+          const sent = await sendTabMessageSafely(tab.id, { type: 'TOGGLE_DRAWER' });
+          if (!sent) {
             try {
-              await chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                func: () => {
-                  (window as any).__QUICKFILLER_AUTO_OPEN__ = true;
-                },
-              });
-              await chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                files: ['content-scripts/content.js'],
-              });
+              await injectContentScriptSafely(tab.id, true);
             } catch (err) {
               console.error('[QuickFiller] Could not inject content script on shortcut:', err);
             }
@@ -100,33 +194,24 @@ export default defineBackground(() => {
       const tabId = message.tabId;
       const targetAction = message.type === 'INJECT_AND_TOGGLE_DRAWER' ? 'TOGGLE_DRAWER' : 'OPEN_DRAWER';
       if (tabId) {
-        chrome.tabs.get(tabId).then((tab) => {
-          if (tab?.url && isSensitiveOrInternalUrl(tab.url)) {
-            sendResponse({ success: false, error: 'Cannot open QuickFiller on sensitive authentication page' });
-            return;
+        (async () => {
+          try {
+            const tab = await getTabSafely(tabId);
+            if (tab?.url && isSensitiveOrInternalUrl(tab.url)) {
+              sendResponse({ success: false, error: 'Cannot open QuickFiller on sensitive authentication page' });
+              return;
+            }
+            const sent = await sendTabMessageSafely(tabId, { type: targetAction });
+            if (sent) {
+              sendResponse({ success: true });
+              return;
+            }
+            await injectContentScriptSafely(tabId, true);
+            sendResponse({ success: true, injected: true });
+          } catch (err: any) {
+            sendResponse({ success: false, error: err?.message || 'Injection failed' });
           }
-          chrome.tabs.sendMessage(tabId, { type: targetAction })
-            .then(() => sendResponse({ success: true }))
-            .catch(async () => {
-              try {
-                await chrome.scripting.executeScript({
-                  target: { tabId },
-                  func: () => {
-                    (window as any).__QUICKFILLER_AUTO_OPEN__ = true;
-                  },
-                });
-                await chrome.scripting.executeScript({
-                  target: { tabId },
-                  files: ['content-scripts/content.js'],
-                });
-                sendResponse({ success: true, injected: true });
-              } catch (err: any) {
-                sendResponse({ success: false, error: err.message });
-              }
-            });
-        }).catch(() => {
-          sendResponse({ success: false, error: 'Tab not found' });
-        });
+        })();
         return true;
       }
     }

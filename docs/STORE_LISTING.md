@@ -100,3 +100,22 @@ Under the **Data usage** section of the Privacy tab:
    - ✅ **"This data is NOT used or transferred to determine creditworthiness or for lending purposes."**
 3. In the Privacy Policy URL field:
    - Provide your public HTTPS link (e.g. `https://github.com/adarshacharya18/QuickFiller/blob/main/PRIVACY_POLICY.md` or your GitHub Pages link).
+
+---
+
+## 5. Store Listing Promotional Screenshots (`public/Screenshots/`)
+
+The extension promotional screenshots are organized and numbered in `public/Screenshots/` ready for upload to Chrome Web Store and Firefox Add-ons (AMO):
+
+| Filename | Caption / Description | Section |
+| :--- | :--- | :--- |
+| `01-copilot-drawer-autofill.png` | **In-Page Copilot Drawer**: 1-Click Autofill, detected candidate fields, and AI screening question drafting on Workday. | In-Page Overlay |
+| `02-copilot-drawer-cover-letter.png` | **Tailored Cover Letter Generator**: Scrapes active JD, customizes tone and word count, and generates tailored pitches. | Copilot Tool |
+| `03-copilot-drawer-outreach-studio.png` | **Outreach Studio**: Refines connection notes and InMail pitches tailored for Recruiters vs Engineering Leads. | Copilot Tool |
+| `04-copilot-drawer-paste-bank.png` | **Custom Paste Bank**: 1-click insertion for work authorization, salary, relocation, and frequently used answers. | Copilot Tool |
+| `05-job-tracker-dashboard.png` | **Job Application Tracker**: 100% local dashboard tracking applied roles, interview rates, and candidate portal links. | Management Hub |
+| `06-candidate-profile-contact-details.png` | **Candidate Profile & Resume Parser**: Local PDF resume parsing for biographical, contact, and social links. | Management Hub |
+| `07-candidate-profile-experience-education.png` | **Work Experience & Portfolio Projects**: Structured career timeline and project achievements grounding AI generation. | Management Hub |
+| `08-screening-qa-and-paste-bank.png` | **Screening Q&A & Reusable Snippets**: Standard screening wizard, approved Q&A bank, and custom paste presets. | Management Hub |
+| `09-ai-settings-llm-configuration.png` | **LLM Engine Configuration**: Seamless toggle between 100% offline local Ollama and BYOK cloud LLMs. | Settings & Privacy |
+

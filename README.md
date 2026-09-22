@@ -4,7 +4,7 @@
 > Powered by local AI (**Ollama**) or Bring-Your-Own-Key cloud LLMs (**Google Gemini, OpenAI, Anthropic Claude**).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests: 216 passing](https://img.shields.io/badge/Tests-216%20passing-brightgreen.svg)](tests/)
+[![Tests: 250 passing](https://img.shields.io/badge/Tests-250%20passing-brightgreen.svg)](tests/)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](tsconfig.json)
 [![Manifest: V3 & V2](https://img.shields.io/badge/Manifest-MV3%20%7C%20MV2-purple.svg)](wxt.config.ts)
 [![Privacy: 100% Local](https://img.shields.io/badge/Privacy-100%25%20Local-success.svg)](PRIVACY_POLICY.md)

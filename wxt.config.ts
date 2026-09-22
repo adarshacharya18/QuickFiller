@@ -29,7 +29,13 @@ export default defineConfig({
     browser_specific_settings: {
       gecko: {
         id: 'quickfiller@adarshacharya.dev',
-        strict_min_version: '109.0',
+        strict_min_version: '140.0',
+        data_collection_permissions: {
+          required: ['none'],
+        },
+      },
+      gecko_android: {
+        strict_min_version: '142.0',
       },
     },
     permissions: [

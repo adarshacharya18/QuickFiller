@@ -7,7 +7,7 @@ export default defineConfig({
     firefoxDataCollection: true,
   },
   manifest: {
-    name: 'QuickFiller - Local-First Job Application Copilot',
+    name: 'QuickFiller - Job Application Copilot',
     description: 'Smart job application autofill and copilot powered by local Ollama & cloud LLMs.',
     version: '1.0.0',
     icons: {

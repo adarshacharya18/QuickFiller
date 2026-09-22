@@ -86,7 +86,7 @@ Copy and paste the exact metadata below into the listing form:
 
 #### 1. Name
 ```text
-QuickFiller - Local-First Job Application Copilot
+QuickFiller - Job Application Copilot
 ```
 
 #### 2. Add-on URL

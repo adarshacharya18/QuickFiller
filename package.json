@@ -1,6 +1,6 @@
 {
   "name": "quickfiller",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Local-first smart job application copilot Chrome extension",
   "type": "module",
   "scripts": {

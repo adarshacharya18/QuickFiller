@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2026-09-22
+
+### Fixed
+- **Firefox Options & Job Tracker Page Opening**:
+  - Configured `options_ui.open_in_tab: true` so `chrome.runtime.openOptionsPage()` opens `options.html` directly in a new tab instead of attempting an iframe embed blocked by `frame-ancestors 'none'`.
+  - Implemented cross-browser `openTabSafely` in `background.ts` supporting both `browser.*` and `chrome.*` APIs, preventing synchronous `TypeError` crashes during tab queries without the `tabs` permission.
+- **Firefox AMO Compatibility**:
+  - Added Mozilla built-in data collection consent declarations (`data_collection_permissions: { required: ["none"] }`).
+  - Adjusted minimum Gecko version to 140 (Desktop) / 142 (Android) to cleanly align with AMO validation standards.
+  - Shortened extension display name to `QuickFiller - App Copilot` to conform with AMO listing constraints.
+
 ## [1.0.0] - 2026-09-21
 
 ### Added

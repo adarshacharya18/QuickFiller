@@ -10,8 +10,8 @@ Both required submission packages have been generated and are ready in your repo
 
 | Package | Path | Size | Purpose |
 |:---|:---|:---|:---|
-| **Extension ZIP** | [`.output/quickfiller-1.0.0-firefox.zip`](file:///home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.0-firefox.zip) | ~750 KB | Uploaded in **Step 2 (Upload Version)** |
-| **Source Code ZIP** | [`.output/quickfiller-1.0.0-sources.zip`](file:///home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.0-sources.zip) | ~269 KB | Uploaded in **Step 3 (Source Code Submission)** |
+| **Extension ZIP** | [`.output/quickfiller-1.0.1-firefox.zip`](file:///home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.1-firefox.zip) | ~767 KB | Uploaded in **Step 2 (Upload Version)** |
+| **Source Code ZIP** | [`.output/quickfiller-1.0.1-sources.zip`](file:///home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.1-sources.zip) | ~280 KB | Uploaded in **Step 3 (Source Code Submission)** |
 
 > [!TIP]
 > If you ever make changes to the code before submitting, regenerate both zip archives in one command:
@@ -45,7 +45,7 @@ Select **"On this site"** and click **Continue**.
 1. Click **Select a file...**.
 2. Browse to and upload:
    ```text
-   /home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.0-firefox.zip
+   /home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.1-firefox.zip
    ```
 3. The automatic AMO validator will run a series of automated security, manifest, and compatibility checks.
 4. When validation finishes with green success:
@@ -62,7 +62,7 @@ Because QuickFiller uses TypeScript, React, Vite, and WXT bundling, Mozilla revi
    👉 Select **Yes**.
 2. Click **Browse** and upload:
    ```text
-   /home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.0-sources.zip
+   /home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.1-sources.zip
    ```
 3. In the **"Instructions for Reviewer on how to build"** text box, paste:
    ```text
@@ -89,7 +89,7 @@ Copy and paste the exact metadata below into the listing form:
 
 #### 1. Name
 ```text
-QuickFiller - Job Application Copilot
+QuickFiller - App Copilot
 ```
 
 #### 2. Add-on URL

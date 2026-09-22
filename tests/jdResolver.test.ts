@@ -43,6 +43,14 @@ describe('Job Description (JD) Resolver Engine', () => {
       expect(deriveJobPostingUrl(applyUrl)).toBe('https://boards.greenhouse.io/acme/jobs/12345');
     });
 
+    it('derives parent posting URL from Greenhouse confirmation URL (job-boards.greenhouse.io)', () => {
+      const confirmationUrl =
+        'https://job-boards.greenhouse.io/headoutcareers/jobs/4707747006/confirmation?gh_src=sxne3lxs6us';
+      expect(deriveJobPostingUrl(confirmationUrl)).toBe(
+        'https://job-boards.greenhouse.io/headoutcareers/jobs/4707747006'
+      );
+    });
+
     it('derives parent posting URL from Lever apply URL', () => {
       const applyUrl = 'https://jobs.lever.co/acme/abcd-1234/apply';
       expect(deriveJobPostingUrl(applyUrl)).toBe('https://jobs.lever.co/acme/abcd-1234');

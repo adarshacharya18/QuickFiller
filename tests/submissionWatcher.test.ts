@@ -9,6 +9,8 @@ import {
   clearStagedJobMetadata,
   initSubmissionWatcher,
   extractApplicationPortalUrl,
+  isGenericConfirmationTitle,
+  findJobPostingLinkOnConfirmation,
 } from '../src/utils/submissionWatcher';
 import { extractJobMetadata } from '../src/utils/scanner';
 import { resetMockChromeStorage } from './setup';
@@ -610,4 +612,172 @@ describe('Submission Watcher & Job Tracker', () => {
       unwatch();
     });
   });
+
+  describe('Greenhouse Job Boards Tracking (job-boards.greenhouse.io)', () => {
+    it('correctly identifies generic confirmation titles and back-to-job links', () => {
+      expect(isGenericConfirmationTitle('Thank you for applying')).toBe(true);
+      expect(isGenericConfirmationTitle('Application Submitted')).toBe(true);
+      expect(isGenericConfirmationTitle('Confirmation')).toBe(true);
+      expect(isGenericConfirmationTitle('')).toBe(true);
+      expect(isGenericConfirmationTitle('Staff Software Engineer')).toBe(false);
+
+      const div = document.createElement('div');
+      div.innerHTML = `
+        <a href="https://job-boards.greenhouse.io/headoutcareers/jobs/4707747006">Back to job post</a>
+      `;
+      expect(findJobPostingLinkOnConfirmation(div)).toBe(
+        'https://job-boards.greenhouse.io/headoutcareers/jobs/4707747006'
+      );
+    });
+
+    it('tracks direct landing on Greenhouse confirmation URL with null sessionStorage', async () => {
+      delete (window as any).location;
+      (window as any).location = new URL(
+        'https://job-boards.greenhouse.io/headoutcareers/jobs/4707747006/confirmation?gh_src=sxne3lxs6us'
+      );
+
+      document.title = 'Thank you for applying';
+      document.body.innerHTML = `
+        <div class="job-board-container">
+          <header>
+            <img src="/logo.png" alt="Headout Logo" class="company-logo" />
+          </header>
+          <main>
+            <div class="confirmation-section">
+              <h1>Thank you for applying</h1>
+              <p>Your application has been received!</p>
+              <a href="https://job-boards.greenhouse.io/headoutcareers/jobs/4707747006">Back to job post</a>
+              <div class="application_tracking_widget">
+                <a href="https://my.greenhouse.io">Track application on Greenhouse</a>
+              </div>
+            </div>
+          </main>
+        </div>
+      `;
+
+      sessionStorage.clear();
+
+      expect(isConfirmationUrl()).toBe(true);
+      expect(hasVisibleSuccessMessage()).toBe(true);
+      expect(hasActiveFormFields()).toBe(false);
+
+      const trackedApps: any[] = [];
+      const unwatch = initSubmissionWatcher({
+        onAutoTracked: (app) => trackedApps.push(app),
+      });
+
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(trackedApps.length).toBe(1);
+      expect(trackedApps[0].company).toBe('Headout');
+      expect(trackedApps[0].title).toBe('Headout Application');
+      expect(trackedApps[0].url).toBe('https://job-boards.greenhouse.io/headoutcareers/jobs/4707747006');
+      expect(trackedApps[0].portalUrl).toBe('https://my.greenhouse.io/');
+      expect(trackedApps[0].status).toBe('Applied');
+
+      unwatch();
+    });
+
+    it('recovers job metadata cross-origin via storage.lastStagedJob', async () => {
+      // Simulate staging on boards.greenhouse.io
+      const stagedJob = {
+        company: 'Headout',
+        title: 'Senior Backend Engineer',
+        url: 'https://boards.greenhouse.io/headoutcareers/jobs/4707747006',
+        timestamp: Date.now(),
+        submitted: true,
+      };
+      resetMockChromeStorage({
+        jobTrackerEnabled: true,
+        autoTrackOnSubmit: true,
+        applications: [],
+        lastStagedJob: stagedJob,
+      });
+
+      // Browser redirected cross-origin to job-boards.greenhouse.io, where sessionStorage is partitioned/empty
+      delete (window as any).location;
+      (window as any).location = new URL(
+        'https://job-boards.greenhouse.io/headoutcareers/jobs/4707747006/confirmation?gh_src=sxne3lxs6us'
+      );
+
+      document.title = 'Thank you for applying';
+      document.body.innerHTML = `
+        <div class="confirmation-section">
+          <h2>Application submitted</h2>
+          <p>We have received your application.</p>
+        </div>
+      `;
+      sessionStorage.clear();
+
+      const trackedApps: any[] = [];
+      const unwatch = initSubmissionWatcher({
+        onAutoTracked: (app) => trackedApps.push(app),
+      });
+
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(trackedApps.length).toBe(1);
+      expect(trackedApps[0].company).toBe('Headout');
+      expect(trackedApps[0].title).toBe('Senior Backend Engineer');
+      expect(trackedApps[0].url).toBe('https://boards.greenhouse.io/headoutcareers/jobs/4707747006');
+      expect(trackedApps[0].status).toBe('Applied');
+
+      unwatch();
+    });
+
+    it('tracks Greenhouse Remix SPA form submit and navigation to /confirmation', async () => {
+      delete (window as any).location;
+      (window as any).location = new URL(
+        'https://job-boards.greenhouse.io/headoutcareers/jobs/4707747006'
+      );
+
+      document.title = 'Staff Frontend Engineer at Headout';
+      document.body.innerHTML = `
+        <header>
+          <img alt="Headout" class="logo" />
+        </header>
+        <div class="job-header">
+          <h1 class="app-title">Staff Frontend Engineer</h1>
+        </div>
+        <form id="application_form">
+          <input name="first_name" value="Adarsh" />
+          <input name="email" value="adarsh@example.com" />
+          <button id="submit_app" type="submit">Submit Application</button>
+        </form>
+      `;
+
+      const trackedApps: any[] = [];
+      const unwatch = initSubmissionWatcher({
+        onAutoTracked: (app) => trackedApps.push(app),
+      });
+
+      // User clicks submit
+      const submitBtn = document.getElementById('submit_app')!;
+      submitBtn.click();
+
+      // Remix SPA navigates to /confirmation
+      (window as any).location = new URL(
+        'https://job-boards.greenhouse.io/headoutcareers/jobs/4707747006/confirmation'
+      );
+      document.title = 'Thank you for applying';
+      document.body.innerHTML = `
+        <div class="confirmation">
+          <h3>Thank you for applying</h3>
+          <p>Your application was submitted successfully.</p>
+          <a href="https://job-boards.greenhouse.io/headoutcareers/jobs/4707747006">Back to job post</a>
+        </div>
+      `;
+
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(trackedApps.length).toBe(1);
+      expect(trackedApps[0].company).toBe('Headout');
+      expect(trackedApps[0].title).toBe('Staff Frontend Engineer');
+      expect(trackedApps[0].url).toBe('https://job-boards.greenhouse.io/headoutcareers/jobs/4707747006');
+      expect(trackedApps[0].status).toBe('Applied');
+
+      unwatch();
+    });
+  });
 });
+

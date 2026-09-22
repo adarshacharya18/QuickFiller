@@ -258,7 +258,10 @@ Records tracked job submissions:
 | :--- | :--- | :--- |
 | `initSubmissionWatcher` | `(onSubmission: (app: JobApplication) => void): () => void` | Initializes click listeners on submit buttons, navigation observers, and DOM mutation observers. Returns teardown function. |
 | `isSubmitTriggerElement`| `(el: HTMLElement): boolean` | Returns `true` if an element is a submit button by inspecting tag name, `type="submit"`, text content, `data-testid`, `data-automation-id`, and `data-qa`. |
-| `hasVisibleSuccessMessage`| `(root?: Document \| HTMLElement): boolean` | Scans the DOM for confirmation keywords, Angular confirmation components (`<app-jobconfirm>`, `<lib-apply-confirmation>`), and SweetAlert containers. |
+| `hasVisibleSuccessMessage`| `(root?: Document \| HTMLElement): boolean` | Scans the DOM for confirmation keywords, Angular confirmation components (`<app-jobconfirm>`, `<lib-apply-confirmation>`), Greenhouse tracking widgets, and SweetAlert containers. |
+| `isGenericConfirmationTitle` | `(title?: string \| null): boolean` | Returns `true` if document title is a generic confirmation message (e.g. `"Thank you for applying"`, `"Application submitted"`) rather than a real job role. |
+| `findJobPostingLinkOnConfirmation` | `(root?: Document \| Element): string \| null` | Inspects confirmation DOM for links pointing back to original job post (e.g. `"Back to job post"`, `/jobs/<id>`). |
+| `extractApplicationPortalUrl` | `(root?: Document \| Element): string \| null` | Scans confirmation DOM for candidate portal links (Workday `candidateHome`, Greenhouse `my.greenhouse.io`, SmartRecruiters `my.smartrecruiters.com`, Darwinbox). |
 | `CONFIRMATION_URL_REGEX`| `RegExp` | Matches confirmation URLs: `/submitted`, `/confirmation`, `/confirm`, `/jobconfirm`, `/thank-you`. |
 | `SUCCESS_TEXT_REGEX` | `RegExp` | Matches success messages, including standalone `"Thank You"`, `"profile ... submitted"`, and vendor typos (`"submited"`, `"sucessfully"`). |
 

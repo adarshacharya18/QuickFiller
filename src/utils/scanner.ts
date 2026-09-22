@@ -1084,8 +1084,52 @@ export function extractJobMetadata(): JobMetadata {
   let company = '';
   const hostname = window.location.hostname;
   if (hostname.includes('greenhouse.io')) {
-    const parts = window.location.pathname.split('/').filter(Boolean);
-    company = parts[0] || 'Company';
+    // 1. Check logo image alt attribute (e.g. <img src="..." alt="Headout Logo" class="logo"/>)
+    const logoAlt = document
+      .querySelector('.confirmation .logo, [class*="logo"] img, img.logo, header img[alt]')
+      ?.getAttribute('alt');
+    if (logoAlt && logoAlt.trim()) {
+      const clean = logoAlt.replace(/\s*logo\s*/gi, '').trim();
+      if (clean && clean.length >= 2 && !/^(company|careers|greenhouse)$/i.test(clean)) {
+        company = clean;
+      }
+    }
+
+    // 2. Check "View more jobs at <Company>" button text
+    if (!company) {
+      const viewMoreBtn = document.querySelector('a[href*="/careers"], [class*="confirmation"] a.btn, a.btn--pill');
+      if (viewMoreBtn) {
+        const txt = (viewMoreBtn.textContent || '').trim();
+        const m = txt.match(/View more jobs at\s+([^<\n\r]+)/i);
+        if (m && m[1].trim()) {
+          company = m[1].trim();
+        }
+      }
+    }
+
+    // 3. Check og:site_name meta tag
+    if (!company) {
+      const metaSite = document.querySelector('meta[property="og:site_name"]')?.getAttribute('content');
+      if (metaSite && !/greenhouse/i.test(metaSite)) {
+        company = metaSite.trim();
+      }
+    }
+
+    // 4. Fallback to URL path slug with smart suffix stripping (e.g. headoutcareers -> Headout)
+    if (!company) {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const slug = parts[0] || '';
+      if (slug) {
+        const stripped = slug.replace(/(?:careers|jobs|hiring|team)$/i, '').replace(/[-_]/g, ' ').trim();
+        const finalName = stripped || slug.replace(/[-_]/g, ' ').trim();
+        company = finalName
+          .split(' ')
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+      } else {
+        company = 'Company';
+      }
+    }
   } else if (hostname.includes('lever.co')) {
     const parts = window.location.pathname.split('/').filter(Boolean);
     company = parts[0] || 'Company';
@@ -1334,9 +1378,16 @@ export function extractJobMetadata(): JobMetadata {
   const rawDesc = descContainer ? descContainer.textContent || '' : document.body.innerText.slice(0, 3000);
   const cleanDesc = rawDesc.replace(/\s+/g, ' ').trim().slice(0, 1500);
 
+  const finalCompany = company ? company.charAt(0).toUpperCase() + company.slice(1) : 'Company';
+
+  // If title extracted is a generic confirmation message ("Thank you for applying", "Application Submitted"), sanitize it
+  if (/^(thank\s*you(\s*for\s*applying)?|application\s*(confirmation|submitted|received)|confirmation|success|applied)$/i.test(title)) {
+    title = finalCompany && finalCompany !== 'Company' ? `${finalCompany} Application` : 'Job Application';
+  }
+
   return {
     title,
-    company: company.charAt(0).toUpperCase() + company.slice(1),
+    company: finalCompany,
     descriptionSnippet: cleanDesc,
   };
 }

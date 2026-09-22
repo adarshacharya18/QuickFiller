@@ -297,6 +297,7 @@ export function getStorageData(): Promise<StorageData> {
             jobTrackerEnabled: result?.jobTrackerEnabled ?? defaultStorageData.jobTrackerEnabled,
             autoTrackOnSubmit: result?.autoTrackOnSubmit ?? defaultStorageData.autoTrackOnSubmit,
             extensionEnabled: result?.extensionEnabled ?? defaultStorageData.extensionEnabled,
+            lastStagedJob: result?.lastStagedJob !== undefined ? result.lastStagedJob : defaultStorageData.lastStagedJob,
           });
         } catch {
           resolve(defaultStorageData);

@@ -55,8 +55,14 @@ export function deriveJobPostingUrl(currentUrl: string): string | null {
 
     // 1. Greenhouse job boards
     if (host.includes('greenhouse.io')) {
-      if (path.endsWith('/apply')) {
+      if (path.endsWith('/apply') || path.endsWith('/apply/')) {
         url.pathname = path.replace(/\/apply\/?$/, '');
+        url.hash = '';
+        url.search = '';
+        return url.toString();
+      }
+      if (/\/confirmation\/?$/i.test(path)) {
+        url.pathname = path.replace(/\/confirmation\/?$/i, '');
         url.hash = '';
         url.search = '';
         return url.toString();
@@ -119,6 +125,12 @@ export function deriveJobPostingUrl(currentUrl: string): string | null {
     }
     if (/\/application(?:\/.*)?$/i.test(path)) {
       url.pathname = path.replace(/\/application(?:\/.*)?$/i, '');
+      url.hash = '';
+      url.search = '';
+      return url.toString();
+    }
+    if (/\/(?:confirmation|applicationconfirmation|applicationsubmitted|thank-you|thanks)(?:\/.*)?$/i.test(path)) {
+      url.pathname = path.replace(/\/(?:confirmation|applicationconfirmation|applicationsubmitted|thank-you|thanks)(?:\/.*)?$/i, '');
       url.hash = '';
       url.search = '';
       return url.toString();

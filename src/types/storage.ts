@@ -19,6 +19,13 @@ export interface StorageData {
   jobTrackerEnabled: boolean;
   autoTrackOnSubmit: boolean;
   extensionEnabled: boolean;
+  lastStagedJob?: {
+    company: string;
+    title: string;
+    url: string;
+    timestamp: number;
+    submitted: boolean;
+  } | null;
 }
 
 export const defaultStorageData: StorageData = {
@@ -31,4 +38,5 @@ export const defaultStorageData: StorageData = {
   jobTrackerEnabled: true,
   autoTrackOnSubmit: true,
   extensionEnabled: true,
+  lastStagedJob: null,
 };

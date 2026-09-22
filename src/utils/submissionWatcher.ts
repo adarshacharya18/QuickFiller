@@ -2,6 +2,7 @@ import { JobMetadata, extractJobMetadata, isElementVisible, querySelectorAllDeep
 import { JobApplication } from '../types/applications';
 import { getStorageData, updateStorageData, isExtensionValid } from './storage';
 import { isSafeWebUrl } from './security';
+import { deriveJobPostingUrl } from './jdResolver';
 
 const SESSION_STORAGE_KEY = 'quickfiller_pending_submission';
 const STAGE_EXPIRATION_MS = 15 * 60 * 1000; // 15 minutes
@@ -49,7 +50,7 @@ export const PORTAL_TEXT_REGEX =
   /(candidate\s*(home|portal)|applicant\s*(home|portal)|view\s*(your\s*|my\s*)?application\s*status|check\s*(your\s*|my\s*)?(application\s*)?status|track\s*(your\s*|my\s*)?application|my\s*applications|my\s*submissions|view\s*submitted\s*application|manage\s*(your\s*|my\s*)?applications|application\s*status)/i;
 
 export const PORTAL_HREF_REGEX =
-  /(\/candidatehome|\/userhome|\/candidate-home|\/user-home|\/candidate-portal|\/applicant-portal|\/my-applications|\/myapplications|my\.smartrecruiters\.com|\/application[-_]?status|\/candidatev2\/main\/applications|\/my_submissions)/i;
+  /(\/candidatehome|\/userhome|\/candidate-home|\/user-home|\/candidate-portal|\/applicant-portal|\/my-applications|\/myapplications|my\.smartrecruiters\.com|my\.greenhouse\.io|\/application[-_]?status|\/candidatev2\/main\/applications|\/my_submissions)/i;
 
 export const EXCLUDED_PORTAL_TEXT_REGEX =
   /^(careers?(\s*home)?|home|back|back\s*to.*|search\s*jobs|browse\s*jobs|view\s*(all\s*|other\s*)?jobs|explore\s*(all\s*|other\s*)?jobs|privacy(\s*policy)?|terms(\s*of\s*service)?|help|contact(\s*us)?|faq|sign\s*out|log\s*out|sign\s*in|log\s*in)$/i;
@@ -98,6 +99,24 @@ export function extractApplicationPortalUrl(root: Document | Element = document)
   if (typeof window !== 'undefined' && window.location && window.location.href) {
     if (PORTAL_HREF_REGEX.test(window.location.href)) {
       return window.location.href;
+    }
+  }
+
+  // 0. Greenhouse candidate portal (MyGreenhouse)
+  if (typeof window !== 'undefined' && window.location && window.location.hostname.includes('greenhouse.io')) {
+    const ghPortalLink = root.querySelector('a[href*="my.greenhouse.io"]');
+    if (ghPortalLink) {
+      const href = extractSafeHref(ghPortalLink as HTMLElement);
+      if (href) return href;
+    }
+    const trackingWidget = root.querySelector('.application_tracking_widget, [class*="application_tracking"]');
+    if (trackingWidget && isElementVisible(trackingWidget as HTMLElement)) {
+      const widgetAnchor = trackingWidget.querySelector('a[href]');
+      if (widgetAnchor) {
+        const href = extractSafeHref(widgetAnchor as HTMLElement);
+        if (href) return href;
+      }
+      return 'https://my.greenhouse.io';
     }
   }
 
@@ -165,7 +184,7 @@ export function extractApplicationPortalUrl(root: Document | Element = document)
 }
 
 /**
- * Saves or updates the currently viewed job candidate into session storage.
+ * Saves or updates the currently viewed job candidate into session storage and chrome.storage.local.
  */
 export function stageCurrentJobMetadata(
   metadata: JobMetadata | null,
@@ -174,18 +193,22 @@ export function stageCurrentJobMetadata(
   if (!metadata) return;
   const title = (metadata.title || '').trim() || 'Job Application';
   const company = (metadata.company || '').trim() || 'Company';
+  const staged: StagedJob = {
+    company,
+    title,
+    url: window.location.href,
+    timestamp: Date.now(),
+    submitted,
+  };
   try {
-    const staged: StagedJob = {
-      company,
-      title,
-      url: window.location.href,
-      timestamp: Date.now(),
-      submitted,
-    };
     sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(staged));
   } catch {
     // Ignore storage quota or cross-origin restrictions
   }
+  try {
+    // Cross-origin and multi-tab fallback (e.g. boards.greenhouse.io -> job-boards.greenhouse.io)
+    updateStorageData({ lastStagedJob: staged }).catch(() => {});
+  } catch {}
 }
 
 /**
@@ -211,7 +234,7 @@ export function getStagedJobMetadata(requireSubmitted: boolean = false): StagedJ
 }
 
 /**
- * Clears the staged submission from session storage.
+ * Clears the staged submission from session storage and storage.local.
  */
 export function clearStagedJobMetadata(): void {
   try {
@@ -219,6 +242,39 @@ export function clearStagedJobMetadata(): void {
   } catch {
     // Ignore
   }
+  try {
+    updateStorageData({ lastStagedJob: null }).catch(() => {});
+  } catch {}
+}
+
+/**
+ * Checks if a candidate title string is a generic confirmation message rather than an actual role.
+ */
+export function isGenericConfirmationTitle(title?: string | null): boolean {
+  if (!title || typeof title !== 'string') return true;
+  const clean = title.trim();
+  if (clean.length < 3) return true;
+  return /^(thank\s*you(\s*for\s*applying)?|application\s*(submitted|received|confirmation|complete)|submission\s*(successful|received|complete)|confirmation|success|applied|job\s*application)$/i.test(
+    clean
+  );
+}
+
+/**
+ * Scans confirmation DOM for links pointing back to the original job post.
+ */
+export function findJobPostingLinkOnConfirmation(root: Document | Element = document): string | null {
+  const anchors = root.querySelectorAll('a[href]');
+  for (const a of anchors) {
+    const text = (a.textContent || '').trim();
+    const href = a.getAttribute('href') || '';
+    if (/back to (job|post|listing|position)/i.test(text) && href) {
+      return href;
+    }
+    if (/\/jobs\/\d+/i.test(href) && !/\/confirmation/i.test(href)) {
+      return href;
+    }
+  }
+  return null;
 }
 
 /**
@@ -434,14 +490,6 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
       return;
     }
 
-    const staged: StagedJob = getStagedJobMetadata() || {
-      company: extractJobMetadata().company || 'Company',
-      title: extractJobMetadata().title || 'Job Application',
-      url: window.location.href,
-      timestamp: Date.now(),
-      submitted: true,
-    };
-
     let storage;
     try {
       storage = await getStorageData();
@@ -451,6 +499,62 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
 
     if (storage.jobTrackerEnabled === false || storage.autoTrackOnSubmit === false) {
       return;
+    }
+
+    let staged: StagedJob | null = getStagedJobMetadata();
+
+    // Cross-origin and multi-tab fallback (e.g. boards.greenhouse.io -> job-boards.greenhouse.io)
+    if (!staged && storage.lastStagedJob) {
+      const timeDiff = Date.now() - (storage.lastStagedJob.timestamp || 0);
+      if (timeDiff < STAGE_EXPIRATION_MS) {
+        const lastUrl = (storage.lastStagedJob.url || '').toLowerCase();
+        const currentUrl = window.location.href.toLowerCase();
+        const derived = (deriveJobPostingUrl(currentUrl) || '').toLowerCase();
+        let isHostMatch = false;
+        try {
+          isHostMatch = currentUrl.includes(new URL(storage.lastStagedJob.url).hostname.toLowerCase());
+        } catch {}
+
+        if (
+          lastUrl.includes(window.location.hostname.toLowerCase()) ||
+          isHostMatch ||
+          lastUrl === derived ||
+          (storage.lastStagedJob.company &&
+            window.location.pathname.toLowerCase().includes(storage.lastStagedJob.company.toLowerCase()))
+        ) {
+          staged = { ...storage.lastStagedJob };
+        }
+      }
+    }
+
+    if (!staged) {
+      const derivedUrl = deriveJobPostingUrl(window.location.href);
+      const backToJobLink = findJobPostingLinkOnConfirmation(document);
+      const targetUrl = backToJobLink
+        ? (deriveJobPostingUrl(backToJobLink) || backToJobLink)
+        : (derivedUrl || window.location.href);
+
+      const meta = extractJobMetadata();
+      let title = meta.title;
+      let company = meta.company;
+
+      if (isGenericConfirmationTitle(title)) {
+        title = company && company !== 'Company' ? `${company} Application` : 'Job Application';
+      }
+
+      staged = {
+        company: company || 'Company',
+        title: title || 'Job Application',
+        url: targetUrl,
+        timestamp: Date.now(),
+        submitted: true,
+      };
+    } else {
+      // Clean staged URL if it was on a confirmation URL or has query tracking parameters
+      const cleanUrl = deriveJobPostingUrl(staged.url);
+      if (cleanUrl) {
+        staged.url = cleanUrl;
+      }
     }
 
     const currentApps = storage.applications || [];
@@ -581,13 +685,24 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     }
   };
 
-  // 1. Check if user landed on a confirmation page via redirect (must have an explicitly submitted staged job)
+  // 1. Check if user landed on a confirmation page via redirect
   if (isConfirmationUrl()) {
     const staged = getStagedJobMetadata(true);
-    if (staged && (!hasActiveFormFields() || hasVisibleSuccessMessage())) {
+    if (
+      (staged || !hasActiveFormFields() || hasVisibleSuccessMessage()) &&
+      (!hasActiveFormFields() || hasVisibleSuccessMessage())
+    ) {
       commitApplicationIfPending(true);
     } else if (hasVisibleSuccessMessage()) {
       enrichTrackedApplicationsWithPortal();
+    }
+  }
+
+  // If page contains active application form fields, proactively stage current job metadata
+  if (hasActiveFormFields()) {
+    const meta = extractJobMetadata();
+    if (meta.title && meta.title !== 'Job Application') {
+      stageCurrentJobMetadata(meta, false);
     }
   }
 
@@ -650,8 +765,11 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     const recentSubmit =
       submitAttemptTimestamp > 0 && Date.now() - submitAttemptTimestamp < SUBMIT_WINDOW_MS;
 
-    if (recentSubmit && (hasVisibleSuccessMessage() || (isConfirmationUrl() && !hasActiveFormFields()))) {
-      commitApplicationIfPending();
+    if (
+      (recentSubmit && (hasVisibleSuccessMessage() || (isConfirmationUrl() && !hasActiveFormFields()))) ||
+      (isConfirmationUrl() && !hasActiveFormFields() && hasVisibleSuccessMessage())
+    ) {
+      commitApplicationIfPending(true);
     } else if (hasVisibleSuccessMessage() || isConfirmationUrl()) {
       enrichTrackedApplicationsWithPortal();
     }
@@ -671,7 +789,10 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
         const recentSubmit =
           submitAttemptTimestamp > 0 && Date.now() - submitAttemptTimestamp < SUBMIT_WINDOW_MS;
         const staged = getStagedJobMetadata(true);
-        if ((recentSubmit || staged) && (!hasActiveFormFields() || hasVisibleSuccessMessage())) {
+        if (
+          (recentSubmit || staged || !hasActiveFormFields() || hasVisibleSuccessMessage()) &&
+          (!hasActiveFormFields() || hasVisibleSuccessMessage())
+        ) {
           commitApplicationIfPending(true);
         }
       }
@@ -685,7 +806,10 @@ export function initSubmissionWatcher(options: SubmissionWatcherOptions): () => 
     }
     if (isConfirmationUrl()) {
       const staged = getStagedJobMetadata(true);
-      if (staged && (!hasActiveFormFields() || hasVisibleSuccessMessage())) {
+      if (
+        (staged || !hasActiveFormFields() || hasVisibleSuccessMessage()) &&
+        (!hasActiveFormFields() || hasVisibleSuccessMessage())
+      ) {
         commitApplicationIfPending(true);
       }
     }

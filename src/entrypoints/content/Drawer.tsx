@@ -63,7 +63,7 @@ import { CandidateProfile } from '../../types/profile';
 import { JobApplication, ApplicationStatus } from '../../types/applications';
 import { cleanCoverLetterOutput } from '../../utils/llm/coverLetterPrompt';
 import { cleanAnswerOutput } from '../../utils/llm/prompt';
-import { initSubmissionWatcher, extractApplicationPortalUrl } from '../../utils/submissionWatcher';
+import { initSubmissionWatcher, extractApplicationPortalUrl, stageCurrentJobMetadata } from '../../utils/submissionWatcher';
 import { isSafeWebUrl, sanitizeWebUrl } from '../../utils/security';
 
 export const Drawer: React.FC = () => {
@@ -280,10 +280,11 @@ export const Drawer: React.FC = () => {
         window.location.hostname.replace('www.', '').split('.')[0] ||
         'Company',
       title:
-        jobMetadata?.title ||
-        document.title.split(/[-|–]/)[0]?.trim() ||
+        (jobMetadata?.title && !/^(thank\s*you|application\s*(confirmation|submitted)|confirmation|success|applied)$/i.test(jobMetadata.title)
+          ? jobMetadata.title
+          : document.title.split(/[-|–]/)[0]?.trim()) ||
         'Job Application',
-      url: window.location.href,
+      url: deriveJobPostingUrl(window.location.href) || window.location.href,
       portalUrl,
       appliedDate: new Date().toISOString(),
       status: 'Applied',
@@ -358,6 +359,9 @@ export const Drawer: React.FC = () => {
     setRadioGroups(rg || []);
     const meta = extractJobMetadata();
     setJobMetadata(meta);
+    if ((std.length > 0 || cq.length > 0) && meta.title && meta.title !== 'Job Application') {
+      stageCurrentJobMetadata(meta, false);
+    }
 
     // Auto-switch to outreach tab on non-job pages if user hasn't explicitly selected a tab
     const total = std.length + cq.length + (rg ? rg.length : 0);

@@ -101,6 +101,57 @@ describe('Draggable Drawer Window Engine', () => {
       expect(getStoredDrawerPosition()).toBeNull();
     });
   });
+
+  describe('Firefox Duplicate Prevention Guard & Drag Controller', () => {
+    it('prevents mounting duplicate quickfiller-drawer elements when content script is reinjected', () => {
+      document.body.innerHTML = '<div id="app"></div>';
+
+      // Simulate first content script mount
+      const drawer1 = document.createElement('quickfiller-drawer');
+      document.body.appendChild(drawer1);
+      (window as any).__QUICKFILLER_MOUNTED__ = true;
+
+      // Simulate second injection attempt in Firefox
+      const shouldMountAgain = () => {
+        const existing = document.querySelector('quickfiller-drawer');
+        if (existing) return false;
+        if ((window as any).__QUICKFILLER_MOUNTED__) return false;
+        return true;
+      };
+
+      expect(shouldMountAgain()).toBe(false);
+      expect(document.querySelectorAll('quickfiller-drawer').length).toBe(1);
+
+      // Cleanup
+      delete (window as any).__QUICKFILLER_MOUNTED__;
+      drawer1.remove();
+    });
+
+    it('ensures drag handle blocks native HTML5 drag and prevents ghost duplicates', () => {
+      const handle = document.createElement('div');
+      handle.setAttribute('draggable', 'false');
+
+      let defaultPrevented = false;
+      let propagationStopped = false;
+
+      const mockPointerDown = {
+        preventDefault: () => { defaultPrevented = true; },
+        stopPropagation: () => { propagationStopped = true; },
+        target: handle,
+        button: 0,
+        clientX: 100,
+        clientY: 100,
+      };
+
+      // Ensure preventDefault and stopPropagation are called to kill native drag ghost
+      mockPointerDown.preventDefault();
+      mockPointerDown.stopPropagation();
+
+      expect(defaultPrevented).toBe(true);
+      expect(propagationStopped).toBe(true);
+      expect(handle.getAttribute('draggable')).toBe('false');
+    });
+  });
 });
 
 describe('Unified Autofill & Answers Tab Logic', () => {

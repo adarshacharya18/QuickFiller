@@ -15,6 +15,26 @@ export default defineContentScript({
       return;
     }
 
+    // Singleton check: Ensure only one instance of quickfiller-drawer exists in the DOM
+    if (typeof document !== 'undefined') {
+      const existing = document.querySelector('quickfiller-drawer');
+      if (existing) {
+        if (typeof window !== 'undefined' && (window as any).__QUICKFILLER_AUTO_OPEN__) {
+          window.dispatchEvent(new CustomEvent('quickfiller:open_drawer'));
+        }
+        return;
+      }
+    }
+    if (typeof window !== 'undefined') {
+      if ((window as any).__QUICKFILLER_MOUNTED__) {
+        if ((window as any).__QUICKFILLER_AUTO_OPEN__) {
+          window.dispatchEvent(new CustomEvent('quickfiller:open_drawer'));
+        }
+        return;
+      }
+      (window as any).__QUICKFILLER_MOUNTED__ = true;
+    }
+
     const ui = await createShadowRootUi(ctx, {
       name: 'quickfiller-drawer',
       position: 'inline',
@@ -26,6 +46,9 @@ export default defineContentScript({
         return root;
       },
       onRemove: (root) => {
+        if (typeof window !== 'undefined') {
+          delete (window as any).__QUICKFILLER_MOUNTED__;
+        }
         root?.unmount();
       },
     });
@@ -36,6 +59,9 @@ export default defineContentScript({
     const livenessCheck = setInterval(() => {
       if (ctx.isInvalid || !isExtensionValid()) {
         clearInterval(livenessCheck);
+        if (typeof window !== 'undefined') {
+          delete (window as any).__QUICKFILLER_MOUNTED__;
+        }
         try {
           ui.remove();
         } catch {}
@@ -44,6 +70,9 @@ export default defineContentScript({
 
     ctx.onInvalidated(() => {
       clearInterval(livenessCheck);
+      if (typeof window !== 'undefined') {
+        delete (window as any).__QUICKFILLER_MOUNTED__;
+      }
       try {
         ui.remove();
       } catch {}

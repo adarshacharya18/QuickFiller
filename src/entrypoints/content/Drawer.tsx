@@ -106,6 +106,16 @@ export const Drawer: React.FC = () => {
   });
   const currentPosRef = useRef<{ x: number; y: number } | null>(customPosition);
   const drawerContainerRef = useRef<HTMLDivElement | null>(null);
+  const activeDragCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (activeDragCleanupRef.current) {
+        activeDragCleanupRef.current();
+        activeDragCleanupRef.current = null;
+      }
+    };
+  }, []);
 
   // Outreach Studio State
   const [outreachDraft, setOutreachDraft] = useState('');
@@ -468,12 +478,23 @@ export const Drawer: React.FC = () => {
       }
     };
 
+    const handleCustomOpen = () => {
+      setIsOpen(true);
+      try {
+        sessionStorage.setItem('quickfiller_drawer_open', 'true');
+      } catch {}
+      setTimeout(scanPage, 50);
+    };
+
+    window.addEventListener('quickfiller:open_drawer', handleCustomOpen);
+
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
       try {
         chrome.runtime.onMessage.addListener(handleMessage);
       } catch {}
     }
     return () => {
+      window.removeEventListener('quickfiller:open_drawer', handleCustomOpen);
       try {
         if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
           chrome.runtime.onMessage.removeListener(handleMessage);
@@ -1144,6 +1165,16 @@ export const Drawer: React.FC = () => {
     if (e.button !== 0) return;
     if (!drawerContainerRef.current) return;
 
+    // Prevent default browser behaviors (text selection and Firefox native HTML5 drag ghosting)
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Clean up any lingering drag listeners from a previous interrupted gesture
+    if (activeDragCleanupRef.current) {
+      activeDragCleanupRef.current();
+      activeDragCleanupRef.current = null;
+    }
+
     const rect = drawerContainerRef.current.getBoundingClientRect();
     isDraggingRef.current = true;
     setIsDragging(true);
@@ -1154,37 +1185,46 @@ export const Drawer: React.FC = () => {
       initPosY: rect.top,
     };
 
-    try {
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    } catch {}
-  };
+    const handleWindowPointerMove = (moveEvent: PointerEvent) => {
+      if (!isDraggingRef.current || !drawerContainerRef.current) return;
+      moveEvent.preventDefault();
+      const deltaX = moveEvent.clientX - dragStartRef.current.startX;
+      const deltaY = moveEvent.clientY - dragStartRef.current.startY;
+      const newX = dragStartRef.current.initPosX + deltaX;
+      const newY = dragStartRef.current.initPosY + deltaY;
 
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDraggingRef.current || !drawerContainerRef.current) return;
-    const deltaX = e.clientX - dragStartRef.current.startX;
-    const deltaY = e.clientY - dragStartRef.current.startY;
-    const newX = dragStartRef.current.initPosX + deltaX;
-    const newY = dragStartRef.current.initPosY + deltaY;
+      const currentRect = drawerContainerRef.current.getBoundingClientRect();
+      const clamped = clampPosition(newX, newY, currentRect.width, currentRect.height);
+      currentPosRef.current = clamped;
+      setCustomPosition(clamped);
+    };
 
-    const rect = drawerContainerRef.current.getBoundingClientRect();
-    const clamped = clampPosition(newX, newY, rect.width, rect.height);
-    currentPosRef.current = clamped;
-    setCustomPosition(clamped);
-  };
-
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (isDraggingRef.current) {
+    const handleWindowPointerUp = () => {
       isDraggingRef.current = false;
       setIsDragging(false);
-      try {
-        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {}
+      window.removeEventListener('pointermove', handleWindowPointerMove);
+      window.removeEventListener('pointerup', handleWindowPointerUp);
+      window.removeEventListener('pointercancel', handleWindowPointerUp);
+      activeDragCleanupRef.current = null;
+
       if (currentPosRef.current) {
         try {
           sessionStorage.setItem('quickfiller_drawer_pos', JSON.stringify(currentPosRef.current));
         } catch {}
       }
-    }
+    };
+
+    activeDragCleanupRef.current = () => {
+      isDraggingRef.current = false;
+      setIsDragging(false);
+      window.removeEventListener('pointermove', handleWindowPointerMove);
+      window.removeEventListener('pointerup', handleWindowPointerUp);
+      window.removeEventListener('pointercancel', handleWindowPointerUp);
+    };
+
+    window.addEventListener('pointermove', handleWindowPointerMove, { passive: false });
+    window.addEventListener('pointerup', handleWindowPointerUp);
+    window.addEventListener('pointercancel', handleWindowPointerUp);
   };
 
   const handleHeaderDoubleClick = (e: React.MouseEvent) => {
@@ -1294,7 +1334,9 @@ export const Drawer: React.FC = () => {
       {/* Expanded Copilot Drawer */}
       {isOpen && (
         <div
-          className={`flex flex-col transition-all duration-200 ease-in-out bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-scale-in origin-bottom-right ${
+          className={`flex flex-col ${
+            isDragging ? 'transition-none' : 'transition-all duration-200 ease-in-out'
+          } bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-scale-in origin-bottom-right ${
             isExpanded
               ? 'w-[580px] sm:w-[680px] max-w-[calc(100vw-24px)] h-[640px] sm:h-[680px] max-h-[92vh]'
               : 'w-[380px] sm:w-[440px] max-w-[calc(100vw-24px)] h-[580px] sm:h-[620px] max-h-[90vh]'
@@ -1303,13 +1345,20 @@ export const Drawer: React.FC = () => {
           {/* Header (Drag Handle) */}
           <div
             onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
             onDoubleClick={handleHeaderDoubleClick}
+            draggable={false}
+            onDragStart={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
             className={`bg-slate-900 text-white px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between border-b border-slate-800 touch-none select-none transition-colors ${
               isDragging ? 'cursor-grabbing bg-slate-950' : 'cursor-grab'
             }`}
+            style={{
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              MozUserSelect: 'none',
+            }}
             title="Drag to move Copilot window (Double-click or click dock icon to reset position)"
           >
             <div className="flex items-center gap-2 min-w-0 flex-1 mr-2 pointer-events-none">

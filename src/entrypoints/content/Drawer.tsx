@@ -1106,7 +1106,12 @@ export const Drawer: React.FC = () => {
         (res) => {
           setGenerating((prev) => ({ ...prev, [field.id]: false }));
           if (chrome.runtime?.lastError) {
-            alert('Extension context invalidated. Please refresh the page.');
+            const errMsg = chrome.runtime.lastError.message || 'Unknown runtime error';
+            if (errMsg.includes('context invalidated') || errMsg.includes('Extension context invalidated')) {
+              alert('QuickFiller extension was updated or reloaded. Please refresh the page to reconnect.');
+            } else {
+              alert(`Error communicating with extension: ${errMsg}`);
+            }
             return;
           }
           if (res?.success && res.answer) {
@@ -1116,9 +1121,14 @@ export const Drawer: React.FC = () => {
           }
         }
       );
-    } catch {
+    } catch (err: any) {
       setGenerating((prev) => ({ ...prev, [field.id]: false }));
-      alert('Extension context invalidated. Please refresh the page.');
+      const msg = err?.message || '';
+      if (msg.includes('context invalidated') || msg.includes('Extension context invalidated')) {
+        alert('QuickFiller extension was updated or reloaded. Please refresh the page to reconnect.');
+      } else {
+        alert(`Error communicating with extension: ${msg || 'Extension context error'}`);
+      }
     }
   };
 

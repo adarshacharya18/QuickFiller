@@ -247,7 +247,11 @@ export function sanitizeProfile(profile: CandidateProfile): CandidateProfile {
  */
 export function isExtensionValid(): boolean {
   try {
-    return typeof chrome !== 'undefined' && Boolean(chrome.runtime && chrome.runtime.id);
+    const globalBrowser = (globalThis as any).browser;
+    return (
+      (typeof chrome !== 'undefined' && Boolean(chrome.runtime && chrome.runtime.id)) ||
+      (typeof globalBrowser !== 'undefined' && Boolean(globalBrowser.runtime && globalBrowser.runtime.id))
+    );
   } catch {
     return false;
   }

@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.1] - 2026-09-22
+## [1.0.2] - 2026-09-22
 
 ### Fixed
+- **Firefox LLM Drafting & Port Closure Fix**:
+  - **Cross-Browser Sender Verification**: Resolved false message rejections in `background.ts` by recognizing `sender.tab` (content scripts), Firefox Gecko IDs (`browser.runtime.id`), and extension protocol origins (`moz-extension://` and `chrome-extension://`). Prevents premature channel closure errors (`"The message port closed before a response was received."`).
+  - **Granular Error Diagnostics**: Updated `generateAnswerForField` in `Drawer.tsx` to surface actual runtime error messages rather than showing generic "Extension context invalidated" alerts.
+  - **Dual Context Validation**: Enhanced `isExtensionValid()` in `storage.ts` to inspect both `chrome.runtime.id` and `(globalThis as any).browser?.runtime?.id`.
+- **Dual-Layer Ollama Origin Rewriting (Firefox MV2 & Chrome MV3)**:
+  - **Native Blocking `webRequest` Engine for Firefox**: Overcame Mozilla's WebExtensions Declarative Net Request limitation where `modifyHeaders` is ignored for extension background requests (due to ungrantable internal initiator host permissions). Implemented `setupOllamaWebRequestRules` in `rules.ts` using native blocking `webRequest` to rewrite `Origin: moz-extension://...` to `http://localhost:11434` and inject `Access-Control-Allow-Origin: moz-extension://...`.
+  - **Port-Free Match Patterns**: Defined WebExtension-compliant match patterns (`http://localhost/*`, `http://127.0.0.1/*`) without embedded port numbers (which cause Firefox `Invalid match pattern` errors), filtering target ports (`11434`) dynamically inside listener logic.
+  - **Dynamic Manifest Permissions**: Dynamically allocated `webRequest` and `webRequestBlocking` permissions in `wxt.config.ts` specifically for Firefox builds while preserving pure Manifest V3 compliance for Chromium.
+  - **DNR Add-on ID Syntax Protection**: Guarded `initiatorDomains` in `setupOllamaDNRRules` against IDs containing `@` characters (such as Gecko add-on IDs), preventing schema syntax validation errors in Firefox's DNR parser.
+  - **Universal Rules Orchestration**: Created `setupOllamaRules` to seamlessly synchronize both network rule layers across extension startup, storage preference changes, and inference dispatches.
 - **PDF Resume Parser Overhaul & Firefox Compatibility**:
   - **Coordinate-Aware Line Reconstruction**: Reconstructed PDF page lines by tracking vertical position deltas (`deltaY > 3.5`) and `hasEOL` flags, eliminating single-line flattening on 1-page resumes in Firefox Options page (`ProfileTab.tsx`).
   - **Flexible Section Header Matching**: Replaced rigid exact-match lookup with regex-based boundary detection supporting colons, pipes, markdown headers, and variants (`WORK HISTORY`, `EMPLOYMENT HISTORY`, `RELEVANT EXPERIENCE`, `CAREER HISTORY`, `E X P E R I E N C E`).
@@ -20,6 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Implemented submission lock and double-commit prevention in `submissionWatcher.ts`, ensuring exactly one application is logged on rapid clicks or empty form submissions on Workday test forms.
 - **Firefox Copilot Drawer Dragging Duplication**:
   - Implemented window-level pointer capture with singleton mount guard, preventing native HTML5 drag ghosting and duplicate window instances in Firefox.
+
+### Tested & Verified
+- **Expanded Automated Test Suite**:
+  - Added unit test coverage for port-free webRequest origin rewriting, CORS response header injection, Firefox Gecko ID DNR handling, and browser namespace validation.
+  - Total test suite expanded to **279 passing tests across 21 test files** with 100% pass rate.
+  - Validated with Mozilla's official `addons-linter` (0 errors, 0 notices).
+
+## [1.0.1] - 2026-09-22
+
+### Fixed
 - **Firefox Options & Job Tracker Page Opening**:
   - Configured `options_ui.open_in_tab: true` so `chrome.runtime.openOptionsPage()` opens `options.html` directly in a new tab instead of attempting an iframe embed blocked by `frame-ancestors 'none'`.
   - Implemented cross-browser `openTabSafely` in `background.ts` supporting both `browser.*` and `chrome.*` APIs, preventing synchronous `TypeError` crashes during tab queries without the `tabs` permission.
@@ -29,10 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Shortened extension display name to `QuickFiller - App Copilot` to conform with AMO listing constraints.
 
 ### Tested & Verified
-- **Expanded Automated Test Suite**:
-  - Added 26 unit tests in `tests/pdfParser.test.ts` covering section segmentation, experience extraction, date matching, and line reconstruction.
-  - Total test suite expanded to **276 passing tests across 21 test files** with 100% pass rate.
-  - Validated with Mozilla's official `addons-linter` (0 errors, 0 notices).
+- **Automated Test Suite**:
+  - 253 passing tests across 20 test files.
 
 ## [1.0.0] - 2026-09-21
 

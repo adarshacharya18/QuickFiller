@@ -241,12 +241,25 @@ When resolving external job descriptions (`FETCH_EXTERNAL_JD`), the background s
 - Disallows loopback domains (`localhost`, `*.localhost`, `*.internal`, `*.local`).
 - Enforces strict 10-second request timeouts and a 2.5 MB HTML parsing ceiling.
 
-### 2. Declarative Net Request (DNR) CORS Shield ([`src/utils/rules.ts`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/rules.ts))
-Local Ollama instances reject cross-origin requests by default. Rather than exposing Ollama to all external websites:
-- QuickFiller uses Chrome's `declarativeNetRequest` to rewrite the `Origin` request header exclusively for requests originating from the extension (`chrome-extension://<id>`).
-- Re-sets `Access-Control-Allow-Origin` to the extension origin only, preventing malicious web pages on the user's browser from communicating with the local Ollama daemon.
+### 2. Dual-Layer Local AI Network Strategy ([`src/utils/rules.ts`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/rules.ts))
+Local Ollama instances reject cross-origin requests by default (allowing `http://localhost:*`, `http://127.0.0.1:*`, and `chrome-extension://*`, but blocking `moz-extension://*` with HTTP 403 Forbidden). QuickFiller overcomes cross-browser limitations through a specialized dual-layer pipeline:
+- **Chromium (Manifest V3)**:
+  - Registers dynamic [`declarativeNetRequest`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/rules.ts#L7-L116) rules with `modifyHeaders` action to rewrite outgoing `Origin` headers to `http://localhost:11434` (or custom Ollama host).
+  - Constrains `initiatorDomains` strictly to the extension's internal ID, preventing any open web page from leveraging the extension to bypass CORS against local model servers.
+  - Dynamically injects `Access-Control-Allow-Origin: chrome-extension://<id>` to keep response inspection isolated.
+- **Mozilla Firefox (Manifest V2)**:
+  - Overcomes the Gecko limitation where DNR `modifyHeaders` ignores extension-initiated requests (due to ungrantable internal initiator host permissions).
+  - Employs native blocking [`webRequest.onBeforeSendHeaders`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/rules.ts#L126-L235) with valid port-free match patterns (`http://localhost/*`, `http://127.0.0.1/*`) and in-listener port filtering (`url.port === '11434'`).
+  - Rewrites `Origin` to `http://localhost:11434` at the socket level before transmission, and ensures `onHeadersReceived` injects `Access-Control-Allow-Origin: moz-extension://<uuid>`.
 
-### 3. Secret Redaction & Sanitization
+### 3. Cross-Browser Internal Messaging Security ([`src/entrypoints/background.ts`](file:///home/adarsh/Documents/Projects/QuickFiller/src/entrypoints/background.ts))
+The background service worker validates that all incoming runtime messages originate internally:
+- Validates `sender.id === chrome.runtime.id` or `sender.id === browser.runtime.id`.
+- Permits injected tab content scripts via `Boolean(sender.tab)`.
+- Verifies internal extension protocols (`chrome-extension://`, `moz-extension://`).
+- Rejects untrusted external callers, protecting against extension hijacking.
+
+### 4. Secret Redaction & Sanitization
 All API keys (Gemini, OpenAI, Anthropic) are masked and stripped from logs, error payloads, and diagnostic outputs using [`redactSecrets`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/security.ts#L79-L98).
 
 ---

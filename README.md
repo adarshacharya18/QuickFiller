@@ -4,7 +4,7 @@
 > Powered by local AI (**Ollama**) or Bring-Your-Own-Key cloud LLMs (**Google Gemini, OpenAI, Anthropic Claude**).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests: 276 passing](https://img.shields.io/badge/Tests-276%20passing-brightgreen.svg)](tests/)
+[![Tests: 279 passing](https://img.shields.io/badge/Tests-279%20passing-brightgreen.svg)](tests/)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](tsconfig.json)
 [![Manifest: V3 & V2](https://img.shields.io/badge/Manifest-MV3%20%7C%20MV2-purple.svg)](wxt.config.ts)
 [![Privacy: 100% Local](https://img.shields.io/badge/Privacy-100%25%20Local-success.svg)](PRIVACY_POLICY.md)
@@ -20,7 +20,7 @@ Job searching is notoriously repetitive. Candidates fill out the exact same pers
 
 ### QuickFiller Solves Both:
 - **🔒 100% Local-First & Zero Telemetry**: All data (profile, parsed resume, Q&A bank, custom paste snippets, application history) stays strictly inside your browser sandbox (`chrome.storage.local`). Zero analytics, zero tracking beacons, zero developer servers.
-- **🦙 Dual AI Engine (Offline Ollama + Cloud BYOK)**: Run zero-cost inference 100% offline via **Ollama** (`llama3.2`, `mistral`, `qwen2.5`) with automated Declarative Net Request (DNR) CORS rewriting. Or connect your own API key for Google Gemini Flash, OpenAI GPT-4o-mini, or Anthropic Claude.
+- **🦙 Dual AI Engine (Offline Ollama + Cloud BYOK)**: Run zero-cost inference 100% offline via **Ollama** (`llama3.2`, `mistral`, `qwen2.5`) with dual-layer CORS resolution (Declarative Net Request rules in Chrome MV3 + native blocking `webRequest` in Firefox MV2). Or connect your own API key for Google Gemini Flash, OpenAI GPT-4o-mini, or Anthropic Claude.
 - **🎯 Resilient Copilot Drawer inside Shadow DOM**: Rendered inside an isolated `attachShadow({ mode: 'open' })` container with zero page CSS bleeding. Fully **draggable & dockable**, with position memory and expandable reading modes.
 - **⚡ Prototype-Level Synthetic Autofill**: Bypasses React, Angular, and Vue virtual DOM state traps by calling native property descriptors and dispatching complete synthetic event sequences.
 - **✉️ Outreach Message Refiner**: Refines cold outreach notes directly on LinkedIn or any web page. Produces character-limited LinkedIn connection requests (≤ 300 chars) and structured InMail/email pitches for Recruiters or Engineering Leads with 1-click insertion into LinkedIn message popups.

@@ -6,7 +6,7 @@ import {
   redactSecrets,
   validatePdfBuffer,
 } from '../src/utils/security';
-import { setupOllamaDNRRules } from '../src/utils/rules';
+import { setupOllamaDNRRules, setupOllamaWebRequestRules, setupOllamaRules } from '../src/utils/rules';
 import { mockDynamicRules, resetMockDynamicRules } from './setup';
 
 describe('Security & XSS Defense Utilities', () => {
@@ -232,6 +232,77 @@ describe('Security & XSS Defense Utilities', () => {
       expect(originHeader).toBeDefined();
       expect(originHeader.value).toBe('chrome-extension://mock-quickfiller-id');
       expect(originHeader.value).not.toBe('*');
+    });
+
+    it('safely handles Firefox gecko IDs containing "@" by omitting initiatorDomains to prevent DNR syntax error', async () => {
+      const origId = (globalThis as any).chrome.runtime.id;
+      try {
+        (globalThis as any).chrome.runtime.id = 'quickfiller@adarshacharya.dev';
+        await setupOllamaDNRRules();
+
+        expect(mockDynamicRules.length).toBeGreaterThanOrEqual(2);
+        for (const rule of mockDynamicRules) {
+          expect(rule.condition.initiatorDomains).toBeUndefined();
+          expect(rule.action.type).toBe('modifyHeaders');
+          expect(rule.action.requestHeaders).toBeDefined();
+        }
+      } finally {
+        (globalThis as any).chrome.runtime.id = origId;
+      }
+    });
+
+    it('sets up blocking webRequest listeners to rewrite Origin in Firefox MV2 environments', () => {
+      let registeredBeforeSend: any = null;
+      let registeredHeaders: any = null;
+      let registeredUrls: string[] = [];
+
+      (globalThis as any).chrome.webRequest = {
+        onBeforeSendHeaders: {
+          addListener: (cb: any, filter: any) => {
+            registeredBeforeSend = cb;
+            registeredUrls = filter?.urls || [];
+          },
+          removeListener: () => {
+            registeredBeforeSend = null;
+          },
+          hasListener: () => Boolean(registeredBeforeSend),
+        },
+        onHeadersReceived: {
+          addListener: (cb: any) => {
+            registeredHeaders = cb;
+          },
+          removeListener: () => {
+            registeredHeaders = null;
+          },
+          hasListener: () => Boolean(registeredHeaders),
+        },
+      };
+
+      try {
+        setupOllamaWebRequestRules();
+        expect(registeredUrls).toContain('http://localhost/*');
+        expect(registeredUrls).toContain('http://127.0.0.1/*');
+
+        // Verify request header rewriting
+        const res = registeredBeforeSend({
+          url: 'http://localhost:11434/api/chat',
+          requestHeaders: [{ name: 'Origin', value: 'moz-extension://test-uuid' }],
+        });
+        expect(res.requestHeaders[0].value).toBe('http://localhost:11434');
+
+        // Verify response CORS header injection
+        const respHeadersRes = registeredHeaders({
+          url: 'http://localhost:11434/api/chat',
+          responseHeaders: [],
+        });
+        const acao = respHeadersRes.responseHeaders.find(
+          (h: any) => h.name.toLowerCase() === 'access-control-allow-origin'
+        );
+        expect(acao).toBeDefined();
+        expect(acao.value).toBe('chrome-extension://mock-quickfiller-id');
+      } finally {
+        delete (globalThis as any).chrome.webRequest;
+      }
     });
   });
 

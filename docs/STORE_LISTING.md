@@ -13,7 +13,7 @@ This file contains the exact copy, structured plain-text description, and permis
 | **Primary Category** | **Productivity** | Dropdown selection |
 | **Secondary Category** | **Workflow & Planning** (or **Tools**) | Dropdown selection |
 | **Language** | **English** | Dropdown selection |
-| **Version** | `1.0.0` | In manifest |
+| **Version** | `1.0.2` | In manifest |
 | **Pricing** | **Free** | No in-app purchases |
 
 ---
@@ -103,9 +103,9 @@ Under the **Data usage** section of the Privacy tab:
 
 ---
 
-## 5. Store Listing Promotional Screenshots (`public/Screenshots/`)
+## 5. Store Listing Promotional Screenshots (`screenshots/`)
 
-The extension promotional screenshots are organized and numbered in `public/Screenshots/` ready for upload to Chrome Web Store and Firefox Add-ons (AMO):
+The extension promotional screenshots are organized and numbered in `screenshots/` ready for upload to Chrome Web Store and Firefox Add-ons (AMO):
 
 | Filename | Caption / Description | Section |
 | :--- | :--- | :--- |

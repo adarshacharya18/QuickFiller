@@ -3,7 +3,7 @@ import { getStorageData } from '../utils/storage';
 import { fetchOllamaModels } from '../utils/llm/ollama';
 import { generateAnswer } from '../utils/llm';
 import { buildSystemPrompt, cleanAnswerOutput } from '../utils/llm/prompt';
-import { setupOllamaDNRRules } from '../utils/rules';
+import { setupOllamaRules, setupOllamaDNRRules } from '../utils/rules';
 import { extractCleanJDFromHtml, isValidJobDescription } from '../utils/jdResolver';
 import {
   buildCoverLetterSystemPrompt,
@@ -167,25 +167,39 @@ export default defineBackground(() => {
     });
   }
 
-  // Initialize Declarative Net Request rules to prevent 403 Forbidden CORS issues with Ollama
+  // Initialize Declarative Net Request rules and webRequest listeners to prevent 403 Forbidden CORS issues with Ollama
   getStorageData().then((storage) => {
     const host = storage.llmSettings?.ollama?.host || 'http://localhost:11434';
-    setupOllamaDNRRules(host);
+    setupOllamaRules(host);
   }).catch(() => {
-    setupOllamaDNRRules();
+    setupOllamaRules();
   });
 
   if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && changes.llmSettings?.newValue?.ollama?.host) {
-        setupOllamaDNRRules(changes.llmSettings.newValue.ollama.host);
+        setupOllamaRules(changes.llmSettings.newValue.ollama.host);
       }
     });
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    // Security: Verify message sender is internal to this extension
-    if (sender.id && typeof chrome !== 'undefined' && chrome.runtime?.id && sender.id !== chrome.runtime.id) {
+    // Security: Verify message sender is internal to this extension (or its injected content scripts/extension pages)
+    const globalBrowser = (globalThis as any).browser;
+    const currentId = (typeof chrome !== 'undefined' && chrome.runtime?.id) || globalBrowser?.runtime?.id;
+    const isInternal =
+      !sender.id ||
+      (currentId && sender.id === currentId) ||
+      (globalBrowser?.runtime?.id && sender.id === globalBrowser.runtime.id) ||
+      Boolean(sender.tab) ||
+      Boolean(
+        sender.url &&
+          (sender.url.startsWith('chrome-extension://') ||
+            sender.url.startsWith('moz-extension://') ||
+            sender.url.startsWith('extension://'))
+      );
+
+    if (!isInternal) {
       console.warn('[QuickFiller] Rejected message from untrusted sender ID:', sender.id);
       return false;
     }
@@ -379,7 +393,7 @@ export default defineBackground(() => {
         .then(async (storage) => {
           const activeSettings = llmSettings || storage.llmSettings;
           if (activeSettings?.provider === 'ollama') {
-            await setupOllamaDNRRules(activeSettings.ollama?.host);
+            await setupOllamaRules(activeSettings.ollama?.host);
           }
 
           const systemPrompt = buildCoverLetterSystemPrompt(
@@ -407,7 +421,7 @@ export default defineBackground(() => {
         .then(async (storage) => {
           const activeSettings = llmSettings || storage.llmSettings;
           if (activeSettings?.provider === 'ollama') {
-            await setupOllamaDNRRules(activeSettings.ollama?.host);
+            await setupOllamaRules(activeSettings.ollama?.host);
           }
 
           const persona = options?.persona || 'recruiter';
@@ -436,7 +450,7 @@ export default defineBackground(() => {
 
     if (message?.type === 'CHECK_OLLAMA') {
       const host = message.host || 'http://localhost:11434';
-      setupOllamaDNRRules(host).then(() => {
+      setupOllamaRules(host).then(() => {
         return fetchOllamaModels(host);
       })
         .then((models) => sendResponse({ success: true, models }))
@@ -458,7 +472,7 @@ export default defineBackground(() => {
         .then(async (storage) => {
           const activeSettings = llmSettings || storage.llmSettings;
           if (activeSettings?.provider === 'ollama') {
-            await setupOllamaDNRRules(activeSettings.ollama?.host);
+            await setupOllamaRules(activeSettings.ollama?.host);
           }
 
           const systemPrompt = buildSystemPrompt(

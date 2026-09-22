@@ -6,10 +6,10 @@ export default defineConfig({
   suppressWarnings: {
     firefoxDataCollection: true,
   },
-  manifest: {
+  manifest: ({ browser }) => ({
     name: 'QuickFiller - App Copilot',
     description: 'Smart job application autofill and copilot powered by local Ollama & cloud LLMs.',
-    version: '1.0.1',
+    version: '1.0.2',
     icons: {
       16: 'icon-16.png',
       32: 'icon-32.png',
@@ -43,6 +43,7 @@ export default defineConfig({
       'activeTab',
       'scripting',
       'declarativeNetRequest',
+      ...(browser === 'firefox' ? ['webRequest', 'webRequestBlocking'] : []),
     ],
     host_permissions: [
       'http://localhost:11434/*',
@@ -77,5 +78,5 @@ export default defineConfig({
       open_in_tab: true,
       page: 'options.html',
     },
-  },
+  }),
 });

@@ -10,8 +10,8 @@ Both required submission packages have been generated and are ready in your repo
 
 | Package | Path | Size | Purpose |
 |:---|:---|:---|:---|
-| **Extension ZIP** | [`.output/quickfiller-1.0.1-firefox.zip`](file:///home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.1-firefox.zip) | ~767 KB | Uploaded in **Step 2 (Upload Version)** |
-| **Source Code ZIP** | [`.output/quickfiller-1.0.1-sources.zip`](file:///home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.1-sources.zip) | ~280 KB | Uploaded in **Step 3 (Source Code Submission)** |
+| **Extension ZIP** | [`.output/quickfiller-1.0.2-firefox.zip`](file:///home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.2-firefox.zip) | ~770 KB | Uploaded in **Step 2 (Upload Version)** |
+| **Source Code ZIP** | [`.output/quickfiller-1.0.2-sources.zip`](file:///home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.2-sources.zip) | ~280 KB | Uploaded in **Step 3 (Source Code Submission)** |
 
 > [!TIP]
 > If you ever make changes to the code before submitting, regenerate both zip archives in one command:
@@ -45,7 +45,7 @@ Select **"On this site"** and click **Continue**.
 1. Click **Select a file...**.
 2. Browse to and upload:
    ```text
-   /home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.1-firefox.zip
+   /home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.2-firefox.zip
    ```
 3. The automatic AMO validator will run a series of automated security, manifest, and compatibility checks.
 4. When validation finishes with green success:
@@ -62,7 +62,7 @@ Because QuickFiller uses TypeScript, React, Vite, and WXT bundling, Mozilla revi
    👉 Select **Yes**.
 2. Click **Browse** and upload:
    ```text
-   /home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.1-sources.zip
+   /home/adarsh/Documents/Projects/QuickFiller/.output/quickfiller-1.0.2-sources.zip
    ```
 3. In the **"Instructions for Reviewer on how to build"** text box, paste:
    ```text
@@ -173,9 +173,10 @@ Testing without external accounts:
 3. Click the floating "[QuickFiller]" badge in the bottom-right corner or press Alt+Shift+Q to open the Copilot Drawer.
 4. Click "Fill All Standard" to verify autofill functionality.
 
-Network / AI Privacy:
+Network / AI Privacy & webRequest Permissions:
 - QuickFiller does not transmit any user data to any developer server.
 - AI features are 100% BYOK (Bring-Your-Own-Key) or run completely offline via user-installed Ollama on http://localhost:11434.
+- Permissions `webRequest` and `webRequestBlocking` are used solely to rewrite request headers (Origin -> http://localhost:11434) and append CORS headers when communicating with the user's local Ollama instance. This is required because Firefox's declarativeNetRequest modifyHeaders engine ignores extension background requests due to internal initiator host permission boundaries.
 
 Linter Warnings Note:
 - innerHTML warnings are internal to the React DOM / JSX runtime.

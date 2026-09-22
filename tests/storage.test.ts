@@ -151,5 +151,21 @@ describe('Storage & Profile Data Engine', () => {
         (globalThis as any).chrome.runtime = originalRuntime;
       }
     });
+
+    it('recognizes browser.runtime.id when running in Firefox environment', () => {
+      const originalRuntime = (globalThis as any).chrome.runtime;
+      try {
+        (globalThis as any).chrome.runtime = undefined;
+        (globalThis as any).browser = {
+          runtime: {
+            id: 'quickfiller@adarshacharya.dev',
+          },
+        };
+        expect(isExtensionValid()).toBe(true);
+      } finally {
+        (globalThis as any).chrome.runtime = originalRuntime;
+        delete (globalThis as any).browser;
+      }
+    });
   });
 });

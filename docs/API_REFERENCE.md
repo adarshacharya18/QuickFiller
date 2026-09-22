@@ -307,3 +307,24 @@ Records tracked job submissions:
 | `extractCity` | `(headerLines: string[], email: string, phone: string): string` | Extracts city from header lines using City, State regex patterns or international city dictionaries. |
 | `classifyResumeUrl` | `(rawUrl: string): { category: string; isProfile: boolean; username?: string }` | Classifies links into `github`, `linkedin`, `portfolio`, `project` (code repositories), or `other`. |
 
+---
+
+### G. Network & Origin Rewriting Engine ([`src/utils/rules.ts`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/rules.ts))
+
+| Function | Signature | Description |
+| :--- | :--- | :--- |
+| `setupOllamaRules` | `(customHost?: string): Promise<void>` | Universal Ollama network rules coordinator. Simultaneously activates native blocking `webRequest` rules (for Firefox MV2) and `declarativeNetRequest` dynamic rules (for Chrome MV3). |
+| `setupOllamaWebRequestRules` | `(customHost?: string): void` | Registers native blocking `webRequest.onBeforeSendHeaders` and `onHeadersReceived` listeners in Firefox MV2. Uses port-free match patterns (`http://localhost/*`, `http://127.0.0.1/*`), filters ports dynamically, rewrites `Origin` to `http://localhost:11434`, and injects `Access-Control-Allow-Origin: moz-extension://...`. |
+| `setupOllamaDNRRules` | `(customHost?: string): Promise<void>` | Registers dynamic Declarative Net Request (DNR) rules in Chromium. Replaces dynamic rules to set `Origin` header and sets extension-scoped CORS response headers. Safely guards against `@` characters in add-on IDs. |
+
+---
+
+### H. Context & Storage Utilities ([`src/utils/storage.ts`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/storage.ts))
+
+| Function | Signature | Description |
+| :--- | :--- | :--- |
+| `isExtensionValid` | `(): boolean` | Cross-browser runtime context liveness checker. Evaluates both `chrome.runtime.id` and `browser.runtime.id` to prevent extension context invalidated crashes on reload. |
+| `getStorageData` | `(): Promise<StorageData>` | Retrieves complete extension state from `chrome.storage.local` with profile sanitization and fallback isolation. |
+| `updateStorageData` | `(partial: Partial<StorageData>): Promise<void>` | Persists partial state changes back to `chrome.storage.local`. |
+
+

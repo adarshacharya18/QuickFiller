@@ -1,4 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  getInitialDrawerOpenState,
+  getInitialDrawerExpandedState,
+  isSensitiveOrInternalUrl,
+  isEligibleForDrawer,
+} from '../src/utils/drawerUtils';
 
 describe('Copilot Drawer State Persistence & Pin Auto-Open', () => {
   beforeEach(() => {
@@ -6,78 +12,37 @@ describe('Copilot Drawer State Persistence & Pin Auto-Open', () => {
     delete (window as any).__QUICKFILLER_AUTO_OPEN__;
   });
 
-  const checkInitialOpen = () => {
-    if (typeof window !== 'undefined') {
-      if ((window as any).__QUICKFILLER_AUTO_OPEN__) {
-        (window as any).__QUICKFILLER_AUTO_OPEN__ = false;
-        try {
-          sessionStorage.setItem('quickfiller_drawer_open', 'true');
-        } catch {}
-        return true;
-      }
-      try {
-        const stored = sessionStorage.getItem('quickfiller_drawer_open');
-        if (stored === 'false') return false;
-        if (stored === 'true') return true;
-      } catch {}
-
-      // On first visit / pin click access grant, open the drawer by default
-      try {
-        sessionStorage.setItem('quickfiller_drawer_open', 'true');
-      } catch {}
-      return true;
-    }
-    return false;
-  };
-
-  const checkInitialExpanded = () => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = sessionStorage.getItem('quickfiller_drawer_expanded');
-        if (stored === 'false') return false;
-        if (stored === 'true') return true;
-      } catch {}
-
-      // On first visit / pin click, default to expanded wide view
-      try {
-        sessionStorage.setItem('quickfiller_drawer_expanded', 'true');
-      } catch {}
-      return true;
-    }
-    return true;
-  };
-
-  it('initializes open by default on first visit / pin click access grant (white circle pin to normal pin)', () => {
-    expect(checkInitialOpen()).toBe(true);
-    expect(sessionStorage.getItem('quickfiller_drawer_open')).toBe('true');
+  it('initializes CLOSED by default on new pages (prevents auto-popping on arbitrary web pages)', () => {
+    expect(getInitialDrawerOpenState()).toBe(false);
+    expect(sessionStorage.getItem('quickfiller_drawer_open')).toBeNull();
   });
 
-  it('initializes in expanded view on first visit / pin click', () => {
-    expect(checkInitialExpanded()).toBe(true);
+  it('initializes in expanded view on first visit', () => {
+    expect(getInitialDrawerExpandedState()).toBe(true);
     expect(sessionStorage.getItem('quickfiller_drawer_expanded')).toBe('true');
   });
 
   it('respects user width collapse when sessionStorage has false', () => {
     sessionStorage.setItem('quickfiller_drawer_expanded', 'false');
-    expect(checkInitialExpanded()).toBe(false);
+    expect(getInitialDrawerExpandedState()).toBe(false);
   });
 
   it('initializes open and saves to sessionStorage when __QUICKFILLER_AUTO_OPEN__ is true', () => {
     (window as any).__QUICKFILLER_AUTO_OPEN__ = true;
 
-    expect(checkInitialOpen()).toBe(true);
+    expect(getInitialDrawerOpenState()).toBe(true);
     expect((window as any).__QUICKFILLER_AUTO_OPEN__).toBe(false);
     expect(sessionStorage.getItem('quickfiller_drawer_open')).toBe('true');
   });
 
   it('maintains open state across page reloads / steps via sessionStorage', () => {
     sessionStorage.setItem('quickfiller_drawer_open', 'true');
-    expect(checkInitialOpen()).toBe(true);
+    expect(getInitialDrawerOpenState()).toBe(true);
   });
 
   it('respects user minimization when sessionStorage is set to false', () => {
     sessionStorage.setItem('quickfiller_drawer_open', 'false');
-    expect(checkInitialOpen()).toBe(false);
+    expect(getInitialDrawerOpenState()).toBe(false);
   });
 
   it('correctly updates sessionStorage when closed or minimized', () => {
@@ -89,24 +54,27 @@ describe('Copilot Drawer State Persistence & Pin Auto-Open', () => {
     expect(sessionStorage.getItem('quickfiller_drawer_open')).toBe('false');
   });
 
-  it('identifies eligible web URLs for auto-opening drawer', () => {
-    const isEligibleForDrawer = (url?: string): boolean => {
-      if (!url) return false;
-      if (
-        url.startsWith('chrome://') ||
-        url.startsWith('chrome-extension://') ||
-        url.startsWith('about:') ||
-        url.startsWith('edge://') ||
-        url.startsWith('view-source:')
-      ) {
-        return false;
-      }
-      return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://');
-    };
+  it('blocks sensitive authentication pages and internal browser URLs', () => {
+    expect(isSensitiveOrInternalUrl('https://accounts.google.com/signin/v2/identifier')).toBe(true);
+    expect(isSensitiveOrInternalUrl('https://accounts.google.com/ServiceLogin')).toBe(true);
+    expect(isSensitiveOrInternalUrl('https://login.microsoftonline.com/common/oauth2')).toBe(true);
+    expect(isSensitiveOrInternalUrl('https://login.live.com/login.srf')).toBe(true);
+    expect(isSensitiveOrInternalUrl('https://appleid.apple.com/auth/authorize')).toBe(true);
+    expect(isSensitiveOrInternalUrl('https://example.auth0.com/u/login')).toBe(true);
+    expect(isSensitiveOrInternalUrl('https://company.okta.com/login')).toBe(true);
+    expect(isSensitiveOrInternalUrl('chrome://extensions/')).toBe(true);
+    expect(isSensitiveOrInternalUrl('about:debugging')).toBe(true);
+    expect(isSensitiveOrInternalUrl('moz-extension://xyz/popup.html')).toBe(true);
+    expect(isSensitiveOrInternalUrl('chrome-extension://xyz/popup.html')).toBe(true);
+    expect(isSensitiveOrInternalUrl('about:blank')).toBe(true);
+  });
 
+  it('identifies eligible web URLs for drawer', () => {
     expect(isEligibleForDrawer('https://wd5.myworkdayjobs.com/careers')).toBe(true);
+    expect(isEligibleForDrawer('https://job-boards.greenhouse.io/headoutcareers/jobs/123')).toBe(true);
     expect(isEligibleForDrawer('http://localhost:3000/apply')).toBe(true);
     expect(isEligibleForDrawer('file:///home/user/app.html')).toBe(true);
+    expect(isEligibleForDrawer('https://accounts.google.com/signin')).toBe(false);
     expect(isEligibleForDrawer('chrome://extensions/')).toBe(false);
     expect(isEligibleForDrawer('chrome-extension://xyz/popup.html')).toBe(false);
     expect(isEligibleForDrawer('about:blank')).toBe(false);

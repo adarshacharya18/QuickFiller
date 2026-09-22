@@ -16,6 +16,7 @@ import {
   parseOutreachResponse,
 } from '../utils/llm/outreachPrompt';
 import { isSafeExternalUrl } from '../utils/security';
+import { isSensitiveOrInternalUrl } from '../utils/drawerUtils';
 
 export default defineBackground(() => {
   console.log('[QuickFiller] Background Service Worker initialized.');
@@ -47,7 +48,7 @@ export default defineBackground(() => {
     chrome.commands.onCommand.addListener(async (command) => {
       if (command === 'toggle_drawer') {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab?.id && tab.url && !tab.url.startsWith('chrome://')) {
+        if (tab?.id && tab.url && !isSensitiveOrInternalUrl(tab.url)) {
           try {
             await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_DRAWER' });
           } catch {
@@ -99,25 +100,33 @@ export default defineBackground(() => {
       const tabId = message.tabId;
       const targetAction = message.type === 'INJECT_AND_TOGGLE_DRAWER' ? 'TOGGLE_DRAWER' : 'OPEN_DRAWER';
       if (tabId) {
-        chrome.tabs.sendMessage(tabId, { type: targetAction })
-          .then(() => sendResponse({ success: true }))
-          .catch(async () => {
-            try {
-              await chrome.scripting.executeScript({
-                target: { tabId },
-                func: () => {
-                  (window as any).__QUICKFILLER_AUTO_OPEN__ = true;
-                },
-              });
-              await chrome.scripting.executeScript({
-                target: { tabId },
-                files: ['content-scripts/content.js'],
-              });
-              sendResponse({ success: true, injected: true });
-            } catch (err: any) {
-              sendResponse({ success: false, error: err.message });
-            }
-          });
+        chrome.tabs.get(tabId).then((tab) => {
+          if (tab?.url && isSensitiveOrInternalUrl(tab.url)) {
+            sendResponse({ success: false, error: 'Cannot open QuickFiller on sensitive authentication page' });
+            return;
+          }
+          chrome.tabs.sendMessage(tabId, { type: targetAction })
+            .then(() => sendResponse({ success: true }))
+            .catch(async () => {
+              try {
+                await chrome.scripting.executeScript({
+                  target: { tabId },
+                  func: () => {
+                    (window as any).__QUICKFILLER_AUTO_OPEN__ = true;
+                  },
+                });
+                await chrome.scripting.executeScript({
+                  target: { tabId },
+                  files: ['content-scripts/content.js'],
+                });
+                sendResponse({ success: true, injected: true });
+              } catch (err: any) {
+                sendResponse({ success: false, error: err.message });
+              }
+            });
+        }).catch(() => {
+          sendResponse({ success: false, error: 'Tab not found' });
+        });
         return true;
       }
     }

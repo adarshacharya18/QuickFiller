@@ -65,47 +65,15 @@ import { cleanCoverLetterOutput } from '../../utils/llm/coverLetterPrompt';
 import { cleanAnswerOutput } from '../../utils/llm/prompt';
 import { initSubmissionWatcher, extractApplicationPortalUrl, stageCurrentJobMetadata } from '../../utils/submissionWatcher';
 import { isSafeWebUrl, sanitizeWebUrl } from '../../utils/security';
+import {
+  getInitialDrawerOpenState,
+  getInitialDrawerExpandedState,
+  isSensitiveOrInternalUrl,
+} from '../../utils/drawerUtils';
 
 export const Drawer: React.FC = () => {
-  const [isOpen, setIsOpen] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      if ((window as any).__QUICKFILLER_AUTO_OPEN__) {
-        (window as any).__QUICKFILLER_AUTO_OPEN__ = false;
-        try {
-          sessionStorage.setItem('quickfiller_drawer_open', 'true');
-        } catch {}
-        return true;
-      }
-      try {
-        const stored = sessionStorage.getItem('quickfiller_drawer_open');
-        if (stored === 'false') return false;
-        if (stored === 'true') return true;
-      } catch {}
-
-      // On first visit / pin click access grant, open the drawer by default
-      try {
-        sessionStorage.setItem('quickfiller_drawer_open', 'true');
-      } catch {}
-      return true;
-    }
-    return false;
-  });
-  const [isExpanded, setIsExpanded] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = sessionStorage.getItem('quickfiller_drawer_expanded');
-        if (stored === 'false') return false;
-        if (stored === 'true') return true;
-      } catch {}
-
-      // On first visit / pin click, default to expanded wide view
-      try {
-        sessionStorage.setItem('quickfiller_drawer_expanded', 'true');
-      } catch {}
-      return true;
-    }
-    return true;
-  });
+  const [isOpen, setIsOpen] = useState<boolean>(getInitialDrawerOpenState);
+  const [isExpanded, setIsExpanded] = useState<boolean>(getInitialDrawerExpandedState);
   const [storage, setStorage] = useState<StorageData | null>(null);
   const [standardFields, setStandardFields] = useState<DetectedField[]>([]);
   const [customQuestions, setCustomQuestions] = useState<DetectedField[]>([]);
@@ -1238,6 +1206,14 @@ export const Drawer: React.FC = () => {
   };
 
   const totalFields = standardFields.length + radioGroups.length + customQuestions.length;
+
+  if (typeof window !== 'undefined' && isSensitiveOrInternalUrl(window.location?.href)) {
+    return null;
+  }
+
+  if (storage && storage.extensionEnabled === false) {
+    return null;
+  }
 
   return (
     <div

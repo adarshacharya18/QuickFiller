@@ -3,12 +3,18 @@ import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import ReactDOM from 'react-dom/client';
 import { Drawer } from './Drawer';
 import { isExtensionValid } from '../../utils/storage';
+import { isSensitiveOrInternalUrl } from '../../utils/drawerUtils';
 import './styles.css';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
   cssInjectionMode: 'ui',
   async main(ctx) {
+    // Skip mounting on sensitive authentication pages (e.g. accounts.google.com) or internal URLs
+    if (typeof window !== 'undefined' && isSensitiveOrInternalUrl(window.location?.href)) {
+      return;
+    }
+
     const ui = await createShadowRootUi(ctx, {
       name: 'quickfiller-drawer',
       position: 'inline',

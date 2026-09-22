@@ -154,29 +154,78 @@ export default defineBackground(() => {
         ? chrome.runtime.getURL(`options.html?tab=${encodeURIComponent(tabName)}#${encodeURIComponent(tabName)}`)
         : chrome.runtime.getURL('options.html');
 
-      if (typeof chrome !== 'undefined' && chrome.tabs?.query) {
-        chrome.tabs.query({ url: chrome.runtime.getURL('options.html*') })
-          .then(async (tabs) => {
-            if (tabs.length > 0 && tabs[0].id) {
-              await chrome.tabs.update(tabs[0].id, { url: targetUrl, active: true });
-              if (tabs[0].windowId && chrome.windows?.update) {
-                await chrome.windows.update(tabs[0].windowId, { focused: true });
+      const openTabSafely = async () => {
+        try {
+          const globalBrowser = (globalThis as any).browser;
+          const tabsApi = globalBrowser?.tabs ? globalBrowser.tabs : chrome.tabs;
+          let existingTabId: number | undefined;
+          let existingWinId: number | undefined;
+
+          // Attempt to find already open options tab
+          if (tabsApi?.query) {
+            try {
+              const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
+                try {
+                  const res = tabsApi.query({}, (tabsList: chrome.tabs.Tab[]) => {
+                    if (chrome.runtime?.lastError) resolve([]);
+                    else resolve(tabsList || []);
+                  });
+                  if (res && typeof (res as any).then === 'function') {
+                    (res as any).then((list: chrome.tabs.Tab[]) => resolve(list || [])).catch(() => resolve([]));
+                  }
+                } catch {
+                  resolve([]);
+                }
+              });
+
+              const found = tabs.find((t) => t.url && t.url.includes('options.html'));
+              if (found?.id) {
+                existingTabId = found.id;
+                existingWinId = found.windowId;
               }
-            } else {
-              await chrome.tabs.create({ url: targetUrl });
+            } catch {
+              // Ignore query errors
             }
-            sendResponse({ success: true });
-          })
-          .catch(() => {
+          }
+
+          if (existingTabId) {
+            try {
+              await new Promise<void>((resolve) => {
+                const res = tabsApi.update(existingTabId!, { url: targetUrl, active: true }, () => resolve());
+                if (res && typeof (res as any).then === 'function') {
+                  (res as any).then(() => resolve()).catch(() => resolve());
+                }
+              });
+              if (existingWinId) {
+                const winApi = globalBrowser?.windows ? globalBrowser.windows : chrome.windows;
+                winApi?.update?.(existingWinId, { focused: true });
+              }
+              sendResponse({ success: true });
+              return;
+            } catch {
+              // If update fails, fall through to create
+            }
+          }
+
+          // Fallback: create a new tab
+          if (tabsApi?.create) {
+            tabsApi.create({ url: targetUrl }, () => {
+              sendResponse({ success: true });
+            });
+          } else {
             chrome.tabs.create({ url: targetUrl });
             sendResponse({ success: true });
-          });
-        return true;
-      } else {
-        chrome.tabs.create({ url: targetUrl });
-        sendResponse({ success: true });
-        return false;
-      }
+          }
+        } catch {
+          try {
+            chrome.tabs.create({ url: targetUrl });
+          } catch {}
+          sendResponse({ success: true });
+        }
+      };
+
+      openTabSafely();
+      return true;
     }
 
     if (message?.type === 'FETCH_EXTERNAL_JD') {

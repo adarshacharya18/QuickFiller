@@ -288,3 +288,22 @@ Records tracked job submissions:
 | [`buildCoverLetterSystemPrompt`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/llm/coverLetterPrompt.ts) | Formulates a professional cover letter writing persona incorporating past projects and experience. |
 | [`cleanCoverLetterOutput`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/llm/coverLetterPrompt.ts) | Strips markdown code blocks, conversational greetings, and closing offers from drafted cover letters. |
 | [`buildOutreachSystemPrompt`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/llm/outreachPrompt.ts) | Configures tone and formatting rules for recruiter or technical outreach pitches. |
+
+---
+
+### F. PDF Resume Parser & Link Extractor ([`src/utils/pdfParser.ts`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/pdfParser.ts))
+
+| Function / Type | Signature | Description |
+| :--- | :--- | :--- |
+| `parseResumePdf` | `(fileBuffer: ArrayBuffer): Promise<ParsedResumeResult>` | End-to-end PDF resume parser. Extracts text with coordinates, embedded annotations, contact info, sections, experience, projects, education, and skills. Automatically falls back to in-thread parsing if Gecko worker fails. |
+| `reconstructTextWithLines` | `(items: any[]): string` | Reconstructs visual line breaks from PDF text items by tracking vertical coordinate deltas (`deltaY > 3.5`) and `hasEOL` flags, preserving horizontal whitespace gaps (`gap > 2`). |
+| `matchSectionHeader` | `(line: string): string \| null` | Robust section header detector. Strips bullets, colons, pipes, and markdown formatting, matching synonyms for `experience`, `projects`, `education`, `skills`, `certificates`, and `summary`. |
+| `parseResumeSections` | `(text: string): Record<string, string[]>` | Segments continuous text into categorized arrays of line items. |
+| `parseExperience` | `(lines: string[]): ExperienceItem[]` | Extracts work experiences using broad date patterns (`MM/YYYY`, `YYYY/MM`, `Month Year`, `Till Date`, `Ongoing`, `Current`), extracts locations, and splits roles and companies cleanly. |
+| `parseProjects` | `(lines: string[], links: ExtractedLink[]): ProjectItem[]` | Extracts projects, descriptions, and technologies. Matches project titles to discovered GitHub repo links while ignoring general web URLs. |
+| `parseSkills` | `(lines: string[]): string[]` | Parses comma/bullet-separated skills, removing category prefixes and deduplicating tokens. |
+| `parseEducation` | `(lines: string[]): EducationItem[]` | Extracts institution, degree, field of study, graduation year, and GPA. |
+| `extractCandidateName` | `(fullText: string, email?: string, phone?: string): { firstName: string; lastName: string }` | Discovers candidate name preceding contact information block. |
+| `extractCity` | `(headerLines: string[], email: string, phone: string): string` | Extracts city from header lines using City, State regex patterns or international city dictionaries. |
+| `classifyResumeUrl` | `(rawUrl: string): { category: string; isProfile: boolean; username?: string }` | Classifies links into `github`, `linkedin`, `portfolio`, `project` (code repositories), or `other`. |
+

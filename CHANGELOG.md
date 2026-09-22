@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.1] - 2026-09-22
 
 ### Fixed
+- **PDF Resume Parser Overhaul & Firefox Compatibility**:
+  - **Coordinate-Aware Line Reconstruction**: Reconstructed PDF page lines by tracking vertical position deltas (`deltaY > 3.5`) and `hasEOL` flags, eliminating single-line flattening on 1-page resumes in Firefox Options page (`ProfileTab.tsx`).
+  - **Flexible Section Header Matching**: Replaced rigid exact-match lookup with regex-based boundary detection supporting colons, pipes, markdown headers, and variants (`WORK HISTORY`, `EMPLOYMENT HISTORY`, `RELEVANT EXPERIENCE`, `CAREER HISTORY`, `E X P E R I E N C E`).
+  - **Comprehensive Experience Date & Role Parsing**: Expanded date range matching to support numeric formats (`MM/YYYY`, `YYYY/MM`), `Month Year`, and modern end dates (`Till Date`, `Ongoing`, `Current`), with intelligent delimiter splitting for company and role (`|`, `-`, `,`, `at`).
+  - **Project Link Over-Population Guard**: Restricted `category: 'project'` strictly to genuine code repositories (`github.com/user/repo`, `gitlab`, `bitbucket`), categorizing company websites and articles as `'other'` to eliminate phantom project pollution.
+  - **Gecko Worker Resilience**: Added in-thread fake worker fallback to ensure smooth resume parsing even if browser CSP or module worker limits trigger in Firefox.
+- **Job Tracker Duplicate Application Prevention**:
+  - Implemented submission lock and double-commit prevention in `submissionWatcher.ts`, ensuring exactly one application is logged on rapid clicks or empty form submissions on Workday test forms.
+- **Firefox Copilot Drawer Dragging Duplication**:
+  - Implemented window-level pointer capture with singleton mount guard, preventing native HTML5 drag ghosting and duplicate window instances in Firefox.
 - **Firefox Options & Job Tracker Page Opening**:
   - Configured `options_ui.open_in_tab: true` so `chrome.runtime.openOptionsPage()` opens `options.html` directly in a new tab instead of attempting an iframe embed blocked by `frame-ancestors 'none'`.
   - Implemented cross-browser `openTabSafely` in `background.ts` supporting both `browser.*` and `chrome.*` APIs, preventing synchronous `TypeError` crashes during tab queries without the `tabs` permission.
@@ -17,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added Mozilla built-in data collection consent declarations (`data_collection_permissions: { required: ["none"] }`).
   - Adjusted minimum Gecko version to 140 (Desktop) / 142 (Android) to cleanly align with AMO validation standards.
   - Shortened extension display name to `QuickFiller - App Copilot` to conform with AMO listing constraints.
+
+### Tested & Verified
+- **Expanded Automated Test Suite**:
+  - Added 26 unit tests in `tests/pdfParser.test.ts` covering section segmentation, experience extraction, date matching, and line reconstruction.
+  - Total test suite expanded to **276 passing tests across 21 test files** with 100% pass rate.
+  - Validated with Mozilla's official `addons-linter` (0 errors, 0 notices).
 
 ## [1.0.0] - 2026-09-21
 

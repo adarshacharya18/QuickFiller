@@ -248,3 +248,47 @@ Local Ollama instances reject cross-origin requests by default. Rather than expo
 
 ### 3. Secret Redaction & Sanitization
 All API keys (Gemini, OpenAI, Anthropic) are masked and stripped from logs, error payloads, and diagnostic outputs using [`redactSecrets`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/security.ts#L79-L98).
+
+---
+
+## 6. Client-Side PDF Resume & Link Harvester Pipeline
+
+The PDF resume parser ([`src/utils/pdfParser.ts`](file:///home/adarsh/Documents/Projects/QuickFiller/src/utils/pdfParser.ts)) enables client-side biographical extraction without sending files to third-party OCR services:
+
+```mermaid
+flowchart TD
+    PDF[Raw Resume PDF File] --> Buffer[ArrayBuffer]
+    Buffer --> SecValidation["Security Validation\n(Header & Size Check)"]
+    SecValidation --> PDFJS["PDF.js Engine\n(Web Worker / In-Thread Fallback)"]
+    
+    subgraph Extraction["Page Extraction Layer"]
+        PDFJS --> TextContent["getTextContent() Items\n[str, transform(x,y), hasEOL]"]
+        PDFJS --> Annotations["getAnnotations()\nEmbedded Links /Annots"]
+    end
+
+    TextContent --> LineRecon["Coordinate-Aware Line Reconstructor\n(reconstructTextWithLines)"]
+    LineRecon --> FullText["Formatted Multiline Text"]
+    
+    FullText --> SectionParser["Section Segmentation\n(matchSectionHeader)"]
+    SectionParser --> ExpBlock["Experience Lines"]
+    SectionParser --> ProjBlock["Project Lines"]
+    SectionParser --> SkillBlock["Skill Lines"]
+    SectionParser --> EduBlock["Education Lines"]
+
+    ExpBlock --> ExpParser["Experience Parser\n(Broad Date Regex + Role/Company Separators)"]
+    ProjBlock --> ProjParser["Project Parser\n(Tech Stack Detection + Repo Link Matching)"]
+    Annotations --> LinkClassifier["Link Classifier\n(classifyResumeUrl)"]
+    LinkClassifier --> ProjParser
+
+    ExpParser --> CandidateProfile[Candidate Profile State]
+    ProjParser --> CandidateProfile
+    SkillBlock --> CandidateProfile
+    EduBlock --> CandidateProfile
+```
+
+### Architectural Highlights
+1. **Coordinate-Aware Line Reconstruction**: PDF content streams do not encode newlines. The parser tracks vertical coordinate deltas (`deltaY > 3.5`) and `hasEOL` flags to accurately reconstruct visual lines and horizontal gaps.
+2. **Flexible Section Segmentation**: Supports diverse typographical layouts (colons, markdown, pipes, spaced letters like `E X P E R I E N C E`, and synonyms like `WORK HISTORY` or `EMPLOYMENT HISTORY`).
+3. **Broad Date & Role Engine**: Handles `MM/YYYY`, `YYYY/MM`, `Month Year`, and end dates (`Till Date`, `Ongoing`, `Current`) alongside delimiter splitting (`|`, `-`, `,`, `at`).
+4. **Resilient Worker Architecture**: Resolves worker URLs via `browser.runtime.getURL` and automatically falls back to in-thread parsing if Gecko MV2 CSP limits trigger in Firefox.
+

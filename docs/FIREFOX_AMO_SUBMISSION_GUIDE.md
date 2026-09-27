@@ -2,6 +2,12 @@
 
 > Complete, step-by-step guide for publishing **QuickFiller** publicly to the official **Mozilla Firefox Add-ons Directory (AMO)** based on the official [Firefox Extension Workshop documentation](https://extensionworkshop.com/documentation/publish/submitting-an-add-on/).
 
+> [!NOTE]
+> 🎉 **Status: Officially Live & Published!**  
+> QuickFiller has been reviewed, approved, and published on Mozilla Add-ons (AMO):  
+> 👉 **[QuickFiller on Firefox Browser Add-ons](https://addons.mozilla.org/en-US/firefox/addon/quickfiller-job-copilot/)**  
+> Listing slug: `quickfiller-job-copilot`
+
 ---
 
 ## 📦 1. Pre-Packaged Submission Files
@@ -93,11 +99,11 @@ QuickFiller - App Copilot
 ```
 
 #### 2. Add-on URL
-Leave default or edit to:
+Listing slug:
 ```text
-quickfiller
+quickfiller-job-copilot
 ```
-*(Your public listing will be available at `https://addons.mozilla.org/firefox/addon/quickfiller/`)*
+*(Public listing is live at `https://addons.mozilla.org/en-US/firefox/addon/quickfiller-job-copilot/`)*
 
 #### 3. Summary (Short Description)
 ```text
@@ -195,8 +201,8 @@ Click the blue **"Submit Version"** button at the bottom of the page!
 1. **Automatic Static Analysis:** Runs immediately and validates manifest and code patterns.
 2. **Human Review Queue:** Mozilla add-on reviewers review new extensions. Because QuickFiller is open-source, provides reproduction build steps, and includes offline test pages, review is straightforward.
 3. **Approval Notification:** You will receive an email confirmation once approved (typically within 24 to 72 hours).
-4. **Live URL:** Your extension will be publicly live at:
+4. **Live URL:** The extension is officially live at:
    ```text
-   https://addons.mozilla.org/firefox/addon/quickfiller/
+   https://addons.mozilla.org/en-US/firefox/addon/quickfiller-job-copilot/
    ```
-   Any Firefox user can click **"Add to Firefox"** to install it.
+   Any Firefox user can click **"Add to Firefox"** to install it directly with automatic updates.

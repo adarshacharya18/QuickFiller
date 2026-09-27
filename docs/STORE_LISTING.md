@@ -1,6 +1,10 @@
-# Chrome Web Store Listing Copy & Submission Kit
+# Store Listing Copy & Submission Kit
 
-This file contains the exact copy, structured plain-text description, and permission justification statements ready to be pasted directly into the **Chrome Web Store Developer Console** during the submission process.
+This file contains the listing copy, plain-text descriptions, and permission justifications for browser extension store listings.
+
+## 🚀 Official Store Directory Listings
+- 🦊 **Mozilla Firefox Add-ons (AMO)**: [QuickFiller - App Copilot on Firefox](https://addons.mozilla.org/en-US/firefox/addon/quickfiller-job-copilot/) *(Officially Reviewed & Live)*
+- 🌐 **Chrome Web Store**: Developer Console submission kit below.
 
 ---
 

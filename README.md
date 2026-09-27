@@ -4,7 +4,8 @@
 > Powered by local AI (**Ollama**) or Bring-Your-Own-Key cloud LLMs (**Google Gemini, OpenAI, Anthropic Claude**).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests: 279 passing](https://img.shields.io/badge/Tests-279%20passing-brightgreen.svg)](tests/)
+[![Firefox Add-on](https://img.shields.io/badge/Firefox%20Add--on-Install%20Now-orange?logo=firefox-browser&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/quickfiller-job-copilot/)
+[![Tests: 302 passing](https://img.shields.io/badge/Tests-302%20passing-brightgreen.svg)](tests/)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](tsconfig.json)
 [![Manifest: V3 & V2](https://img.shields.io/badge/Manifest-MV3%20%7C%20MV2-purple.svg)](wxt.config.ts)
 [![Privacy: 100% Local](https://img.shields.io/badge/Privacy-100%25%20Local-success.svg)](PRIVACY_POLICY.md)
@@ -38,7 +39,7 @@ Job searching is notoriously repetitive. Candidates fill out the exact same pers
 | **Outreach Message Refiner** | Refines candidate pitches for **Recruiter** (availability, metrics) or **Technical Lead** (architecture, GitHub repos). 1-click insertion into LinkedIn messages. |
 | **Automated Job Tracker** | Intercepts submit button clicks (`data-testid`, `data-automation-id`), detects confirmation routes (`/confirm`, `/jobconfirm`, `submitted`, `thank-you`), and saves candidate portal URLs. |
 | **Tailored Cover Letter Generator** | Scrapes job titles and descriptions from active postings or linked tabs and drafts letters tailored by Tone (*Professional*, *Enthusiastic*, *Concise*) and Focus (*Technical*, *Leadership*). |
-| **Deep ATS Support** | Specialized engine for **Workday** (phone extension separation, custom dropdowns), **Darwinbox**, **CRISIL / Angular SPAs**, **Google Forms**, and **Microsoft Forms**. |
+| **Deep ATS Support** | Specialized engine for **Workday** (phone extension separation, custom dropdowns), **SAP SuccessFactors** (multi-tenant `career4` / global clusters), **Darwinbox**, **CRISIL / Angular SPAs**, **Greenhouse**, **Lever**, **Google Forms**, and **Microsoft Forms**. |
 | **Pre-Screen Legal Wizard** | One-click answers for work authorization, visa sponsorship, notice period, desired salary, relocation, and voluntary EEO disclosures. |
 | **Custom Paste Bank** | Quick-access snippet bank for frequently requested portfolio links, diversity statements, or custom disclosures. |
 
@@ -46,14 +47,42 @@ Job searching is notoriously repetitive. Candidates fill out the exact same pers
 
 ## 🛠️ Quick Start & Installation
 
-### 1. Prerequisites
+### 🦊 1. Install on Mozilla Firefox (Official Add-on Store)
+
+QuickFiller is officially reviewed, verified, and live on **Mozilla Firefox Add-ons (AMO)**!
+
+[![Install from Firefox Browser Add-ons](https://img.shields.io/badge/Firefox%20Browser%20Add--ons-Get%20QuickFiller-orange?style=for-the-badge&logo=firefox-browser&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/quickfiller-job-copilot/)
+
+👉 **[Click here to Install QuickFiller on Firefox](https://addons.mozilla.org/en-US/firefox/addon/quickfiller-job-copilot/)**
+
+1. Navigate to the [QuickFiller Firefox Add-on Listing](https://addons.mozilla.org/en-US/firefox/addon/quickfiller-job-copilot/).
+2. Click **Add to Firefox**.
+3. Confirm the browser permission prompt.
+4. Pin **QuickFiller** to your toolbar (`Extensions` $\rightarrow$ pin `QuickFiller`) and start applying!
+
+---
+
+### 2. Prerequisites
 - **Node.js** (v18+) or **Bun**
 - *(Optional for 100% local AI)*: [Ollama](https://ollama.com/) running on your workstation:
   ```bash
   ollama run llama3.2:3b
   ```
 
-### 2. Build the Extension
+### 🌐 3. Load in Google Chrome / Chromium Browsers (Developer Mode)
+1. Build the extension or download from releases:
+   ```bash
+   npm run build
+   ```
+2. Open Google Chrome and navigate to `chrome://extensions`.
+3. Toggle **Developer mode** in the top-right corner.
+4. Click **Load unpacked**.
+5. Select the `.output/chrome-mv3` directory.
+6. Pin **QuickFiller** from the Chrome extensions menu (`Extensions` $\rightarrow$ pin `QuickFiller`).
+
+---
+
+### 💻 4. Build from Source (Chromium & Firefox)
 ```bash
 # Clone repository
 git clone https://github.com/adarshacharya18/QuickFiller.git
@@ -67,20 +96,19 @@ npm run build
 
 # Or build for Firefox (Manifest V2)
 npm run build:firefox
+
+# Development mode with live reload
+npm run dev
+npm run dev:firefox
 ```
 
 The compiled extensions will output to:
 - Chromium: `.output/chrome-mv3`
 - Firefox: `.output/firefox-mv2`
 
-### 3. Load in Google Chrome / Chromium Browsers
-1. Open Google Chrome and navigate to `chrome://extensions`.
-2. Toggle **Developer mode** in the top-right corner.
-3. Click **Load unpacked**.
-4. Select the `.output/chrome-mv3` directory.
-5. Pin **QuickFiller** from the Chrome extensions menu (`Extensions` $\rightarrow$ pin `QuickFiller`).
+---
 
-### 4. Load in Mozilla Firefox
+### 🦊 5. Load Local Firefox Build (Temporary Add-on)
 1. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.
 2. Click **Load Temporary Add-on...**.
 3. Select any file inside `.output/firefox-mv2` (e.g., `manifest.json`).
@@ -146,7 +174,7 @@ QuickFiller/
 │   ├── USER_GUIDE.md              # End-user walkthrough & copilot manual
 │   ├── STORE_LISTING.md           # Chrome Web Store listing kit & permission justifications
 │   └── ideas/                     # Product specifications & design notes
-├── tests/                         # Vitest test suite (18 test files, 216 tests)
+├── tests/                         # Vitest test suite (22 test files, 302 tests)
 ├── test-form.html                 # Mock standard application form
 ├── workday-test-app.html          # Mock Workday candidate portal form
 ├── darwinbox-test-app.html        # Mock Darwinbox candidate portal form
@@ -176,7 +204,7 @@ Review our complete [Privacy Policy](PRIVACY_POLICY.md) for further details.
 
 ## 🧪 Testing & Quality Assurance
 
-QuickFiller maintains a 100% test pass rate across 18 test suites:
+QuickFiller maintains a 100% test pass rate across 22 test suites (302 tests):
 
 ```bash
 # Run complete unit test suite
@@ -197,10 +225,12 @@ npm run security:sbom
 
 ## 📚 Documentation Index
 
+- 🦊 [Firefox Add-on Store Page](https://addons.mozilla.org/en-US/firefox/addon/quickfiller-job-copilot/) - Official Mozilla listing & direct 1-click install.
 - 📘 [User Guide & Copilot Manual](docs/USER_GUIDE.md) - Step-by-step instructions for job seekers.
 - 🏗️ [Architecture & Technical Specifications](docs/ARCHITECTURE.md) - C4 diagrams, sequence workflows, and security architecture.
 - 🔌 [Internal API & Developer Reference](docs/API_REFERENCE.md) - Message protocols, types, and utility functions.
-- 📦 [Chrome Web Store Listing Kit](docs/STORE_LISTING.md) - Store description and reviewer justifications.
+- 📦 [Store Listing Copy & Kit](docs/STORE_LISTING.md) - Store description and reviewer justifications.
+- 🦊 [Firefox AMO Submission Guide](docs/FIREFOX_AMO_SUBMISSION_GUIDE.md) - Guide and packaging notes for Mozilla review.
 - 📜 [Changelog](CHANGELOG.md) - Complete release history.
 - 🔒 [Privacy Policy](PRIVACY_POLICY.md) - Privacy declarations and data usage terms.
 

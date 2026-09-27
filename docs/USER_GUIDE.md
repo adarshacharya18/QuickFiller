@@ -36,6 +36,15 @@ With QuickFiller, you can:
 
 ## 2. Installation & Setup
 
+### For Mozilla Firefox (Official Add-on Store — Recommended)
+QuickFiller is officially verified and listed on **Mozilla Add-ons (AMO)**:
+1. Visit the official listing: **[QuickFiller on Firefox Browser Add-ons](https://addons.mozilla.org/en-US/firefox/addon/quickfiller-job-copilot/)**.
+2. Click **Add to Firefox**.
+3. Confirm the browser prompt to grant permissions.
+4. Pin QuickFiller to your toolbar from the extensions puzzle menu.
+
+---
+
 ### For Google Chrome & Chromium Browsers (Brave, Edge, Arc)
 1. **Download or Clone the Repository**:
    ```bash
@@ -50,14 +59,21 @@ With QuickFiller, you can:
 5. Select the `.output/chrome-mv3` folder inside your project directory.
 6. Click the puzzle icon in Chrome's toolbar and **Pin** QuickFiller for easy access!
 
-### For Mozilla Firefox
-1. Run the Firefox build command:
-   ```bash
-   npm run build:firefox
-   ```
-2. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.
-3. Click **Load Temporary Add-on...**.
-4. Select any file inside `.output/firefox-mv2` (e.g. `manifest.json`).
+---
+
+### Developer Setup & Building from Source
+If you are developing or compiling locally:
+```bash
+# Build for Chrome (Manifest V3)
+npm run build
+
+# Build for Firefox (Manifest V2)
+npm run build:firefox
+```
+To load temporary unpacked add-on in Firefox:
+1. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.
+2. Click **Load Temporary Add-on...**.
+3. Select any file inside `.output/firefox-mv2` (e.g., `manifest.json`).
 
 ---
 

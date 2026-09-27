@@ -35,8 +35,8 @@ QuickFiller handles the following categories of data solely within your browser'
 
 ## 3. How Your Data Is Stored & Protected
 
-- **Protected Browser Storage (`chrome.storage.local`):**  
-  All profile details, resume data, screening answers, and job tracking records are stored exclusively inside Chromium's isolated extension storage sandbox (`chrome.storage.local`).
+- **Protected Browser Storage (`chrome.storage.local` / `browser.storage.local`):**  
+  All profile details, resume data, screening answers, and job tracking records are stored exclusively inside your browser's isolated extension storage sandbox (`chrome.storage.local` / `browser.storage.local`).
 - **No Third-Party Web Access:**  
   Websites you visit cannot access or inspect your QuickFiller extension storage. QuickFiller includes explicit origin boundary guards that prevent candidate data from being read or written to web document `localStorage`.
 - **Zero Remote Analytics or Telemetry:**  

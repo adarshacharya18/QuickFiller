@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.2] - 2026-09-22
 
+### Published
+- **Official Mozilla Firefox Add-ons (AMO) Release**:
+  - QuickFiller is officially approved, signed, and published on Mozilla's Add-ons directory: [QuickFiller on Firefox Browser Add-ons](https://addons.mozilla.org/en-US/firefox/addon/quickfiller-job-copilot/).
+  - Supports automatic updates, verified package integrity, and 1-click install for Firefox desktop users.
+
+### Added
+- **SAP SuccessFactors ATS Support (`career4.successfactors.com` & Global Clusters)**:
+  - Multi-tenant identifier extraction from URL parameters (`?company=...`), header logos, and cleaned document titles.
+  - Platform branding suffix sanitization (`- SAP SuccessFactors`) to prevent platform titles from leaking into job metadata.
+  - Canonical job posting URL derivation: converts application flow URLs (`career_ns=job_application` or `/jobapplication`) into canonical public job listings (`career_ns=job_listing` or `/jobreqentry`).
+  - Native submission trigger detection for SAP UI5 buttons (`.sapMBtn`, `.sapUiBtn`).
+  - Automatic candidate portal link extraction for `navBarLevel=MY_APPLICATIONS` and `navBarLevel=MY_PROFILE`.
+  - Comprehensive field classification for `data-field-id` and `data-sap-ui` attributes.
+
 ### Fixed
 - **Firefox LLM Drafting & Port Closure Fix**:
   - **Cross-Browser Sender Verification**: Resolved false message rejections in `background.ts` by recognizing `sender.tab` (content scripts), Firefox Gecko IDs (`browser.runtime.id`), and extension protocol origins (`moz-extension://` and `chrome-extension://`). Prevents premature channel closure errors (`"The message port closed before a response was received."`).

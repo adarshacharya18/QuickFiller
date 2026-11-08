@@ -5,13 +5,14 @@ import { callGemini, callOpenAI, callAnthropic } from './cloud';
 export async function generateAnswer(
   settings: LLMSettings,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  options?: { maxTokens?: number }
 ): Promise<string> {
   switch (settings.provider) {
     case 'ollama': {
       const host = settings.ollama.host || 'http://localhost:11434';
       const model = settings.ollama.model || 'llama3.2:3b';
-      return await callOllama(host, model, systemPrompt, userPrompt);
+      return await callOllama(host, model, systemPrompt, userPrompt, options);
     }
     case 'gemini': {
       if (!settings.gemini.apiKey) {
@@ -21,7 +22,8 @@ export async function generateAnswer(
         settings.gemini.apiKey,
         settings.gemini.model,
         systemPrompt,
-        userPrompt
+        userPrompt,
+        options
       );
     }
     case 'openai': {
@@ -32,7 +34,8 @@ export async function generateAnswer(
         settings.openai.apiKey,
         settings.openai.model,
         systemPrompt,
-        userPrompt
+        userPrompt,
+        options
       );
     }
     case 'anthropic': {
@@ -43,7 +46,8 @@ export async function generateAnswer(
         settings.anthropic.apiKey,
         settings.anthropic.model,
         systemPrompt,
-        userPrompt
+        userPrompt,
+        options
       );
     }
     default:

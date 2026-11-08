@@ -6,7 +6,7 @@ import {
   fetchAnthropicModels,
   fetchProviderModels,
 } from '../src/utils/llm/discovery';
-import { callOpenAI, callAnthropic } from '../src/utils/llm/cloud';
+import { callGemini, callOpenAI, callAnthropic } from '../src/utils/llm/cloud';
 
 describe('LLM Discovery & Modern Models Catalog', () => {
   const originalFetch = globalThis.fetch;
@@ -301,6 +301,125 @@ describe('LLM Discovery & Modern Models Catalog', () => {
       expect(sentHeaders).toBeDefined();
       expect(sentHeaders['anthropic-dangerous-direct-browser-access']).toBe('true');
       expect(sentHeaders['x-api-key']).toBe('sk-ant-test');
+    });
+  });
+
+  describe('Google Gemini Fast Execution & Model Sanitization (callGemini)', () => {
+    it('strips accidental models/ prefix and encodes clean model path in URL', async () => {
+      let requestedUrl = '';
+      let sentBody: any = null;
+
+      globalThis.fetch = vi.fn().mockImplementation(async (url, options) => {
+        requestedUrl = url.toString();
+        sentBody = JSON.parse(options.body);
+        return {
+          ok: true,
+          json: async () => ({
+            candidates: [{ content: { parts: [{ text: 'Connection successful!' }] } }],
+          }),
+        };
+      });
+
+      await callGemini('AIzaTestKey', 'models/gemini-2.0-flash', 'System prompt', 'User prompt', {
+        maxTokens: 16,
+      });
+
+      expect(requestedUrl).toBe(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+      );
+      expect(sentBody.generationConfig.maxOutputTokens).toBe(16);
+    });
+
+    it('sets thinkingBudget: 0 for Gemini 2.5 models during quick connection tests', async () => {
+      let sentBody: any = null;
+
+      globalThis.fetch = vi.fn().mockImplementation(async (_url, options) => {
+        sentBody = JSON.parse(options.body);
+        return {
+          ok: true,
+          json: async () => ({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    { thought: true, text: 'Thinking about testing connection...' },
+                    { text: 'Connection successful!' },
+                  ],
+                },
+              },
+            ],
+          }),
+        };
+      });
+
+      const result = await callGemini(
+        'AIzaTestKey',
+        'gemini-2.5-flash',
+        'System prompt',
+        'User prompt',
+        { maxTokens: 100 }
+      );
+
+      expect(sentBody.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 });
+      expect(result).toBe('Connection successful!');
+    });
+
+    it('extracts non-thought text part when model returns reasoning/thought parts', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  { thought: true, text: 'Internal reasoning...' },
+                  { text: 'Final Answer' },
+                ],
+              },
+            },
+          ],
+        }),
+      } as any);
+
+      const answer = await callGemini('AIzaTestKey', 'gemini-2.5-pro', 'sys', 'usr');
+      expect(answer).toBe('Final Answer');
+    });
+
+    it('handles and redacts secrets in detailed JSON error responses from Gemini', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () =>
+          JSON.stringify({
+            error: {
+              code: 404,
+              message: 'models/custom-model-xyz is not found for API version v1beta',
+              status: 'NOT_FOUND',
+            },
+          }),
+      } as any);
+
+      await expect(
+        callGemini('AIzaSecretKey123', 'custom-model-xyz', 'sys', 'usr')
+      ).rejects.toThrow('Gemini error (404): models/custom-model-xyz is not found');
+    });
+
+    it('uses 1000 max tokens by default when maxTokens option is not specified', async () => {
+      let sentBody: any = null;
+
+      globalThis.fetch = vi.fn().mockImplementation(async (_url, options) => {
+        sentBody = JSON.parse(options.body);
+        return {
+          ok: true,
+          json: async () => ({
+            candidates: [{ content: { parts: [{ text: 'Standard reply' }] } }],
+          }),
+        };
+      });
+
+      await callGemini('AIzaTestKey', 'gemini-1.5-flash', 'System prompt', 'User prompt');
+
+      expect(sentBody.generationConfig.maxOutputTokens).toBe(1000);
     });
   });
 });

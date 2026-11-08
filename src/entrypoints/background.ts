@@ -477,6 +477,30 @@ export default defineBackground(() => {
       return true; // Keep message channel open for async response
     }
 
+    if (message?.type === 'TEST_CONNECTION') {
+      const { llmSettings } = message;
+
+      (async () => {
+        try {
+          const storage = await getStorageData();
+          const activeSettings = llmSettings || storage.llmSettings;
+          if (activeSettings?.provider === 'ollama') {
+            await setupOllamaRules(activeSettings.ollama?.host);
+          }
+
+          const systemPrompt = 'You are an AI connection tester. Respond ONLY with "Connection successful!"';
+          const userPrompt = 'Test connection.';
+          const rawAnswer = await generateAnswer(activeSettings, systemPrompt, userPrompt, { maxTokens: 100 });
+          const answer = cleanAnswerOutput(rawAnswer) || 'Connection successful!';
+          sendResponse({ success: true, answer });
+        } catch (err: any) {
+          console.error('[QuickFiller] Test connection error:', err);
+          sendResponse({ success: false, error: err?.message || 'Connection test failed' });
+        }
+      })();
+      return true;
+    }
+
     if (message?.type === 'GENERATE_ANSWER') {
       const {
         questionPrompt,
@@ -487,47 +511,63 @@ export default defineBackground(() => {
         llmSettings,
       } = message;
 
-      getStorageData()
-        .then(async (storage) => {
+      (async () => {
+        try {
+          const storage = await getStorageData();
           const activeSettings = llmSettings || storage.llmSettings;
           if (activeSettings?.provider === 'ollama') {
             await setupOllamaRules(activeSettings.ollama?.host);
           }
 
-          const systemPrompt = buildSystemPrompt(
-            storage.profile,
-            storage.wizardAnswers,
-            storage.questionBank,
-            jobContext,
-            storage.customPasteBank || []
+          const isConnectionTest =
+            customInstructions === 'Respond only with connection test confirmation.' ||
+            questionPrompt === 'Say "Connection successful!" in 3 words.';
+
+          const systemPrompt = isConnectionTest
+            ? 'You are an AI connection tester. Respond ONLY with "Connection successful!"'
+            : buildSystemPrompt(
+                storage.profile,
+                storage.wizardAnswers,
+                storage.questionBank,
+                jobContext,
+                storage.customPasteBank || []
+              );
+
+          let userPrompt = isConnectionTest
+            ? 'Test connection.'
+            : `Job Application Question:\n<screening_question>\n${questionPrompt}\n</screening_question>`;
+
+          if (!isConnectionTest) {
+            if (placeholder) {
+              userPrompt += `\nExpected Format / Example: "${placeholder}"`;
+            }
+
+            if (isTextarea === false) {
+              userPrompt += `\nField Input Type: Single-line input field. Output MUST be short, concise, and directly match the placeholder format (1 short line, maximum 10-15 words, NO paragraphs or letters).`;
+            } else if (isTextarea === true) {
+              userPrompt += `\nField Input Type: Multi-line textarea. Provide a well-structured, detailed 1-3 paragraph answer.`;
+            }
+
+            if (customInstructions) {
+              userPrompt += `\n\nSpecific Instruction: ${customInstructions}`;
+            }
+
+            userPrompt += `\n\nCRITICAL: Output ONLY the direct answer text. Do NOT wrap your answer in XML tags like <screening_answer> or </screening_answer>. Do NOT use markdown code blocks.`;
+          }
+
+          const rawAnswer = await generateAnswer(
+            activeSettings,
+            systemPrompt,
+            userPrompt,
+            isConnectionTest ? { maxTokens: 100 } : undefined
           );
-
-          let userPrompt = `Job Application Question:\n<screening_question>\n${questionPrompt}\n</screening_question>`;
-
-          if (placeholder) {
-            userPrompt += `\nExpected Format / Example: "${placeholder}"`;
-          }
-
-          if (isTextarea === false) {
-            userPrompt += `\nField Input Type: Single-line input field. Output MUST be short, concise, and directly match the placeholder format (1 short line, maximum 10-15 words, NO paragraphs or letters).`;
-          } else if (isTextarea === true) {
-            userPrompt += `\nField Input Type: Multi-line textarea. Provide a well-structured, detailed 1-3 paragraph answer.`;
-          }
-
-          if (customInstructions) {
-            userPrompt += `\n\nSpecific Instruction: ${customInstructions}`;
-          }
-
-          userPrompt += `\n\nCRITICAL: Output ONLY the direct answer text. Do NOT wrap your answer in XML tags like <screening_answer> or </screening_answer>. Do NOT use markdown code blocks.`;
-
-          const rawAnswer = await generateAnswer(activeSettings, systemPrompt, userPrompt);
-          const answer = cleanAnswerOutput(rawAnswer);
+          const answer = cleanAnswerOutput(rawAnswer) || (isConnectionTest ? 'Connection successful!' : '');
           sendResponse({ success: true, answer });
-        })
-        .catch((err) => {
+        } catch (err: any) {
           console.error('[QuickFiller] Generation error:', err);
-          sendResponse({ success: false, error: err.message });
-        });
+          sendResponse({ success: false, error: err?.message || 'Failed to generate answer' });
+        }
+      })();
       return true;
     }
 

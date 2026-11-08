@@ -167,5 +167,39 @@ describe('Storage & Profile Data Engine', () => {
         delete (globalThis as any).browser;
       }
     });
+
+    it('persists and restores custom added models for each LLM provider across reloads', async () => {
+      const initial = await getStorageData();
+      expect(initial.llmSettings.customModels).toBeDefined();
+      expect(initial.llmSettings.customModels?.ollama).toEqual([]);
+
+      const updatedLLMSettings = {
+        ...initial.llmSettings,
+        ollama: {
+          ...initial.llmSettings.ollama,
+          model: 'deepseek-r1:14b',
+        },
+        openai: {
+          ...initial.llmSettings.openai,
+          model: 'ft:gpt-4o-mini:my-org::custom',
+        },
+        customModels: {
+          ollama: ['deepseek-r1:14b', 'custom-qwen:32b'],
+          gemini: ['gemini-2.5-flash-preview'],
+          openai: ['ft:gpt-4o-mini:my-org::custom'],
+          anthropic: ['claude-3-7-sonnet-latest'],
+        },
+      };
+
+      await updateStorageData({ llmSettings: updatedLLMSettings });
+
+      const reloaded = await getStorageData();
+      expect(reloaded.llmSettings.ollama.model).toBe('deepseek-r1:14b');
+      expect(reloaded.llmSettings.openai.model).toBe('ft:gpt-4o-mini:my-org::custom');
+      expect(reloaded.llmSettings.customModels?.ollama).toEqual(['deepseek-r1:14b', 'custom-qwen:32b']);
+      expect(reloaded.llmSettings.customModels?.gemini).toEqual(['gemini-2.5-flash-preview']);
+      expect(reloaded.llmSettings.customModels?.openai).toEqual(['ft:gpt-4o-mini:my-org::custom']);
+      expect(reloaded.llmSettings.customModels?.anthropic).toEqual(['claude-3-7-sonnet-latest']);
+    });
   });
 });

@@ -16,6 +16,7 @@ export interface LLMSettings {
   gemini: CloudLLMConfig;
   openai: CloudLLMConfig;
   anthropic: CloudLLMConfig;
+  customModels?: Record<LLMProvider, string[]>;
 }
 
 export const defaultLLMSettings: LLMSettings = {
@@ -35,5 +36,11 @@ export const defaultLLMSettings: LLMSettings = {
   anthropic: {
     apiKey: '',
     model: 'claude-3-5-haiku-20241022',
+  },
+  customModels: {
+    ollama: [],
+    gemini: [],
+    openai: [],
+    anthropic: [],
   },
 };

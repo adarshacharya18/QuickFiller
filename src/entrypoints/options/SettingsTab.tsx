@@ -39,15 +39,27 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
     openai: null,
     anthropic: null,
   });
-  const [customModelMode, setCustomModelMode] = useState<Record<LLMProvider, boolean>>({
+  const [addingCustomModel, setAddingCustomModel] = useState<Record<LLMProvider, boolean>>({
     ollama: false,
     gemini: false,
     openai: false,
     anthropic: false,
   });
+  const [customInputText, setCustomInputText] = useState<Record<LLMProvider, string>>({
+    ollama: '',
+    gemini: '',
+    openai: '',
+    anthropic: '',
+  });
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
+
+  useEffect(() => {
+    if (settings) {
+      setFormData(settings);
+    }
+  }, [settings]);
 
   const getProviderModel = (prov: LLMProvider): string => {
     return formData[prov]?.model || '';
@@ -58,6 +70,65 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       ...prev,
       [prov]: { ...prev[prov], model: modelVal },
     }));
+  };
+
+  const handleAddCustomModel = (provider: LLMProvider, inputName: string) => {
+    const trimmed = inputName.trim();
+    if (!trimmed) return;
+
+    const currentCustom = formData.customModels?.[provider] || [];
+    const updatedCustomList = Array.from(new Set([...currentCustom, trimmed]));
+
+    const updatedSettings: LLMSettings = {
+      ...formData,
+      [provider]: {
+        ...formData[provider],
+        model: trimmed,
+      },
+      customModels: {
+        ollama: formData.customModels?.ollama || [],
+        gemini: formData.customModels?.gemini || [],
+        openai: formData.customModels?.openai || [],
+        anthropic: formData.customModels?.anthropic || [],
+        [provider]: updatedCustomList,
+      },
+    };
+
+    setFormData(updatedSettings);
+    onSaveSettings(updatedSettings);
+
+    setAddingCustomModel((prev) => ({ ...prev, [provider]: false }));
+    setCustomInputText((prev) => ({ ...prev, [provider]: '' }));
+  };
+
+  const handleRemoveCustomModel = (provider: LLMProvider, modelToRemove: string) => {
+    const currentCustom = formData.customModels?.[provider] || [];
+    const updatedCustomList = currentCustom.filter((m) => m !== modelToRemove);
+
+    let nextModel = getProviderModel(provider);
+    if (nextModel === modelToRemove) {
+      const curated = CURATED_MODELS[provider] || [];
+      const discovered = discoveredModels[provider] || [];
+      nextModel = updatedCustomList[0] || discovered[0] || curated[0]?.id || '';
+    }
+
+    const updatedSettings: LLMSettings = {
+      ...formData,
+      [provider]: {
+        ...formData[provider],
+        model: nextModel,
+      },
+      customModels: {
+        ollama: formData.customModels?.ollama || [],
+        gemini: formData.customModels?.gemini || [],
+        openai: formData.customModels?.openai || [],
+        anthropic: formData.customModels?.anthropic || [],
+        [provider]: updatedCustomList,
+      },
+    };
+
+    setFormData(updatedSettings);
+    onSaveSettings(updatedSettings);
   };
 
   const fetchModelsForProvider = (provider: LLMProvider) => {
@@ -102,32 +173,92 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   const testConnection = () => {
     setTestingConnection(true);
     setTestResult(null);
-    chrome.runtime.sendMessage(
-      {
-        type: 'GENERATE_ANSWER',
-        questionPrompt: 'Say "Connection successful!" in 3 words.',
-        customInstructions: 'Respond only with connection test confirmation.',
-        llmSettings: formData,
-      },
-      (res) => {
-        setTestingConnection(false);
-        if (res?.success) {
-          setTestResult({
-            success: true,
-            message: `Success! Response: "${res.answer}"`,
-          });
-          // Auto-discover live models from provider API upon successful connection if empty
-          if (discoveredModels[formData.provider].length === 0) {
-            fetchModelsForProvider(formData.provider);
-          }
-        } else {
-          setTestResult({
-            success: false,
-            message: `Error: ${res?.error || 'Could not connect to model'}`,
-          });
-        }
+
+    const handleConnectionSuccess = () => {
+      setTestingConnection(false);
+      const activeProv = formData.provider;
+      const activeModel = getProviderModel(activeProv);
+      const curatedIds = new Set((CURATED_MODELS[activeProv] || []).map((m) => m.id));
+      const discovered = discoveredModels[activeProv] || [];
+      const currentCustom = formData.customModels?.[activeProv] || [];
+
+      // If the verified working model is custom, permanently add it to customModels
+      let updatedSettings = formData;
+      if (
+        activeModel &&
+        !curatedIds.has(activeModel) &&
+        !discovered.includes(activeModel) &&
+        !currentCustom.includes(activeModel)
+      ) {
+        updatedSettings = {
+          ...formData,
+          customModels: {
+            ollama: formData.customModels?.ollama || [],
+            gemini: formData.customModels?.gemini || [],
+            openai: formData.customModels?.openai || [],
+            anthropic: formData.customModels?.anthropic || [],
+            [activeProv]: [...currentCustom, activeModel],
+          },
+        };
+        setFormData(updatedSettings);
       }
-    );
+
+      // Permanently save settings so reload preserves tested connection & model
+      onSaveSettings(updatedSettings);
+
+      setTestResult({
+        success: true,
+        message: `Success! Connected to ${activeModel}. Settings saved permanently.`,
+      });
+    };
+
+    const handleConnectionFailure = (errorMsg?: string) => {
+      setTestingConnection(false);
+      const runtimeError = chrome.runtime?.lastError?.message;
+      setTestResult({
+        success: false,
+        message: `Error: ${errorMsg || runtimeError || 'Could not connect to model'}`,
+      });
+    };
+
+    try {
+      chrome.runtime.sendMessage(
+        {
+          type: 'TEST_CONNECTION',
+          llmSettings: formData,
+        },
+        (res) => {
+          if (res !== undefined) {
+            if (res.success) {
+              handleConnectionSuccess();
+            } else {
+              handleConnectionFailure(res.error);
+            }
+          } else {
+            // Port closed or TEST_CONNECTION not recognized by an older active background worker
+            // Seamlessly fall back to GENERATE_ANSWER
+            console.warn('[QuickFiller] TEST_CONNECTION returned undefined, falling back to GENERATE_ANSWER');
+            chrome.runtime.sendMessage(
+              {
+                type: 'GENERATE_ANSWER',
+                questionPrompt: 'Say "Connection successful!" in 3 words.',
+                customInstructions: 'Respond only with connection test confirmation.',
+                llmSettings: formData,
+              },
+              (fallbackRes) => {
+                if (fallbackRes?.success) {
+                  handleConnectionSuccess();
+                } else {
+                  handleConnectionFailure(fallbackRes?.error);
+                }
+              }
+            );
+          }
+        }
+      );
+    } catch (e: any) {
+      handleConnectionFailure(e?.message);
+    }
   };
 
   const renderModelSelector = (provider: LLMProvider) => {
@@ -135,21 +266,37 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
     const curated = CURATED_MODELS[provider] || [];
     const discovered = discoveredModels[provider] || [];
     const isLoading = loadingProviderModels[provider];
-    const isCustom = customModelMode[provider];
     const fetchErr = modelFetchError[provider];
+    const isAdding = addingCustomModel[provider];
 
     const curatedIds = new Set(curated.map((m) => m.id));
-    const extraDiscovered = discovered.filter((id) => !curatedIds.has(id));
-    const isKnown = curatedIds.has(currentModel) || discovered.includes(currentModel);
+    const savedCustomModels = Array.from(
+      new Set([
+        ...(formData.customModels?.[provider] || []),
+        // If currentModel is neither curated nor discovered, treat as custom model
+        ...(currentModel && !curatedIds.has(currentModel) && !discovered.includes(currentModel)
+          ? [currentModel]
+          : []),
+      ])
+    );
+
+    const extraDiscovered = discovered.filter(
+      (id) => !curatedIds.has(id) && !savedCustomModels.includes(id)
+    );
 
     return (
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <label className="block text-xs font-medium text-slate-700">Model Name</label>
             {discovered.length > 0 && (
               <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">
                 Live ({discovered.length})
+              </span>
+            )}
+            {savedCustomModels.length > 0 && (
+              <span className="text-[10px] bg-sky-50 text-sky-700 border border-sky-200 px-1.5 py-0.5 rounded font-medium">
+                Custom ({savedCustomModels.length})
               </span>
             )}
           </div>
@@ -157,20 +304,20 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             <button
               type="button"
               onClick={() =>
-                setCustomModelMode((prev) => ({
+                setAddingCustomModel((prev) => ({
                   ...prev,
                   [provider]: !prev[provider],
                 }))
               }
-              className="text-[11px] text-slate-500 hover:text-slate-800 transition underline underline-offset-2"
+              className="text-[11px] text-sky-600 hover:text-sky-700 font-medium transition cursor-pointer"
             >
-              {isCustom ? 'Pick from list' : 'Custom model'}
+              {isAdding ? 'Close' : '+ Add custom model'}
             </button>
             <button
               type="button"
               onClick={() => fetchModelsForProvider(provider)}
               disabled={isLoading}
-              className="flex items-center gap-1 text-[11px] text-sky-600 hover:text-sky-700 disabled:opacity-50 transition"
+              className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-700 disabled:opacity-50 transition cursor-pointer"
               title="Fetch available models from API"
             >
               <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
@@ -179,33 +326,61 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
         </div>
 
-        {isCustom ? (
-          <div>
-            <input
-              type="text"
-              value={currentModel}
-              onChange={(e) => setProviderModel(provider, e.target.value)}
-              placeholder={
-                provider === 'gemini'
-                  ? 'gemini-2.5-flash'
-                  : provider === 'openai'
-                  ? 'o3-mini or ft:gpt-4o-mini:...'
-                  : provider === 'anthropic'
-                  ? 'claude-3-7-sonnet-20250219'
-                  : 'llama3.2:3b'
-              }
-              className="w-full text-xs font-mono p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
-            />
-            <p className="text-[10px] text-slate-500 mt-1">
-              Custom mode active. Enter any model ID, fine-tuned model, or experimental tag.
+        {isAdding ? (
+          <div className="p-2.5 bg-sky-50/70 border border-sky-200 rounded-lg space-y-2 animate-slide-down">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-sky-950">Add Permanent Custom Model</span>
+              <button
+                type="button"
+                onClick={() => setAddingCustomModel((prev) => ({ ...prev, [provider]: false }))}
+                className="text-[10px] text-slate-500 hover:text-slate-800"
+              >
+                Cancel
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={customInputText[provider] || ''}
+                onChange={(e) =>
+                  setCustomInputText((prev) => ({ ...prev, [provider]: e.target.value }))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddCustomModel(provider, customInputText[provider] || '');
+                  }
+                }}
+                placeholder={
+                  provider === 'gemini'
+                    ? 'e.g. gemini-2.5-flash'
+                    : provider === 'openai'
+                    ? 'e.g. o3-mini or ft:gpt-4o:...'
+                    : provider === 'anthropic'
+                    ? 'e.g. claude-3-7-sonnet-20250219'
+                    : 'e.g. deepseek-r1:14b or custom-llama:latest'
+                }
+                className="w-full text-xs font-mono p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-sky-500"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => handleAddCustomModel(provider, customInputText[provider] || '')}
+                className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-md text-xs font-medium whitespace-nowrap transition active:scale-95 cursor-pointer"
+              >
+                Add &amp; Save
+              </button>
+            </div>
+            <p className="text-[10px] text-sky-700">
+              Permanently saved to storage and available across reloads and browser sessions.
             </p>
           </div>
         ) : (
           <select
             value={currentModel}
             onChange={(e) => {
-              if (e.target.value === '__custom__') {
-                setCustomModelMode((prev) => ({ ...prev, [provider]: true }));
+              if (e.target.value === '__add_custom__') {
+                setAddingCustomModel((prev) => ({ ...prev, [provider]: true }));
               } else {
                 setProviderModel(provider, e.target.value);
               }
@@ -220,6 +395,16 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               ))}
             </optgroup>
 
+            {savedCustomModels.length > 0 && (
+              <optgroup label="My Custom Models (Permanent)">
+                {savedCustomModels.map((m) => (
+                  <option key={m} value={m}>
+                    {m} (Custom)
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
             {extraDiscovered.length > 0 && (
               <optgroup label={provider === 'ollama' ? 'Local Ollama Library' : 'Discovered from Account API'}>
                 {extraDiscovered.map((id) => (
@@ -230,16 +415,44 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               </optgroup>
             )}
 
-            {!isKnown && currentModel && (
-              <optgroup label="Current Configuration">
-                <option value={currentModel}>{currentModel} (Custom)</option>
-              </optgroup>
-            )}
-
-            <optgroup label="Custom">
-              <option value="__custom__">+ Enter custom model name...</option>
+            <optgroup label="Custom Models">
+              <option value="__add_custom__">+ Add permanent custom model...</option>
             </optgroup>
           </select>
+        )}
+
+        {/* Saved Custom Models quick-select and delete chips */}
+        {savedCustomModels.length > 0 && !isAdding && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            <span className="text-[10px] text-slate-400 font-medium">Custom models:</span>
+            {savedCustomModels.map((m) => (
+              <span
+                key={m}
+                className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border font-mono transition ${
+                  currentModel === m
+                    ? 'bg-sky-50 border-sky-300 text-sky-800 font-semibold'
+                    : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200/60'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setProviderModel(provider, m)}
+                  className="hover:underline text-left truncate max-w-[160px] cursor-pointer"
+                  title={`Select ${m}`}
+                >
+                  {m}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveCustomModel(provider, m)}
+                  className="text-slate-400 hover:text-rose-600 transition ml-0.5 text-xs font-bold leading-none cursor-pointer"
+                  title={`Remove ${m} from permanent custom models`}
+                >
+                  &times;
+                </button>
+              </span>
+            ))}
+          </div>
         )}
 
         {fetchErr && (

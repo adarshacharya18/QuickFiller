@@ -296,7 +296,30 @@ export function getStorageData(): Promise<StorageData> {
             wizardAnswers: result?.wizardAnswers || defaultStorageData.wizardAnswers,
             questionBank: result?.questionBank || defaultStorageData.questionBank,
             customPasteBank: result?.customPasteBank || defaultStorageData.customPasteBank,
-            llmSettings: result?.llmSettings || defaultStorageData.llmSettings,
+            llmSettings: result?.llmSettings
+              ? {
+                  ...defaultStorageData.llmSettings,
+                  ...result.llmSettings,
+                  ollama: { ...defaultStorageData.llmSettings.ollama, ...(result.llmSettings.ollama || {}) },
+                  gemini: { ...defaultStorageData.llmSettings.gemini, ...(result.llmSettings.gemini || {}) },
+                  openai: { ...defaultStorageData.llmSettings.openai, ...(result.llmSettings.openai || {}) },
+                  anthropic: { ...defaultStorageData.llmSettings.anthropic, ...(result.llmSettings.anthropic || {}) },
+                  customModels: {
+                    ollama: Array.isArray(result.llmSettings.customModels?.ollama)
+                      ? result.llmSettings.customModels.ollama
+                      : [],
+                    gemini: Array.isArray(result.llmSettings.customModels?.gemini)
+                      ? result.llmSettings.customModels.gemini
+                      : [],
+                    openai: Array.isArray(result.llmSettings.customModels?.openai)
+                      ? result.llmSettings.customModels.openai
+                      : [],
+                    anthropic: Array.isArray(result.llmSettings.customModels?.anthropic)
+                      ? result.llmSettings.customModels.anthropic
+                      : [],
+                  },
+                }
+              : defaultStorageData.llmSettings,
             applications: result?.applications || defaultStorageData.applications,
             jobTrackerEnabled: result?.jobTrackerEnabled ?? defaultStorageData.jobTrackerEnabled,
             autoTrackOnSubmit: result?.autoTrackOnSubmit ?? defaultStorageData.autoTrackOnSubmit,

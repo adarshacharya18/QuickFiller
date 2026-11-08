@@ -27,24 +27,31 @@ export async function callOllama(
   host: string,
   model: string,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  options?: { maxTokens?: number }
 ): Promise<string> {
   const url = `${host.replace(/\/+$/, '')}/api/chat`;
   let response: Response;
+  const requestBody: Record<string, any> = {
+    model: model || 'llama3.2:3b',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    stream: false,
+  };
+  if (options?.maxTokens) {
+    requestBody.options = { num_predict: options.maxTokens };
+  }
+
   try {
     response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: model || 'llama3.2:3b',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        stream: false,
-      }),
+      signal: AbortSignal.timeout(20000),
+      body: JSON.stringify(requestBody),
     });
   } catch (err: any) {
     if (err instanceof TypeError || err?.message?.includes('Failed to fetch')) {

@@ -66,6 +66,23 @@ export async function callOpenAI(
   const modelName = model || 'gpt-4o-mini';
   const url = 'https://api.openai.com/v1/chat/completions';
 
+  const isReasoning = /^o[134](-|$)/i.test(modelName);
+  const requestBody: Record<string, any> = {
+    model: modelName,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+  };
+
+  if (isReasoning) {
+    // OpenAI reasoning models (o1, o3-mini) do not accept temperature and require max_completion_tokens
+    requestBody.max_completion_tokens = 1000;
+  } else {
+    requestBody.temperature = 0.4;
+    requestBody.max_tokens = 1000;
+  }
+
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -73,15 +90,7 @@ export async function callOpenAI(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${cleanKey}`,
       },
-      body: JSON.stringify({
-        model: modelName,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.4,
-        max_tokens: 1000,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -118,6 +127,7 @@ export async function callAnthropic(
         'Content-Type': 'application/json',
         'x-api-key': cleanKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
         'dangerously-allow-browser': 'true',
       },
       body: JSON.stringify({

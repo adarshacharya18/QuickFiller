@@ -1,6 +1,7 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { getStorageData } from '../utils/storage';
 import { fetchOllamaModels } from '../utils/llm/ollama';
+import { fetchProviderModels } from '../utils/llm/discovery';
 import { generateAnswer } from '../utils/llm';
 import { buildSystemPrompt, cleanAnswerOutput } from '../utils/llm/prompt';
 import { setupOllamaRules, setupOllamaDNRRules } from '../utils/rules';
@@ -455,6 +456,24 @@ export default defineBackground(() => {
       })
         .then((models) => sendResponse({ success: true, models }))
         .catch((err) => sendResponse({ success: false, error: err.message }));
+      return true; // Keep message channel open for async response
+    }
+
+    if (message?.type === 'FETCH_PROVIDER_MODELS' || message?.type === 'FETCH_MODELS') {
+      const { provider, host, apiKey } = message;
+      (async () => {
+        try {
+          if (provider === 'ollama') {
+            const targetHost = host || 'http://localhost:11434';
+            await setupOllamaRules(targetHost);
+          }
+          const models = await fetchProviderModels(provider, { host, apiKey });
+          sendResponse({ success: true, models });
+        } catch (err: any) {
+          console.error(`[QuickFiller] Fetch models error for ${provider}:`, err);
+          sendResponse({ success: false, error: err?.message || 'Failed to fetch models' });
+        }
+      })();
       return true; // Keep message channel open for async response
     }
 

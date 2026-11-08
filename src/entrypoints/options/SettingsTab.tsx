@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Cpu, Key, RefreshCw, CheckCircle, AlertCircle, Eye, EyeOff, ShieldCheck, Briefcase } from 'lucide-react';
 import { LLMSettings, LLMProvider } from '../../types/llm';
+import { CURATED_MODELS } from '../../utils/llm/discovery';
 
 interface SettingsTabProps {
   settings: LLMSettings;
@@ -20,30 +21,82 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   onToggleAutoTrackOnSubmit,
 }) => {
   const [formData, setFormData] = useState<LLMSettings>(settings);
-  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
-  const [loadingModels, setLoadingModels] = useState(false);
+  const [discoveredModels, setDiscoveredModels] = useState<Record<LLMProvider, string[]>>({
+    ollama: [],
+    gemini: [],
+    openai: [],
+    anthropic: [],
+  });
+  const [loadingProviderModels, setLoadingProviderModels] = useState<Record<LLMProvider, boolean>>({
+    ollama: false,
+    gemini: false,
+    openai: false,
+    anthropic: false,
+  });
+  const [modelFetchError, setModelFetchError] = useState<Record<LLMProvider, string | null>>({
+    ollama: null,
+    gemini: null,
+    openai: null,
+    anthropic: null,
+  });
+  const [customModelMode, setCustomModelMode] = useState<Record<LLMProvider, boolean>>({
+    ollama: false,
+    gemini: false,
+    openai: false,
+    anthropic: false,
+  });
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
 
-  const fetchModels = (host: string) => {
-    setLoadingModels(true);
-    chrome.runtime.sendMessage({ type: 'CHECK_OLLAMA', host }, (res) => {
-      setLoadingModels(false);
-      if (res?.success && Array.isArray(res.models)) {
-        setOllamaModels(res.models);
-        if (res.models.length > 0 && !res.models.includes(formData.ollama.model)) {
-          setFormData((prev) => ({
-            ...prev,
-            ollama: { ...prev.ollama, model: res.models[0] },
-          }));
+  const getProviderModel = (prov: LLMProvider): string => {
+    return formData[prov]?.model || '';
+  };
+
+  const setProviderModel = (prov: LLMProvider, modelVal: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [prov]: { ...prev[prov], model: modelVal },
+    }));
+  };
+
+  const fetchModelsForProvider = (provider: LLMProvider) => {
+    setLoadingProviderModels((prev) => ({ ...prev, [provider]: true }));
+    setModelFetchError((prev) => ({ ...prev, [provider]: null }));
+
+    const host = provider === 'ollama' ? formData.ollama.host : undefined;
+    const apiKey =
+      provider === 'gemini'
+        ? formData.gemini.apiKey
+        : provider === 'openai'
+        ? formData.openai.apiKey
+        : provider === 'anthropic'
+        ? formData.anthropic.apiKey
+        : undefined;
+
+    chrome.runtime.sendMessage(
+      {
+        type: 'FETCH_PROVIDER_MODELS',
+        provider,
+        host,
+        apiKey,
+      },
+      (res) => {
+        setLoadingProviderModels((prev) => ({ ...prev, [provider]: false }));
+        if (res?.success && Array.isArray(res.models)) {
+          setDiscoveredModels((prev) => ({ ...prev, [provider]: res.models }));
+          if (!getProviderModel(provider) && res.models.length > 0) {
+            setProviderModel(provider, res.models[0]);
+          }
+        } else if (res?.error) {
+          setModelFetchError((prev) => ({ ...prev, [provider]: res.error }));
         }
       }
-    });
+    );
   };
 
   useEffect(() => {
-    fetchModels(formData.ollama.host);
+    fetchModelsForProvider('ollama');
   }, []);
 
   const testConnection = () => {
@@ -63,6 +116,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             success: true,
             message: `Success! Response: "${res.answer}"`,
           });
+          // Auto-discover live models from provider API upon successful connection if empty
+          if (discoveredModels[formData.provider].length === 0) {
+            fetchModelsForProvider(formData.provider);
+          }
         } else {
           setTestResult({
             success: false,
@@ -70,6 +127,128 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           });
         }
       }
+    );
+  };
+
+  const renderModelSelector = (provider: LLMProvider) => {
+    const currentModel = getProviderModel(provider);
+    const curated = CURATED_MODELS[provider] || [];
+    const discovered = discoveredModels[provider] || [];
+    const isLoading = loadingProviderModels[provider];
+    const isCustom = customModelMode[provider];
+    const fetchErr = modelFetchError[provider];
+
+    const curatedIds = new Set(curated.map((m) => m.id));
+    const extraDiscovered = discovered.filter((id) => !curatedIds.has(id));
+    const isKnown = curatedIds.has(currentModel) || discovered.includes(currentModel);
+
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <label className="block text-xs font-medium text-slate-700">Model Name</label>
+            {discovered.length > 0 && (
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">
+                Live ({discovered.length})
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setCustomModelMode((prev) => ({
+                  ...prev,
+                  [provider]: !prev[provider],
+                }))
+              }
+              className="text-[11px] text-slate-500 hover:text-slate-800 transition underline underline-offset-2"
+            >
+              {isCustom ? 'Pick from list' : 'Custom model'}
+            </button>
+            <button
+              type="button"
+              onClick={() => fetchModelsForProvider(provider)}
+              disabled={isLoading}
+              className="flex items-center gap-1 text-[11px] text-sky-600 hover:text-sky-700 disabled:opacity-50 transition"
+              title="Fetch available models from API"
+            >
+              <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {isCustom ? (
+          <div>
+            <input
+              type="text"
+              value={currentModel}
+              onChange={(e) => setProviderModel(provider, e.target.value)}
+              placeholder={
+                provider === 'gemini'
+                  ? 'gemini-2.5-flash'
+                  : provider === 'openai'
+                  ? 'o3-mini or ft:gpt-4o-mini:...'
+                  : provider === 'anthropic'
+                  ? 'claude-3-7-sonnet-20250219'
+                  : 'llama3.2:3b'
+              }
+              className="w-full text-xs font-mono p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">
+              Custom mode active. Enter any model ID, fine-tuned model, or experimental tag.
+            </p>
+          </div>
+        ) : (
+          <select
+            value={currentModel}
+            onChange={(e) => {
+              if (e.target.value === '__custom__') {
+                setCustomModelMode((prev) => ({ ...prev, [provider]: true }));
+              } else {
+                setProviderModel(provider, e.target.value);
+              }
+            }}
+            className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
+          >
+            <optgroup label="Curated Latest Models">
+              {curated.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} {m.description ? `— ${m.description}` : ''}
+                </option>
+              ))}
+            </optgroup>
+
+            {extraDiscovered.length > 0 && (
+              <optgroup label={provider === 'ollama' ? 'Local Ollama Library' : 'Discovered from Account API'}>
+                {extraDiscovered.map((id) => (
+                  <option key={id} value={id}>
+                    {id}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+
+            {!isKnown && currentModel && (
+              <optgroup label="Current Configuration">
+                <option value={currentModel}>{currentModel} (Custom)</option>
+              </optgroup>
+            )}
+
+            <optgroup label="Custom">
+              <option value="__custom__">+ Enter custom model name...</option>
+            </optgroup>
+          </select>
+        )}
+
+        {fetchErr && (
+          <div className="text-[11px] text-rose-600 bg-rose-50 border border-rose-200 p-2 rounded-lg mt-1 flex items-start gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+            <span className="break-all">{fetchErr}</span>
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -91,10 +270,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           <label className="block text-xs font-medium text-slate-700 mb-2">Active AI Provider</label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
             {[
-              { id: 'ollama', title: 'Ollama', desc: 'Local & Private' },
-              { id: 'gemini', title: 'Gemini', desc: 'Fast Google AI' },
-              { id: 'openai', title: 'OpenAI', desc: 'GPT-4o Mini' },
-              { id: 'anthropic', title: 'Anthropic', desc: 'Claude 3.5' },
+              { id: 'ollama', title: 'Ollama', desc: 'Local & Private (Llama 3.3)' },
+              { id: 'gemini', title: 'Gemini', desc: 'Google 2.5 / 2.0 Flash' },
+              { id: 'openai', title: 'OpenAI', desc: 'GPT-4o / o3-mini' },
+              { id: 'anthropic', title: 'Anthropic', desc: 'Claude 3.7 / 3.5' },
             ].map((prov) => (
               <button
                 key={prov.id}
@@ -143,48 +322,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-slate-700">Model Name</label>
-                  <button
-                    onClick={() => fetchModels(formData.ollama.host)}
-                    className="flex items-center gap-1 text-[11px] text-sky-600 hover:text-sky-700"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${loadingModels ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </button>
-                </div>
-
-                {ollamaModels.length > 0 ? (
-                  <select
-                    value={formData.ollama.model}
-                    onChange={(e) =>
-                      setFormData((p) => ({
-                        ...p,
-                        ollama: { ...p.ollama, model: e.target.value },
-                      }))
-                    }
-                    className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
-                  >
-                    {ollamaModels.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={formData.ollama.model}
-                    onChange={(e) =>
-                      setFormData((p) => ({
-                        ...p,
-                        ollama: { ...p.ollama, model: e.target.value },
-                      }))
-                    }
-                    placeholder="llama3.2:3b"
-                    className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
-                  />
-                )}
+                {renderModelSelector('ollama')}
               </div>
             </div>
 
@@ -226,22 +364,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Model</label>
-              <select
-                value={formData.gemini.model}
-                onChange={(e) =>
-                  setFormData((p) => ({
-                    ...p,
-                    gemini: { ...p.gemini, model: e.target.value },
-                  }))
-                }
-                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
-              >
-                <option value="gemini-1.5-flash">gemini-1.5-flash (Fast & Recommended)</option>
-                <option value="gemini-1.5-pro">gemini-1.5-pro (Deep reasoning)</option>
-              </select>
-            </div>
+            {renderModelSelector('gemini')}
           </div>
         )}
 
@@ -272,22 +395,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Model</label>
-              <select
-                value={formData.openai.model}
-                onChange={(e) =>
-                  setFormData((p) => ({
-                    ...p,
-                    openai: { ...p.openai, model: e.target.value },
-                  }))
-                }
-                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
-              >
-                <option value="gpt-4o-mini">gpt-4o-mini (Recommended)</option>
-                <option value="gpt-4o">gpt-4o</option>
-              </select>
-            </div>
+            {renderModelSelector('openai')}
           </div>
         )}
 
@@ -320,22 +428,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Model</label>
-              <select
-                value={formData.anthropic.model}
-                onChange={(e) =>
-                  setFormData((p) => ({
-                    ...p,
-                    anthropic: { ...p.anthropic, model: e.target.value },
-                  }))
-                }
-                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-500"
-              >
-                <option value="claude-3-5-haiku-20241022">claude-3-5-haiku (Fast)</option>
-                <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet (Highest quality)</option>
-              </select>
-            </div>
+            {renderModelSelector('anthropic')}
           </div>
         )}
 
@@ -387,8 +480,10 @@ OLLAMA_ORIGINS="*" ollama serve
 
         {/* Sticky Save Bar */}
         <div className="sticky bottom-0 bg-white/95 backdrop-blur-sm border-t border-slate-200 py-3 px-4 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 rounded-b-xl sm:rounded-b-2xl flex items-center justify-between z-20 shadow-sm">
-          <span className="text-[11px] text-slate-500 font-medium capitalize truncate max-w-[160px] sm:max-w-xs">
-            Model: <strong className="text-slate-800">{formData.provider}</strong>
+          <span className="text-[11px] text-slate-500 font-medium truncate max-w-[200px] sm:max-w-xs">
+            Engine: <strong className="text-slate-800 capitalize">{formData.provider}</strong>
+            <span className="text-slate-400 mx-1">/</span>
+            <span className="text-sky-700 font-mono text-[10px]">{getProviderModel(formData.provider)}</span>
           </span>
           <button
             onClick={() => onSaveSettings(formData)}
